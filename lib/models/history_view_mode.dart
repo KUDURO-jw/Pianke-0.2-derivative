@@ -1,0 +1,1 @@
+enum HistoryViewMode { list, calendar }
