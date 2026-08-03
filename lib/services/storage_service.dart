@@ -1137,6 +1137,59 @@ class StorageService {
     return imported;
   }
 
+  /// Replaces all user-owned sync data in one transaction.
+  Future<void> replaceBackupData({
+    required List<Movie> movies,
+    required List<DrawRecord> drawRecords,
+    required List<ViewingSession> sessions,
+    required Map<String, List<Map<String, Object?>>> tableData,
+  }) async {
+    _ensureInitialized();
+    await _db.transaction((txn) async {
+      for (final table in const [
+        _movieTagsTable,
+        _collectionMembersTable,
+        _tagsTable,
+        _collectionsTable,
+        _drawRecordsTable,
+        _viewingSessionsTable,
+        _moviesTable,
+      ]) {
+        await txn.delete(table);
+      }
+
+      final batch = txn.batch();
+      for (final movie in movies) {
+        batch.insert(_moviesTable, _movieToDbMap(movie));
+      }
+      for (final record in drawRecords) {
+        batch.insert(_drawRecordsTable, _drawRecordToDbMap(record));
+      }
+      for (final session in sessions) {
+        batch.insert(_viewingSessionsTable, _sessionToDbMap(session));
+      }
+      for (final table in const [
+        _collectionsTable,
+        _collectionMembersTable,
+        _tagsTable,
+        _movieTagsTable,
+      ]) {
+        final rows =
+            tableData[table == _collectionsTable
+                ? 'collections'
+                : table == _collectionMembersTable
+                ? 'collectionMembers'
+                : table == _tagsTable
+                ? 'tags'
+                : 'movieTags'];
+        for (final row in rows ?? const <Map<String, Object?>>[]) {
+          batch.insert(table, row);
+        }
+      }
+      await batch.commit(noResult: true);
+    });
+  }
+
   Future<ViewingStats> queryViewingStats() async {
     _ensureInitialized();
 

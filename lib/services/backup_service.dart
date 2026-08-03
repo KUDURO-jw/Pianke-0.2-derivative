@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:random_movie/models/models.dart';
+import 'package:random_movie/services/backup_snapshot.dart';
 import 'package:random_movie/services/storage_service.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -56,7 +57,12 @@ class RestoreStats {
   });
 }
 
-class BackupService {
+abstract interface class SyncBackupStore {
+  Future<BackupSnapshot> createSyncSnapshot();
+  Future<RestoreStats> restoreSyncSnapshot(BackupSnapshot snapshot);
+}
+
+class BackupService implements SyncBackupStore {
   final StorageService _storage;
 
   BackupService(this._storage);
@@ -64,30 +70,11 @@ class BackupService {
   /// 导出完整备份，通过系统分享面板让用户选择保存位置
   Future<BackupResult> exportBackup() async {
     try {
-      final userId = _storage.userId;
-      final userName = _storage.userName;
-      final movies = await _storage.getAllMoviesForBackup();
-      final drawRecords = await _storage.getAllDrawRecordsForBackup();
-      final sessions = await _storage.getAllSessionsForBackup();
-      final collectionsAndTags = await _storage
-          .getCollectionsAndTagsForBackup();
-
       final now = DateTime.now();
-      final payload = {
-        'meta': {
-          'appId': 'Pianke',
-          'schemaVersion': _kSchemaVersion,
-          'exportedAt': now.toIso8601String(),
-        },
-        'user': {'id': userId, 'name': userName},
-        'movies': movies.map((m) => m.toJson()).toList(),
-        'drawRecords': drawRecords.map((r) => r.toJson()).toList(),
-        'viewingSessions': sessions.map((s) => s.toJson()).toList(),
-        'collections': collectionsAndTags['collections'],
-        'collectionMembers': collectionsAndTags['collectionMembers'],
-        'tags': collectionsAndTags['tags'],
-        'movieTags': collectionsAndTags['movieTags'],
-      };
+      final payload = await _collectPayload(includeUserIdentity: true);
+      final movies = payload['movies'] as List<dynamic>;
+      final drawRecords = payload['drawRecords'] as List<dynamic>;
+      final sessions = payload['viewingSessions'] as List<dynamic>;
 
       final jsonStr = const JsonEncoder.withIndent('  ').convert(payload);
       final fileName =
@@ -114,6 +101,149 @@ class BackupService {
     } catch (e) {
       return BackupResult(success: false, message: '导出失败：$e');
     }
+  }
+
+  @override
+  Future<BackupSnapshot> createSyncSnapshot() async {
+    final payload = await _collectPayload(includeUserIdentity: false);
+    return BackupSnapshot.create(payload);
+  }
+
+  @override
+  Future<RestoreStats> restoreSyncSnapshot(BackupSnapshot snapshot) async {
+    final validated = BackupSnapshot.parse(snapshot.toJson());
+    final payload = validated.toJson();
+    final movies = _parseMovies(payload['movies']);
+    final drawRecords = _parseDrawRecords(payload['drawRecords']);
+    final sessions = _parseSessions(payload['viewingSessions']);
+    final tableData = _parseTableData(payload);
+
+    await _storage.replaceBackupData(
+      movies: movies,
+      drawRecords: drawRecords,
+      sessions: sessions,
+      tableData: tableData,
+    );
+
+    final settings = payload['settings'];
+    if (settings is Map) {
+      final userName = settings['userName']?.toString().trim() ?? '';
+      if (userName.isNotEmpty) await _storage.updateUserName(userName);
+      final themeMode = settings['themeMode']?.toString();
+      if (themeMode == 'system' ||
+          themeMode == 'light' ||
+          themeMode == 'dark') {
+        await _storage.setThemeMode(themeMode!);
+      }
+    }
+
+    return RestoreStats(
+      moviesImported: movies.length,
+      moviesSkipped: 0,
+      drawRecordsImported: drawRecords.length,
+      drawRecordsSkipped: 0,
+      sessionsImported: sessions.length,
+    );
+  }
+
+  Future<Map<String, dynamic>> _collectPayload({
+    required bool includeUserIdentity,
+  }) async {
+    final movies = await _storage.getAllMoviesForBackup();
+    final drawRecords = await _storage.getAllDrawRecordsForBackup();
+    final sessions = await _storage.getAllSessionsForBackup();
+    final collectionsAndTags = await _storage.getCollectionsAndTagsForBackup();
+    return {
+      'meta': {
+        'appId': 'Pianke',
+        'schemaVersion': _kSchemaVersion,
+        'exportedAt': DateTime.now().toIso8601String(),
+      },
+      if (includeUserIdentity)
+        'user': {'id': _storage.userId, 'name': _storage.userName},
+      'settings': {
+        'themeMode': _storage.getThemeMode(),
+        'userName': _storage.userName,
+      },
+      'movies': movies.map((m) => m.toJson()).toList(),
+      'drawRecords': drawRecords.map((r) => r.toJson()).toList(),
+      'viewingSessions': sessions.map((s) => s.toJson()).toList(),
+      'collections': collectionsAndTags['collections'],
+      'collectionMembers': collectionsAndTags['collectionMembers'],
+      'tags': collectionsAndTags['tags'],
+      'movieTags': collectionsAndTags['movieTags'],
+    };
+  }
+
+  List<Movie> _parseMovies(dynamic raw) {
+    if (raw is! List) throw const BackupSnapshotException('备份缺少片库数据');
+    final result = <Movie>[];
+    final ids = <String>{};
+    for (final item in raw) {
+      if (item is! Map) throw const BackupSnapshotException('片库数据格式错误');
+      final movie = Movie.fromJson(Map<String, dynamic>.from(item));
+      if (movie.id.trim().isEmpty || !ids.add(movie.id)) {
+        throw const BackupSnapshotException('片库包含无效或重复 ID');
+      }
+      result.add(movie);
+    }
+    return result;
+  }
+
+  List<DrawRecord> _parseDrawRecords(dynamic raw) {
+    if (raw is! List) {
+      throw const BackupSnapshotException('备份缺少抽片记录');
+    }
+    final result = <DrawRecord>[];
+    final ids = <String>{};
+    for (final item in raw) {
+      if (item is! Map) throw const BackupSnapshotException('抽片记录格式错误');
+      final record = DrawRecord.fromJson(Map<String, dynamic>.from(item));
+      if (record.id.trim().isEmpty || !ids.add(record.id)) {
+        throw const BackupSnapshotException('抽片记录包含无效或重复 ID');
+      }
+      result.add(record);
+    }
+    return result;
+  }
+
+  List<ViewingSession> _parseSessions(dynamic raw) {
+    if (raw is! List) {
+      throw const BackupSnapshotException('备份缺少观看记录');
+    }
+    final result = <ViewingSession>[];
+    final ids = <String>{};
+    for (final item in raw) {
+      if (item is! Map) throw const BackupSnapshotException('观看记录格式错误');
+      final session = ViewingSession.fromJson(Map<String, dynamic>.from(item));
+      if (session.id.trim().isEmpty ||
+          session.movieId.trim().isEmpty ||
+          !ids.add(session.id)) {
+        throw const BackupSnapshotException('观看记录包含无效或重复 ID');
+      }
+      result.add(session);
+    }
+    return result;
+  }
+
+  Map<String, List<Map<String, Object?>>> _parseTableData(
+    Map<String, dynamic> payload,
+  ) {
+    final result = <String, List<Map<String, Object?>>>{};
+    for (final key in const [
+      'collections',
+      'collectionMembers',
+      'tags',
+      'movieTags',
+    ]) {
+      final raw = payload[key];
+      if (raw is! List) throw BackupSnapshotException('备份缺少 $key 数据');
+      result[key] = raw
+          .whereType<Map>()
+          .map((row) => Map<String, Object?>.from(row))
+          .toList(growable: false);
+    }
+    return result;
   }
 
   /// 从文件选择器读取备份文件，合并恢复数据

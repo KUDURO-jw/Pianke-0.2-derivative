@@ -3,4 +3,7 @@ export 'movie_scraper_service.dart';
 export 'draw_service.dart';
 export 'draw_selection.dart';
 export 'backup_service.dart';
+export 'backup_snapshot.dart';
 export 'watch_status.dart';
+export 'webdav_client.dart';
+export 'webdav_sync_service.dart';

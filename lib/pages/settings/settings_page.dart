@@ -5,7 +5,10 @@ import 'package:random_movie/providers/providers.dart';
 import 'package:random_movie/services/backup_service.dart';
 import 'package:random_movie/services/storage_service.dart';
 import 'package:random_movie/services/update_service.dart';
+import 'package:random_movie/services/webdav_sync_service.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
+import 'package:random_movie/widgets/settings/webdav_sync_section.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -18,6 +21,7 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   late final BackupService _backupService;
   late final UpdateService _updateService;
+  late final Future<WebDavSyncService> _syncServiceFuture;
   bool _exportLoading = false;
   bool _importLoading = false;
   bool _updateLoading = false;
@@ -27,6 +31,12 @@ class _SettingsPageState extends State<SettingsPage> {
     super.initState();
     _backupService = BackupService(StorageService());
     _updateService = UpdateService();
+    _syncServiceFuture = _createSyncService();
+  }
+
+  Future<WebDavSyncService> _createSyncService() async {
+    final preferences = await SharedPreferences.getInstance();
+    return WebDavSyncService(backup: _backupService, preferences: preferences);
   }
 
   @override
@@ -94,6 +104,13 @@ class _SettingsPageState extends State<SettingsPage> {
                 height: 1.5,
               ),
             ),
+          ),
+          const SizedBox(height: AppTheme.spacingLarge),
+          const _SectionHeader(label: '坚果云同步'),
+          const SizedBox(height: AppTheme.spacingSmall),
+          WebDavSyncSection(
+            serviceFuture: _syncServiceFuture,
+            onRestored: _refreshAfterWebDavRestore,
           ),
           const SizedBox(height: AppTheme.spacingLarge),
           _SectionHeader(label: '关于'),
@@ -284,6 +301,15 @@ class _SettingsPageState extends State<SettingsPage> {
       collectionProvider.refresh(),
       drawHistoryProvider.refresh(),
     ]);
+  }
+
+  Future<void> _refreshAfterWebDavRestore() async {
+    await _refreshAfterImport(
+      movieProvider: context.read<MovieProvider>(),
+      collectionProvider: context.read<CollectionProvider>(),
+      drawHistoryProvider: context.read<DrawHistoryProvider>(),
+    );
+    if (mounted) context.read<ThemeProvider>().load();
   }
 
   Future<bool> _showImportConfirmDialog() async {

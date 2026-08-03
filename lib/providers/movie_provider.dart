@@ -449,6 +449,11 @@ class MovieProvider extends ChangeNotifier {
     await refreshLibrary();
   }
 
+  Future<void> refreshAfterSync() async {
+    await _reloadVisibleCollections();
+    await _refreshVisibleHistoryCalendarIfNeeded();
+  }
+
   Future<void> _reloadVisibleCollections() async {
     final libraryLimit = math.max(
       _libraryMovies.length,

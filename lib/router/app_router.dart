@@ -13,7 +13,7 @@ import 'package:random_movie/pages/movies/movies_page.dart';
 import 'package:random_movie/pages/settings/settings_page.dart';
 import 'package:random_movie/providers/movie_provider.dart';
 
-final _rootNavigatorKey = GlobalKey<NavigatorState>();
+final rootNavigatorKey = GlobalKey<NavigatorState>();
 final _moviesNavigatorKey = GlobalKey<NavigatorState>();
 final _drawNavigatorKey = GlobalKey<NavigatorState>();
 final _historyNavigatorKey = GlobalKey<NavigatorState>();
@@ -104,7 +104,7 @@ class _HomeShellState extends State<HomeShell> {
 }
 
 final appRouter = GoRouter(
-  navigatorKey: _rootNavigatorKey,
+  navigatorKey: rootNavigatorKey,
   initialLocation: '/movies',
   routes: [
     StatefulShellRoute.indexedStack(
@@ -121,12 +121,12 @@ final appRouter = GoRouter(
               routes: [
                 GoRoute(
                   path: 'add',
-                  parentNavigatorKey: _rootNavigatorKey,
+                  parentNavigatorKey: rootNavigatorKey,
                   builder: (context, state) => const AddMoviePage(),
                 ),
                 GoRoute(
                   path: 'detail/:movieId',
-                  parentNavigatorKey: _rootNavigatorKey,
+                  parentNavigatorKey: rootNavigatorKey,
                   pageBuilder: (context, state) {
                     final movieId = state.pathParameters['movieId']!;
                     return CustomTransitionPage<void>(
@@ -161,7 +161,7 @@ final appRouter = GoRouter(
               routes: [
                 GoRoute(
                   path: 'start',
-                  parentNavigatorKey: _rootNavigatorKey,
+                  parentNavigatorKey: rootNavigatorKey,
                   builder: (context, state) => const DrawPage(),
                 ),
               ],
@@ -177,7 +177,7 @@ final appRouter = GoRouter(
               routes: [
                 GoRoute(
                   path: 'calendar',
-                  parentNavigatorKey: _rootNavigatorKey,
+                  parentNavigatorKey: rootNavigatorKey,
                   builder: (context, state) => const HistoryCalendarPage(),
                 ),
               ],
@@ -197,12 +197,12 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/collections',
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => const CollectionsPage(),
       routes: [
         GoRoute(
           path: 'detail',
-          parentNavigatorKey: _rootNavigatorKey,
+          parentNavigatorKey: rootNavigatorKey,
           builder: (context, state) {
             final collection = state.extra as MovieCollection;
             return CollectionDetailPage(collection: collection);
@@ -212,7 +212,7 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/draw-from',
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) {
         final args = state.extra as ({List<String> movieIds, String title});
         return DrawPage(presetMovieIds: args.movieIds, presetTitle: args.title);

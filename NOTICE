@@ -11,6 +11,11 @@ Changes in this derivative:
 - Unified watched-state detection between the library and draw features.
 - Fixed watched-state refresh and SQLite movie-ID query ordering.
 - Added regression tests for draw selection and watched-state behavior.
+- Added optional Jianguoyun WebDAV backup and two-device synchronization.
+- Added secure application-password storage, conflict confirmation, snapshot
+  validation, and automatic replacement of existing remote backups.
+- WebDAV credentials and local device configuration are not included in the
+  repository or backup snapshots.
 
 This derivative is not affiliated with or endorsed by ShareWinter. The
 original name, copyright, and license notices are retained respectfully.
