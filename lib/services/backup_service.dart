@@ -209,17 +209,17 @@ class BackupService implements SyncBackupStore {
 
   List<ViewingSession> _parseSessions(dynamic raw) {
     if (raw is! List) {
-      throw const BackupSnapshotException('备份缺少观看记录');
+      throw const BackupSnapshotException('备份缺少观影记录');
     }
     final result = <ViewingSession>[];
     final ids = <String>{};
     for (final item in raw) {
-      if (item is! Map) throw const BackupSnapshotException('观看记录格式错误');
+      if (item is! Map) throw const BackupSnapshotException('观影记录格式错误');
       final session = ViewingSession.fromJson(Map<String, dynamic>.from(item));
       if (session.id.trim().isEmpty ||
           session.movieId.trim().isEmpty ||
           !ids.add(session.id)) {
-        throw const BackupSnapshotException('观看记录包含无效或重复 ID');
+        throw const BackupSnapshotException('观影记录包含无效或重复 ID');
       }
       result.add(session);
     }

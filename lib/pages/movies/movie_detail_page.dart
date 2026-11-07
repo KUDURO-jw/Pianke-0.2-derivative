@@ -12,7 +12,7 @@ import 'package:random_movie/widgets/movie/movie_tag_editor.dart';
 import 'package:random_movie/widgets/movie/viewing_session_editor.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// 电影详情页
+/// 影片详情页
 class MovieDetailPage extends StatefulWidget {
   final String movieId;
 
@@ -178,7 +178,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
         if (movie == null) {
           return Scaffold(
             appBar: AppBar(),
-            body: const Center(child: Text('电影不存在')),
+            body: const Center(child: Text('影片不存在')),
           );
         }
 
@@ -285,7 +285,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
                             spacing: AppTheme.spacingSmall,
                             runSpacing: 6,
                             children: [
-                              _chipLabel(isSeries ? '剧集' : '电影'),
+                              _chipLabel(isSeries ? '剧集' : '影片'),
                               if (movie.year.isNotEmpty) _chipLabel(movie.year),
                               if (movie.region.isNotEmpty)
                                 _chipLabel(movie.region),
@@ -451,7 +451,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
     final castTop = _splitPeople(movie.cast).take(5).toList();
     final genreText = movie.genre.join(' / ');
     final durationLabel = _formatDurationText(movie.durationText);
-    final subjectTypeLabel = isSeries ? '剧集' : '电影';
+    final subjectTypeLabel = isSeries ? '剧集' : '影片';
 
     final hasCredits =
         genreText.isNotEmpty ||
@@ -872,7 +872,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
             TextField(
               controller: _reviewController,
               maxLines: 4,
-              decoration: const InputDecoration(hintText: '记录你对这部作品的想法...'),
+              decoration: const InputDecoration(hintText: '记录你对这部影片的想法…'),
               onChanged: (_) => _markChanged(),
             ),
             const SizedBox(height: AppTheme.spacingLarge),
@@ -1092,7 +1092,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
               borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
             ),
             child: Text(
-              '分集内容正在准备...',
+              '分集内容正在准备…',
               style: TextStyle(
                 fontSize: 13,
                 color: colorScheme.onSurface.withValues(alpha: 0.65),

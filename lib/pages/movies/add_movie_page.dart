@@ -9,7 +9,7 @@ import 'package:random_movie/services/movie_scraper_service.dart'
 import 'package:random_movie/widgets/common/common_widgets.dart';
 import 'package:random_movie/widgets/movie/movie_card.dart';
 
-/// 添加电影页面
+/// 添加影片页面
 class AddMoviePage extends StatefulWidget {
   const AddMoviePage({super.key});
 
@@ -82,7 +82,7 @@ class _AddMoviePageState extends State<AddMoviePage>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('添加电影'),
+        title: const Text('添加影片'),
         bottom: TabBar(
           controller: _tabController,
           labelColor: colorScheme.primary,
@@ -118,7 +118,7 @@ class _AddMoviePageState extends State<AddMoviePage>
             controller: _searchController,
             textInputAction: TextInputAction.search,
             decoration: InputDecoration(
-              hintText: '搜索电影 / 剧集名',
+              hintText: '搜索影片 / 剧集名',
               prefixIcon: const Icon(Icons.search),
               suffixIcon: _searchController.text.isNotEmpty
                   ? IconButton(
@@ -148,14 +148,14 @@ class _AddMoviePageState extends State<AddMoviePage>
 
   Widget _buildSearchResults() {
     if (_searchLoading) {
-      return const LoadingState(message: '搜索中...');
+      return const LoadingState(message: '搜索中…');
     }
     if (_searchError != null && _searchResults.isEmpty) {
       return ErrorState(message: _searchError!, onRetry: _runSearch);
     }
     if (!_searchDone) {
       return const EmptyState(
-        title: '搜索豆瓣电影',
+        title: '搜索豆瓣影片',
         subtitle: '输入片名后回车即可搜索，点击结果加入片库。',
         icon: Icons.search,
       );
@@ -399,14 +399,14 @@ class _AddMoviePageState extends State<AddMoviePage>
                     ),
                     const SizedBox(height: AppTheme.spacingXSmall),
                     Text(
-                      '支持电影链接、豆瓣 App 跳转链接和片单链接，如果失败请多尝试两次。',
+                      '支持影片链接、豆瓣 App 跳转链接和片单链接，如果失败请多尝试两次。',
                       style: textTheme.bodySmall?.copyWith(height: 1.45),
                     ),
                     const SizedBox(height: AppTheme.spacingMedium),
                     TextField(
                       controller: _urlController,
                       decoration: InputDecoration(
-                        hintText: '粘贴豆瓣电影或片单链接',
+                        hintText: '粘贴豆瓣影片或片单链接',
                         prefixIcon: const Icon(Icons.link),
                         suffixIcon:
                             _urlController.text.isNotEmpty && !_isLoading
@@ -604,7 +604,7 @@ class _AddMoviePageState extends State<AddMoviePage>
   Widget _buildDoulistSectionHeader() {
     final title = _isDoulistLoading && _doulistTotal > 0
         ? '已获取 ${_previewMovies?.length ?? 0}/$_doulistTotal 部影片'
-        : '找到 ${_previewMovies?.length ?? 0} 部电影';
+        : '找到 ${_previewMovies?.length ?? 0} 部影片';
     final subtitle = _isDoulistLoading
         ? '真实卡片会先显示，未完成的条目用占位卡补齐。'
         : '支持逐部添加，也可以一次性加入片库。';
@@ -725,7 +725,7 @@ class _AddMoviePageState extends State<AddMoviePage>
           TextField(
             controller: _titleController,
             decoration: const InputDecoration(
-              hintText: '电影名称 *',
+              hintText: '影片名称 *',
               prefixIcon: Icon(Icons.title),
             ),
           ),
@@ -748,7 +748,7 @@ class _AddMoviePageState extends State<AddMoviePage>
           ),
           const SizedBox(height: AppTheme.spacingLarge),
           PrimaryButton(
-            label: '添加电影',
+            label: '添加影片',
             icon: Icons.add,
             onPressed: () => _addManualMovie(),
           ),
@@ -820,14 +820,14 @@ class _AddMoviePageState extends State<AddMoviePage>
 
   String _buildFetchButtonLabel() {
     if (!_isLoading) {
-      return '获取电影信息';
+      return '获取影片信息';
     }
 
     if (_isDoulistLoading && _doulistTotal > 0) {
       return '获取中 $_doulistCompleted/$_doulistTotal';
     }
 
-    return '获取中...';
+    return '获取中…';
   }
 
   Widget _buildScrapeProgressCard() {
@@ -851,8 +851,8 @@ class _AddMoviePageState extends State<AddMoviePage>
             _isDoulistLoading
                 ? (_doulistTotal > 0
                       ? '已完成 $_doulistCompleted / $_doulistTotal，结果会陆续显示在下方'
-                      : '正在解析片单入口并准备抓取详情...')
-                : '正在解析豆瓣页面结构化数据...',
+                      : '正在解析片单入口并准备抓取详情…')
+                : '正在解析豆瓣页面结构化数据…',
             style: textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurface.withValues(alpha: 0.72),
               height: 1.4,
@@ -887,7 +887,7 @@ class _AddMoviePageState extends State<AddMoviePage>
   Future<void> _addManualMovie() async {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
-      _showError('请输入电影名称');
+      _showError('请输入影片名称');
       return;
     }
 
@@ -928,9 +928,9 @@ class _AddMoviePageState extends State<AddMoviePage>
     if (result.added > 0 && result.skipped > 0) {
       _showSuccess('已添加 ${result.added} 部，${result.skipped} 部已存在');
     } else if (result.added > 0) {
-      _showSuccess('成功添加 ${result.added} 部电影');
+      _showSuccess('成功添加 ${result.added} 部影片');
     } else {
-      _showError('所有电影均已在片库中');
+      _showError('所有影片均已在片库中');
     }
 
     if (result.added > 0 && result.skipped == 0) {

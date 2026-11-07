@@ -1,10 +1,13 @@
 import 'package:random_movie/models/movie.dart';
 
-/// Single model-level watch-state predicate shared by library and draw logic.
-/// StorageService derives Movie.watched from both persisted flags and sessions.
+/// 全库唯一的「是否已看」判定入口，片库与抽片逻辑共用。
+///
+/// [Movie.watched] 由 StorageService 依据显式状态与观影会话派生；
+/// 对剧集，本类额外要求所有分集都已看完才算已看。
 class WatchStatus {
   const WatchStatus._();
 
+  /// 判断一部影片是否已看。
   static bool isWatched(Movie movie) {
     if (movie.watched) return true;
 
@@ -14,6 +17,7 @@ class WatchStatus {
         movie.episodes.every((episode) => episode.watched);
   }
 
+  /// 过滤出尚未观看的影片。
   static List<Movie> unwatchedMovies(Iterable<Movie> movies) =>
       movies.where((movie) => !isWatched(movie)).toList(growable: false);
 }

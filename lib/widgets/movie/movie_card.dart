@@ -5,7 +5,7 @@ import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/models/movie.dart';
 import 'package:random_movie/services/watch_status.dart';
 
-/// 电影卡片组件，带点击缩放动效
+/// 影片卡片组件，带点击缩放动效
 class MovieCard extends StatefulWidget {
   final Movie movie;
   final VoidCallback? onTap;

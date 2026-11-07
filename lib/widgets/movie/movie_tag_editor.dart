@@ -6,7 +6,7 @@ import 'package:random_movie/providers/providers.dart';
 
 /// 影片标签编辑器：展示 / 勾选个人标签，并可新建带颜色的标签。
 ///
-/// 内嵌于电影详情页，改动即时落库（写 movie_tags 关联表）。
+/// 内嵌于影片详情页，改动即时落库（写 movie_tags 关联表）。
 class MovieTagEditor extends StatefulWidget {
   final String movieId;
 

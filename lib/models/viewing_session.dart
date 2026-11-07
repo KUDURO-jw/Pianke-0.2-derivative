@@ -25,7 +25,7 @@ enum WatchMood {
   }
 }
 
-/// 一次观影会话 —— 同一部电影可有多条，记录随时间演变的观影体验。
+/// 一次观影会话 —— 同一部影片可有多条，记录随时间演变的观影体验。
 class ViewingSession {
   final String id;
   final String movieId;

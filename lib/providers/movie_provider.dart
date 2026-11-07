@@ -257,7 +257,7 @@ class MovieProvider extends ChangeNotifier {
         _cacheMovies(movies);
       }
     } catch (error) {
-      _error = '加载更多电影失败: $error';
+      _error = '加载更多影片失败: $error';
     } finally {
       _isLibraryLoadingMore = false;
       notifyListeners();
@@ -509,7 +509,7 @@ class MovieProvider extends ChangeNotifier {
     String? cast,
   }) async {
     if (title.trim().isEmpty) {
-      _error = '电影名称不能为空';
+      _error = '影片名称不能为空';
       notifyListeners();
       return;
     }

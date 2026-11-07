@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// 个人标签，多对多挂到电影上。
+/// 个人标签，多对多挂到影片上。
 class MovieTag {
   final String id;
   final String name;

@@ -165,7 +165,7 @@ class _DrawPageState extends State<DrawPage> {
       _selectionError = null;
     } catch (_) {
       _selectionState.clearAll();
-      _selectionError = '观看状态加载失败，请重试后再抽片';
+      _selectionError = '无法读取影片的已看状态，请重试后再抽片';
     }
   }
 
@@ -246,7 +246,7 @@ class _DrawPageState extends State<DrawPage> {
       if (!mounted || revision != _selectionRevision) return;
       setState(() {
         _selectionLoading = false;
-        _selectionError = '观看状态加载失败，请重试后再筛选';
+        _selectionError = '无法读取影片的已看状态，请重试后再筛选';
       });
     }
   }
@@ -286,7 +286,7 @@ class _DrawPageState extends State<DrawPage> {
             ? '从《${widget.presetTitle}》抽'
             : '今晚看什么？';
       case DrawPhase.animating:
-        return '抽取中...';
+        return '抽取中…';
       case DrawPhase.picking:
         return '三选一';
       case DrawPhase.result:
@@ -298,13 +298,13 @@ class _DrawPageState extends State<DrawPage> {
 
   Widget _buildSelectingPhase(BuildContext context) {
     if (_isInitialLoading) {
-      return const LoadingState(message: '加载片库中...');
+      return const LoadingState(message: '加载片库中…');
     }
 
     if (_totalCount == 0) {
       return EmptyState(
         title: '片库是空的',
-        subtitle: '先去添加几部电影吧',
+        subtitle: '先去添加几部影片吧',
         icon: Icons.movie_outlined,
         onAction: () => context.go('/movies/add'),
         actionLabel: '去添加',
@@ -379,7 +379,7 @@ class _DrawPageState extends State<DrawPage> {
           child: PrimaryButton(
             label: _selectedIds.isNotEmpty
                 ? '${_mode.label} · 开始（${_selectedIds.length} 部）'
-                : '请先选择电影',
+                : '请先选择影片',
             icon: Icons.casino,
             onPressed: _selectedIds.isNotEmpty ? _startDraw : null,
           ),
@@ -468,7 +468,7 @@ class _DrawPageState extends State<DrawPage> {
 
     if (filtered.isEmpty) {
       if (!mounted) return;
-      AppToast.error(context, _filter.isActive ? '没有符合筛选条件的影片' : '没有可用的候选电影');
+      AppToast.error(context, _filter.isActive ? '没有符合筛选条件的影片' : '没有可用的候选影片');
       return;
     }
 
@@ -652,7 +652,7 @@ class _DrawPageState extends State<DrawPage> {
           ),
           const SizedBox(height: AppTheme.spacingLarge),
           Text(
-            '抽取中...',
+            '抽取中…',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,

@@ -4,8 +4,10 @@ import 'dart:io';
 
 import 'package:random_movie/services/backup_snapshot.dart';
 
+/// 上传 / 下载进度回调；[total] 小于 0 表示服务端未返回总长度。
 typedef WebDavProgress = void Function(int current, int total);
 
+/// 坚果云 WebDAV 连接配置。
 class WebDavConfig {
   final String account;
   final String applicationPassword;
@@ -199,8 +201,8 @@ class WebDavClient {
       headers: {'Destination': finalUri.toString(), 'Overwrite': 'T'},
     );
 
-    // Jianguoyun may reject MOVE-overwrite with 409 even with Overwrite: T.
-    // Remove the old target and retry while the new data is still temporary.
+    // 坚果云即使带 Overwrite: T，也可能用 409 拒绝 MOVE 覆盖。
+    // 此时先删掉旧目标文件再重试，新数据此时仍停留在临时文件里，不会丢。
     if (move.statusCode == HttpStatus.conflict) {
       final deletion = await _send('DELETE', finalUri, config);
       if (deletion.statusCode != HttpStatus.notFound) {
@@ -243,7 +245,7 @@ class WebDavClient {
     bool skipAuth = false,
   }) {
     final requestHeaders = <String, String>{
-      'User-Agent': 'Pianke-WebDAV/1.0',
+      'User-Agent': 'Pianke-Derivative-WebDAV/0.2',
       if (!skipAuth) 'Authorization': _authorization(config),
       ...headers,
     };

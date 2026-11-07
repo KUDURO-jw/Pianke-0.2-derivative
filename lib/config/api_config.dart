@@ -1,8 +1,14 @@
 /// API 配置
 class ApiConfig {
-  // Gitee 更新清单地址。创建 Gitee 仓库后，确保根目录存在 update.json。
+  // 更新清单地址。
+  //
+  // 注意：这里必须指向「本二创仓库」自己的 update.json。
+  // 如果沿用上游 ShareWinter/Pianke 的清单，本应用的用户会被引导去下载原版安装包，
+  // 而两者 applicationId 相同，原版会直接覆盖安装本应用。
+  //
+  // 改动此地址后，记得同步修改仓库根目录 update.json 里的 downloadUrl 字段。
   static const String updateManifestUrl =
-      'https://gitee.com/watlem4g/Pianke/raw/main/update.json';
+      'https://raw.githubusercontent.com/KUDURO-jw/Pianke-0.2-derivative/main/update.json';
 
   // 请求头
   static Map<String, String> get defaultHeaders => {

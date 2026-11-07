@@ -4,12 +4,16 @@ import 'package:random_movie/services/backup_snapshot.dart';
 import 'package:random_movie/services/webdav_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// 同步方向：自动判断 / 强制上传 / 强制下载。
 enum WebDavSyncDirection { automatic, upload, download }
 
+/// 同步动作：无需操作 / 上传 / 下载 / 冲突。
 enum WebDavSyncAction { none, upload, download, conflict }
 
+/// 同步过程状态。
 enum WebDavSyncState { idle, working, success, conflict, failure }
 
+/// 冲突时用户的选择：保留本地 / 保留云端。
 enum WebDavConflictChoice { local, remote }
 
 class SyncDecision {

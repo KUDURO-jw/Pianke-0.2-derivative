@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/providers/providers.dart';
@@ -22,6 +23,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late final BackupService _backupService;
   late final UpdateService _updateService;
   late final Future<WebDavSyncService> _syncServiceFuture;
+  late final Future<PackageInfo> _packageInfoFuture;
   bool _exportLoading = false;
   bool _importLoading = false;
   bool _updateLoading = false;
@@ -32,6 +34,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _backupService = BackupService(StorageService());
     _updateService = UpdateService();
     _syncServiceFuture = _createSyncService();
+    _packageInfoFuture = PackageInfo.fromPlatform();
   }
 
   Future<WebDavSyncService> _createSyncService() async {
@@ -116,14 +119,85 @@ class _SettingsPageState extends State<SettingsPage> {
           _SectionHeader(label: '关于'),
           const SizedBox(height: AppTheme.spacingSmall),
           SoftContainer(
-            child: _SettingsTile(
-              icon: Icons.system_update_rounded,
-              iconColor: const Color(0xFFFFB703),
-              title: '检查更新',
-              subtitle: '从 Gitee 检查片刻新版本',
-              loading: _updateLoading,
-              onTap: _handleCheckUpdate,
+            child: Column(
+              children: [
+                _SettingsTile(
+                  icon: Icons.system_update_rounded,
+                  iconColor: const Color(0xFFFFB703),
+                  title: '检查更新',
+                  subtitle: '检查片刻 0.2 二创版的新版本',
+                  loading: _updateLoading,
+                  onTap: _handleCheckUpdate,
+                ),
+                Divider(
+                  height: 1,
+                  indent: 56,
+                  color: colorScheme.outline.withValues(alpha: 0.12),
+                ),
+                _SettingsTile(
+                  icon: Icons.description_outlined,
+                  iconColor: const Color(0xFF6C88C4),
+                  title: '开源声明',
+                  subtitle: '基于 ShareWinter/Pianke 二次创作 · Apache License 2.0',
+                  loading: false,
+                  onTap: _showLicenseNotice,
+                ),
+              ],
             ),
+          ),
+          const SizedBox(height: AppTheme.spacingMedium),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppTheme.spacingSmall,
+            ),
+            child: FutureBuilder<PackageInfo>(
+              future: _packageInfoFuture,
+              builder: (context, snapshot) {
+                final info = snapshot.data;
+                final label = info == null
+                    ? '片刻 0.2'
+                    : '片刻 0.2 · 版本 ${info.version}（${info.buildNumber}）';
+                return Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: colorScheme.onSurface.withValues(alpha: 0.45),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 二创版的开源声明：来源、许可与改动范围。
+  void _showLicenseNotice() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('开源声明'),
+        content: const SingleChildScrollView(
+          child: Text(
+            '片刻 0.2 是基于 ShareWinter/Pianke 的二次创作版本，'
+            '遵循 Apache License 2.0 分发。\n\n'
+            '原始项目：github.com/ShareWinter/Pianke\n'
+            '本仓库：github.com/KUDURO-jw/Pianke-0.2-derivative\n\n'
+            'Copyright 2026 ShareWinter（原始项目）\n'
+            'Copyright 2026 KUDURO-jw（二次创作部分）\n\n'
+            '本版本与原项目作者无隶属关系，也未获得其对本次改动的认可。'
+            '应用名称与原始版权声明均予保留。\n\n'
+            '本版本新增了坚果云 WebDAV 跨设备备份功能。'
+            '该功能需要你主动填写账号才会启用，数据只在你自己的坚果云账号中流转，'
+            '不会上传到本项目维护者或任何第三方服务器。',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('知道了'),
           ),
         ],
       ),

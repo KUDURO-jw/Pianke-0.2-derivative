@@ -142,7 +142,7 @@ class _MoviesPageState extends State<MoviesPage> {
                   movies.isEmpty) {
                 return const SliverFillRemaining(
                   hasScrollBody: false,
-                  child: LoadingState(message: '加载中...'),
+                  child: LoadingState(message: '加载中…'),
                 );
               }
 
@@ -158,16 +158,16 @@ class _MoviesPageState extends State<MoviesPage> {
 
               if (movies.isEmpty) {
                 final emptyLabel = switch (state.filter) {
-                  LibraryFilter.watched => '还没有已看的电影',
-                  LibraryFilter.unwatched => '所有电影都看过啦',
+                  LibraryFilter.watched => '还没有已看的影片',
+                  LibraryFilter.unwatched => '所有影片都看过啦',
                   LibraryFilter.all =>
-                    state.searchQuery.isEmpty ? '片库还是空的' : '没有找到匹配的电影',
+                    state.searchQuery.isEmpty ? '片库还是空的' : '没有找到匹配的影片',
                 };
                 final emptySubtitle = switch (state.filter) {
-                  LibraryFilter.watched => '看完电影后标记一下吧',
-                  LibraryFilter.unwatched => '添加新电影继续探索',
+                  LibraryFilter.watched => '看完影片后标记一下吧',
+                  LibraryFilter.unwatched => '添加新影片继续探索',
                   LibraryFilter.all =>
-                    state.searchQuery.isEmpty ? '添加你的第一部电影吧' : '试试其他搜索词',
+                    state.searchQuery.isEmpty ? '添加你的第一部影片吧' : '试试其他搜索词',
                 };
 
                 return SliverFillRemaining(
@@ -181,7 +181,7 @@ class _MoviesPageState extends State<MoviesPage> {
                             state.searchQuery.isEmpty
                         ? () => _navigateToAddMovie(context)
                         : null,
-                    actionLabel: '添加电影',
+                    actionLabel: '添加影片',
                   ),
                 );
               }

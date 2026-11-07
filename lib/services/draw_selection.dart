@@ -1,10 +1,10 @@
 import 'package:random_movie/models/models.dart';
 
-/// Helpers for keeping draw selections within the current candidate scope.
+/// 让抽片选中的影片始终落在当前候选范围内。
 class DrawSelection {
   const DrawSelection._();
 
-  /// Normalizes, de-duplicates, and optionally scopes movie ids.
+  /// 规范化、去重，并按需裁剪到 [scope] 范围内。
   static List<String> restrictToScope(
     Iterable<String> ids, {
     Iterable<String>? scope,
@@ -37,7 +37,7 @@ class DrawSelection {
   }) => restrictToScope(ids, scope: scope);
 }
 
-/// Per-mode selection state used by the draw page.
+/// 抽片页使用的按模式隔离的选中状态。
 class DrawSelectionState {
   final Map<DrawMode, Set<String>> _selectedByMode = {
     for (final mode in DrawMode.values) mode: <String>{},

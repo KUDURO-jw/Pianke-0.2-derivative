@@ -40,7 +40,7 @@ class _CollectionsPageState extends State<CollectionsPage> {
       body: Consumer<CollectionProvider>(
         builder: (context, provider, _) {
           if (provider.isLoading && !provider.hasLoaded) {
-            return const LoadingState(message: '加载中...');
+            return const LoadingState(message: '加载中…');
           }
           if (provider.error != null &&
               provider.manualCollections.isEmpty &&
@@ -57,7 +57,7 @@ class _CollectionsPageState extends State<CollectionsPage> {
           if (manual.isEmpty && smart.isEmpty) {
             return EmptyState(
               title: '还没有合集',
-              subtitle: '把喜欢的电影归到一起，或等片库丰富后自动生成智能合集',
+              subtitle: '把喜欢的影片归到一起，或等片库丰富后自动生成智能合集',
               icon: Icons.collections_bookmark_outlined,
               onAction: () => _createCollection(context),
               actionLabel: '新建合集',

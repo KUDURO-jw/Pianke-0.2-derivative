@@ -10,7 +10,7 @@ import 'package:random_movie/models/models.dart';
 import 'package:random_movie/providers/movie_provider.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
 
-/// \u89c2\u5f71\u8bb0\u5f55\u9875\u9762
+/// 观影记录页面
 class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
 
@@ -131,7 +131,7 @@ class _HistoryCalendarPageState extends State<HistoryCalendarPage> {
           onPressed: () => context.pop(),
           icon: const Icon(Icons.chevron_left_rounded, size: 30),
         ),
-        title: const Text('\u65e5\u5386'),
+        title: const Text('日历'),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Divider(
@@ -237,9 +237,9 @@ class _HistoryListView extends StatelessWidget {
       slivers: [
         SliverAppBar(
           pinned: true,
-          title: const Text('\u89c2\u5f71\u8bb0\u5f55'),
+          title: const Text('观影记录'),
         ),
-        // \u65e5\u5386\u5185\u5d4c\u5728\u6807\u9898\u6b63\u4e0b\u65b9
+        // 日历内嵌在标题正下方
         SliverToBoxAdapter(child: _buildCalendar(context)),
         _buildContent(context),
       ],
@@ -291,7 +291,7 @@ class _HistoryListView extends StatelessWidget {
     if ((!hasLoadedHistory || isHistoryLoading) && sessionEntries.isEmpty) {
       return const SliverFillRemaining(
         hasScrollBody: false,
-        child: LoadingState(message: '\u52a0\u8f7d\u4e2d...'),
+        child: LoadingState(message: '加载中…'),
       );
     }
 
@@ -309,9 +309,9 @@ class _HistoryListView extends StatelessWidget {
       return const SliverFillRemaining(
         hasScrollBody: false,
         child: EmptyState(
-          title: '\u8fd8\u6ca1\u6709\u89c2\u5f71\u8bb0\u5f55',
+          title: '还没有观影记录',
           subtitle:
-              '\u5728\u7535\u5f71\u8be6\u60c5\u9875\u300c\u8bb0\u5f55\u4e00\u6b21\u89c2\u5f71\u300d\u540e\uff0c\u65f6\u95f4\u7ebf\u4f1a\u51fa\u73b0\u5728\u8fd9\u91cc\u3002',
+              '在影片详情页「记录一次观影」后，时间线会出现在这里。',
           icon: Icons.visibility_outlined,
         ),
       );
@@ -360,7 +360,7 @@ class _HistoryListView extends StatelessWidget {
   }
 }
 
-/// \u89c2\u5f71\u9875\u9876\u90e8\u7edf\u8ba1\u4eea\u8868\u76d8\u3002
+/// 观影页顶部统计仪表盘。
 class _StatsDashboard extends StatelessWidget {
   final ViewingStats stats;
 
@@ -381,14 +381,14 @@ class _StatsDashboard extends StatelessWidget {
               Expanded(
                 child: _StatCell(
                   value: '${stats.monthlyCount}',
-                  label: '\u672c\u6708\u89c2\u5f71',
+                  label: '本月观影',
                 ),
               ),
               _divider(colorScheme),
               Expanded(
                 child: _StatCell(
                   value: '${stats.totalCount}',
-                  label: '\u7d2f\u8ba1\u89c2\u5f71',
+                  label: '累计观影',
                 ),
               ),
               _divider(colorScheme),
@@ -396,8 +396,8 @@ class _StatsDashboard extends StatelessWidget {
                 child: _StatCell(
                   value: stats.highestRating != null
                       ? stats.highestRating!.toStringAsFixed(1)
-                      : '\u2014',
-                  label: '\u6211\u7684\u6700\u9ad8\u5206',
+                      : '—',
+                  label: '我的最高分',
                 ),
               ),
               _divider(colorScheme),
@@ -405,8 +405,8 @@ class _StatsDashboard extends StatelessWidget {
                 child: _StatCell(
                   value: stats.streakDays > 0
                       ? '${stats.streakDays}'
-                      : '\u2014',
-                  label: '\u8fde\u7eed\u5929\u6570',
+                      : '—',
+                  label: '连续天数',
                 ),
               ),
             ],
@@ -427,7 +427,7 @@ class _StatsDashboard extends StatelessWidget {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  '\u5e38\u770b\u7c7b\u578b',
+                  '常看类型',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -510,13 +510,13 @@ class _StatCell extends StatelessWidget {
 
 class _HistoryCalendarView extends StatelessWidget {
   static const List<String> _weekdays = [
-    '\u65e5',
-    '\u4e00',
-    '\u4e8c',
-    '\u4e09',
-    '\u56db',
-    '\u4e94',
-    '\u516d',
+    '日',
+    '一',
+    '二',
+    '三',
+    '四',
+    '五',
+    '六',
   ];
 
   final HistoryMonthKey visibleMonth;
@@ -553,7 +553,7 @@ class _HistoryCalendarView extends StatelessWidget {
     if ((!hasLoaded || isLoading) && monthData == null) {
       return _boundedIfEmbedded(
         const LoadingState(
-          message: '\u6b63\u5728\u51c6\u5907\u672c\u6708\u6d77\u62a5...',
+          message: '正在准备本月海报…',
         ),
       );
     }
@@ -649,7 +649,7 @@ class _HistoryCalendarView extends StatelessWidget {
               child: TextButton(
                 onPressed: onJumpToToday,
                 child: const Text(
-                  '\u8fd9\u4e2a\u6708\u8fd8\u6ca1\u6709\u89c2\u5f71\u8bb0\u5f55',
+                  '这个月还没有观影记录',
                 ),
               ),
             ),
@@ -886,7 +886,7 @@ class _HistoryDaySheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dateLabel = DateFormat(
-      'yyyy\u5e74M\u6708d\u65e5',
+      'yyyy年M月d日',
     ).format(summary.date);
 
     return SafeArea(
@@ -905,7 +905,7 @@ class _HistoryDaySheet extends StatelessWidget {
               Text(dateLabel, style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: AppTheme.spacingXSmall),
               Text(
-                '\u5171 ${summary.count} \u90e8',
+                '共 ${summary.count} 部',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: AppTheme.spacingMedium),

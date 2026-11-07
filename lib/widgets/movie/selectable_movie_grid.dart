@@ -5,7 +5,7 @@ import 'package:random_movie/config/api_config.dart';
 import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/models/movie.dart';
 
-/// 可选择电影网格
+/// 可选择影片网格
 class SelectableMovieGrid extends StatelessWidget {
   final List<Movie> movies;
   final Set<String> selectedIds;

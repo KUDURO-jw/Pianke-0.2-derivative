@@ -137,7 +137,7 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
 
   Widget _buildBody(ColorScheme colorScheme) {
     if (_loading) {
-      return const LoadingState(message: '加载中...');
+      return const LoadingState(message: '加载中…');
     }
     if (_error != null) {
       return ErrorState(message: _error!, onRetry: _load);
@@ -145,7 +145,7 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
     if (_movies.isEmpty) {
       return EmptyState(
         title: '合集里还没有影片',
-        subtitle: _canEdit ? '点右上角把喜欢的电影加进来' : '片库丰富后会自动归类到这里',
+        subtitle: _canEdit ? '点右上角把喜欢的影片加进来' : '片库丰富后会自动归类到这里',
         icon: Icons.movie_outlined,
         onAction: _canEdit ? _manageMembers : null,
         actionLabel: '添加影片',
@@ -430,7 +430,7 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
               child: TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
-                  hintText: '搜索片库...',
+                  hintText: '搜索片库…',
                   isDense: true,
                   prefixIcon: const Icon(Icons.search, size: 20),
                   border: OutlineInputBorder(

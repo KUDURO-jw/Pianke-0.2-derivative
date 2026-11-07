@@ -69,7 +69,7 @@ class _BootstrapShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '片刻',
+      title: '片刻 0.2',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
@@ -256,7 +256,7 @@ class _AppLifecycleShellState extends State<_AppLifecycleShell>
   Widget build(BuildContext context) {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, _) => MaterialApp.router(
-        title: '片刻',
+        title: '片刻 0.2',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,

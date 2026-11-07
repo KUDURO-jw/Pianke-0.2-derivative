@@ -28,11 +28,11 @@ class StorageService {
   static const String _movieWatchedPredicate =
       '(m.watched = 1 OR EXISTS(SELECT 1 FROM $_viewingSessionsTable vs WHERE vs.movie_id = m.id))';
 
-  /// 派生字段：电影是否看过（显式状态或存在观影会话）
+  /// 派生字段：影片是否看过（显式状态或存在观影会话）
   static const String _derivedWatchedExpr =
       '$_movieWatchedPredicate AS derived_watched';
 
-  /// 派生字段：最近一次观看时间，兼容没有会话的显式已看状态。
+  /// 派生字段：最近一次观影时间，兼容没有会话的显式已看状态。
   static const String _derivedWatchedAtExpr =
       'COALESCE((SELECT MAX(vs.watched_at) FROM $_viewingSessionsTable vs WHERE vs.movie_id = m.id), m.watched_at) AS derived_watched_at';
 
@@ -338,7 +338,7 @@ class StorageService {
     );
   }
 
-  /// v4 迁移：为现有 watched=1 的电影各生成一条默认观影会话，
+  /// v4 迁移：为现有 watched=1 的影片各生成一条默认观影会话，
   /// watchedAt 取现有值、rating/note 取 movie 的 userRating/userReview。
   Future<void> _backfillViewingSessions(Database db) async {
     final rows = await db.query(
@@ -537,7 +537,7 @@ class StorageService {
     await _prefs.setString(_themeModeKey, mode);
   }
 
-  // ========== 电影 ==========
+  // ========== 影片 ==========
 
   Future<int> countMovies({
     String searchQuery = '',
@@ -574,7 +574,7 @@ class StorageService {
     return buffer.toString();
   }
 
-  /// 已看排序：最近观看优先；未看排序：未看在前，再按入库时间。
+  /// 已看排序：最近观影优先；未看排序：未看在前，再按入库时间。
   String _movieOrderBy({required bool watchedOnly}) {
     return watchedOnly
         ? 'derived_watched_at DESC, m.created_at DESC'
@@ -954,7 +954,7 @@ class StorageService {
 
   // ========== 观影会话 ==========
 
-  /// 某部影片的所有观影会话，按观看时间倒序。
+  /// 某部影片的所有观影会话，按观影时间倒序。
   Future<List<ViewingSession>> querySessionsByMovie(String movieId) async {
     _ensureInitialized();
     final rows = await _db.query(
@@ -966,7 +966,7 @@ class StorageService {
     return rows.map(_sessionFromDbMap).toList();
   }
 
-  /// 某月所有观影会话，按观看时间倒序。
+  /// 某月所有观影会话，按观影时间倒序。
   Future<List<ViewingSession>> querySessionsByMonth(DateTime month) async {
     _ensureInitialized();
     final firstDay = DateTime(month.year, month.month);
@@ -980,7 +980,7 @@ class StorageService {
     return rows.map(_sessionFromDbMap).toList();
   }
 
-  /// 分页查询全部观影会话（时间线），按观看时间倒序。
+  /// 分页查询全部观影会话（时间线），按观影时间倒序。
   Future<List<ViewingSession>> querySessions({
     required int limit,
     required int offset,
@@ -1228,7 +1228,7 @@ class StorageService {
     final genreDistribution = genreCounts.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
-    // 连续观影天数：取所有观看日期去重，从今天/昨天往前数
+    // 连续观影天数：取所有观影日期去重，从今天/昨天往前数
     final dateRows = await _db.rawQuery(
       'SELECT DISTINCT substr(watched_at, 1, 10) AS day FROM $_viewingSessionsTable',
     );
@@ -1830,7 +1830,7 @@ class StorageService {
     return rows.map(_drawRecordFromDbMap).toList();
   }
 
-  /// 直接写入电影（跳过重复id检查），仅供备份恢复使用
+  /// 直接写入影片（跳过重复id检查），仅供备份恢复使用
   Future<void> addMovieDirectly(Movie movie) async {
     _ensureInitialized();
     await _db.insert(
@@ -2049,7 +2049,7 @@ class DuplicateMovieException implements Exception {
   DuplicateMovieException(this.existingMovie);
 
   @override
-  String toString() => '电影《${existingMovie.title}》已在片库中';
+  String toString() => '影片《${existingMovie.title}》已在片库中';
 }
 
 class _SqlClause {

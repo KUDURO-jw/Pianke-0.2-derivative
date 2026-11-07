@@ -1,21 +1,68 @@
 Pianke derivative work notice
+=============================
 
-This repository is a derivative work based on Pianke by ShareWinter:
+本仓库是基于 Pianke 的二次创作（derivative work）。
+
+原项目 Origin
+-------------
+Pianke by ShareWinter
 https://github.com/ShareWinter/Pianke
 
-The original project and its retained copyright notices are licensed under
-the Apache License, Version 2.0. See LICENSE for the full license text.
+原项目及其保留的版权声明以 Apache License, Version 2.0 授权。
+完整许可证全文见同目录下的 LICENSE。
 
-Changes in this derivative:
-- Fixed draw-page selection, count, filtering, and per-mode state handling.
-- Unified watched-state detection between the library and draw features.
-- Fixed watched-state refresh and SQLite movie-ID query ordering.
-- Added regression tests for draw selection and watched-state behavior.
-- Added optional Jianguoyun WebDAV backup and two-device synchronization.
-- Added secure application-password storage, conflict confirmation, snapshot
-  validation, and automatic replacement of existing remote backups.
-- WebDAV credentials and local device configuration are not included in the
-  repository or backup snapshots.
+Copyright 2026 ShareWinter        （原始项目）
+Copyright 2026 KUDURO-jw          （二次创作部分）
 
-This derivative is not affiliated with or endorsed by ShareWinter. The
-original name, copyright, and license notices are retained respectfully.
+
+二次创作说明 Changes in this derivative
+--------------------------------------
+本仓库在原项目基础上做了以下修改，分布在不同文件中：
+
+1. 抽片修复
+   - 修复抽片页的选择、候选数量、筛选条件以及各模式之间的状态残留问题。
+   - 新增 lib/services/draw_selection.dart，负责候选范围裁剪与按模式隔离的选择状态。
+
+2. 已看状态统一
+   - 新增 lib/services/watch_status.dart，作为全库唯一的「是否已看」判定入口。
+   - 片库页与抽片页现在共用同一套判定逻辑，剧集按分集全部看完才算已看。
+   - 修复已看状态刷新后不更新、以及影片查询排序不正确的问题。
+
+3. 坚果云 WebDAV 同步（本二创新增功能）
+   - 新增 lib/services/webdav_client.dart、webdav_sync_service.dart。
+   - 新增 lib/services/backup_snapshot.dart，提供带 SHA-256 校验的快照格式。
+   - 新增 lib/widgets/settings/webdav_sync_section.dart 作为设置页同步区域。
+   - 应用密码通过系统安全存储保存，不写入 SharedPreferences。
+   - 上传采用「临时文件 + MOVE 覆盖」的方式，避免中途失败破坏已有备份。
+   - 双设备同时修改时进入冲突流程，由用户选择保留本地还是云端。
+
+4. 测试
+   - 新增 test/services/draw_selection_test.dart
+   - 新增 test/services/draw_service_test.dart
+   - 新增 test/services/webdav_sync_test.dart
+
+5. 文本与标识
+   - 重写 README 的数据与隐私说明、许可证与二创来源章节。
+   - 统一界面术语（影片 / 观影记录）与标点（中文省略号）。
+   - 应用显示名、User-Agent 加入二创标识，避免与原版混淆。
+   - 更新检查地址改为本仓库自己的 update.json，不再指向原项目发布页。
+
+
+数据处理说明 Data handling
+-------------------------
+- 仓库中不包含任何 WebDAV 账号、应用密码或本地设备配置。
+- 通过 WebDAV 上传的同步快照包含片库、观影记录、合集、标签与抽片记录，
+  以及 settings 段中的用户名与主题模式。
+- 同步快照不包含独立的 user 身份段（includeUserIdentity 为 false），
+  但仍会带上 settings.userName，即本机显示的用户名。
+- 应用密码保存在系统安全存储中，不写入 SharedPreferences，也不进入快照。
+- 同步目标由用户自行填写，数据仅经用户自己的坚果云账号，不经过本项目维护者。
+
+
+声明 Disclaimer
+---------------
+本二次创作与 ShareWinter 之间不存在隶属关系，也未获得其对本次修改的认可。
+原项目名称、版权声明与许可证声明均予保留。
+
+This derivative is not affiliated with or endorsed by ShareWinter.
+The original name, copyright, and license notices are retained respectfully.

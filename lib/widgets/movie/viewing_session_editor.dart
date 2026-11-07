@@ -158,7 +158,7 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
                   AppTheme.spacingLarge,
                 ),
                 children: [
-                  _label(context, '观看日期'),
+                  _label(context, '观影日期'),
                   InkWell(
                     onTap: _pickDate,
                     borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
@@ -233,7 +233,7 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
                     controller: _noteController,
                     maxLines: 3,
                     decoration: InputDecoration(
-                      hintText: '这次观影的想法...',
+                      hintText: '这次观影的想法…',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(
                           AppTheme.radiusMedium,

@@ -3,8 +3,13 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 
+/// 同步快照格式版本。改动载荷结构时递增，旧版本快照会被拒绝解析。
 const int syncSnapshotFormatVersion = 1;
 
+/// 带校验值的备份快照。
+///
+/// 在普通备份载荷外附加 `sync` 段（格式版本、更新时间、SHA-256 校验值），
+/// 用于 WebDAV 同步时判断本地与云端是否发生变化、以及校验下载内容是否完整。
 class BackupSnapshot {
   final Map<String, dynamic> payload;
   final DateTime updatedAt;

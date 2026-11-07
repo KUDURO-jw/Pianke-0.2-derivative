@@ -1,11 +1,14 @@
 {
-  "versionName": "0.1.1",
-  "versionCode": 2,
-  "title": "片刻 0.1.1",
+  "versionName": "0.2.0",
+  "versionCode": 3,
+  "title": "片刻 0.2 二创版",
   "changelog": [
-    "增加更新推送",
-    "增加按地区智能集合"
+    "修复抽片模式、候选数量与筛选条件的状态残留",
+    "统一片库与抽片页的「已看」判定逻辑",
+    "修复已看状态刷新与影片查询排序问题",
+    "新增坚果云 WebDAV 备份与双设备同步",
+    "应用密码存入系统安全存储，支持同步冲突确认"
   ],
-  "downloadUrl": "https://gitee.com/watlem4g/Pianke/releases/download/v0.1.1/app-arm64-v8a-release.apk",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.0/app-arm64-v8a-release.apk",
   "forceUpdate": false
 }

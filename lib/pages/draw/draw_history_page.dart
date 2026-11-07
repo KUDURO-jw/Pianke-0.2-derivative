@@ -61,7 +61,7 @@ class _DrawHistoryListState extends State<DrawHistoryList> {
         final records = provider.records;
 
         if (provider.isLoading && records.isEmpty) {
-          return const LoadingState(message: '加载中...');
+          return const LoadingState(message: '加载中…');
         }
 
         if (provider.error != null && records.isEmpty) {
