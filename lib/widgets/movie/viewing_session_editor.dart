@@ -38,6 +38,22 @@ class _ViewingSessionEditor extends StatefulWidget {
   State<_ViewingSessionEditor> createState() => _ViewingSessionEditorState();
 }
 
+/// 「和谁一起看」的快捷选项。
+///
+/// [label] 会原样写进 `ViewingSession.watchedWith`，与历史数据格式保持一致，
+/// 都是纯文本，因此旧的自由输入记录无需迁移即可正常回显。
+enum WatchCompanion {
+  alone('alone', '一个人', '👤'),
+  family('family', '和家人', '👨‍👩‍👧'),
+  friends('friends', '朋友', '🍻');
+
+  const WatchCompanion(this.id, this.label, this.emoji);
+
+  final String id;
+  final String label;
+  final String emoji;
+}
+
 class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
   late DateTime _watchedAt;
   late WatchMood _mood;
@@ -45,6 +61,12 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
   late double? _rating;
   late final TextEditingController _withController;
   late final TextEditingController _noteController;
+
+  /// 当前选中的快捷选项；null 表示未选或选了「其他」。
+  WatchCompanion? _companion;
+
+  /// 是否展开自定义输入框（点「其他」或历史数据不是预设项时）。
+  bool _showCustomCompanion = false;
 
   @override
   void initState() {
@@ -54,8 +76,38 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
     _mood = e?.mood ?? WatchMood.none;
     _isRewatch = e?.isRewatch ?? widget.defaultIsRewatch;
     _rating = e?.rating;
-    _withController = TextEditingController(text: e?.watchedWith ?? '');
     _noteController = TextEditingController(text: e?.note ?? '');
+
+    // 回显：历史数据若是三个预设之一则点亮对应芯片，
+    // 否则（自由文本）自动展开自定义输入框，保证老记录不丢。
+    //
+    // 新建记录默认选中「一个人」：观影绝大多数是独自进行，
+    // 预选后用户不点也能直接保存。编辑旧记录时不做改动，
+    // 保持原值（包括原值为空的情况）。
+    final existingWith = e?.watchedWith ?? '';
+    _withController = TextEditingController(text: existingWith);
+    final matched = _matchCompanion(existingWith);
+    _companion = matched;
+    _showCustomCompanion = existingWith.isNotEmpty && matched == null;
+    if (e == null) {
+      _companion = WatchCompanion.alone;
+    }
+  }
+
+  /// 把历史文本匹配回预设选项；同时兼容存 id 和存中文标签两种写法。
+  static WatchCompanion? _matchCompanion(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return null;
+    for (final option in WatchCompanion.values) {
+      if (value == option.label || value == option.id) return option;
+    }
+    return null;
+  }
+
+  /// 当前应当写入 `watchedWith` 的文本。
+  String get _resolvedCompanion {
+    if (_showCustomCompanion) return _withController.text.trim();
+    return _companion?.label ?? '';
   }
 
   @override
@@ -97,7 +149,7 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
               movieId: widget.movieId,
               watchedAt: _watchedAt,
               mood: _mood,
-              watchedWith: _withController.text.trim(),
+              watchedWith: _resolvedCompanion,
               note: _noteController.text.trim(),
               isRewatch: _isRewatch,
               rating: _rating,
@@ -212,20 +264,33 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
                   const SizedBox(height: AppTheme.spacingLarge),
 
                   _label(context, '和谁一起看'),
-                  TextField(
-                    controller: _withController,
-                    decoration: InputDecoration(
-                      hintText: '例如：一个人 / 和家人 / 朋友',
-                      isDense: true,
-                      prefixIcon: const Icon(Icons.people_outline, size: 20),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(
-                          AppTheme.radiusMedium,
+                  Wrap(
+                    spacing: AppTheme.spacingSmall,
+                    runSpacing: AppTheme.spacingSmall,
+                    children: [
+                      for (final option in WatchCompanion.values)
+                        _companionChip(context, option),
+                      _customCompanionChip(context),
+                    ],
+                  ),
+                  if (_showCustomCompanion) ...[
+                    const SizedBox(height: AppTheme.spacingSmall),
+                    TextField(
+                      controller: _withController,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: '例如：和同事 / 团建 / 和猫',
+                        isDense: true,
+                        prefixIcon: const Icon(Icons.edit_outlined, size: 20),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusMedium,
+                          ),
                         ),
                       ),
+                      style: TextStyle(color: colorScheme.onSurface),
                     ),
-                    style: TextStyle(color: colorScheme.onSurface),
-                  ),
+                  ],
                   const SizedBox(height: AppTheme.spacingLarge),
 
                   _label(context, '一句私语'),
@@ -326,6 +391,91 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
         ),
         child: Text(
           '${mood.emoji ?? ''} ${mood.label}',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            color: selected ? Colors.white : colorScheme.onSurface,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 「和谁一起看」的预设芯片，点击即选中；再次点击取消。
+  Widget _companionChip(BuildContext context, WatchCompanion option) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final selected = !_showCustomCompanion && _companion == option;
+    return GestureDetector(
+      onTap: () => setState(() {
+        if (selected) {
+          _companion = null;
+        } else {
+          _companion = option;
+          _showCustomCompanion = false;
+          // 从「其他」切回预设时清空输入框，避免切换后残留看不见的文本。
+          _withController.clear();
+        }
+      }),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppTheme.spacingMedium,
+          vertical: AppTheme.spacingSmall,
+        ),
+        decoration: BoxDecoration(
+          color: selected ? AppTheme.accent : colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+          border: Border.all(
+            color: selected
+                ? AppTheme.accent
+                : colorScheme.outline.withValues(alpha: 0.2),
+          ),
+        ),
+        child: Text(
+          '${option.emoji} ${option.label}',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            color: selected ? Colors.white : colorScheme.onSurface,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 「其他」芯片：选中后展开自由输入，避免把功能做窄。
+  Widget _customCompanionChip(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final selected = _showCustomCompanion;
+    return GestureDetector(
+      onTap: () => setState(() {
+        if (selected && _withController.text.trim().isEmpty) {
+          _showCustomCompanion = false;
+        } else if (selected) {
+          _showCustomCompanion = false;
+          _withController.clear();
+        } else {
+          _companion = null;
+          _showCustomCompanion = true;
+        }
+      }),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppTheme.spacingMedium,
+          vertical: AppTheme.spacingSmall,
+        ),
+        decoration: BoxDecoration(
+          color: selected ? AppTheme.accent : colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+          border: Border.all(
+            color: selected
+                ? AppTheme.accent
+                : colorScheme.outline.withValues(alpha: 0.2),
+          ),
+        ),
+        child: Text(
+          '✏️ 其他',
           style: TextStyle(
             fontSize: 13,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
