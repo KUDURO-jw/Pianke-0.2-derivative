@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:random_movie/config/app_theme.dart';
+import 'package:random_movie/config/design_tokens.dart';
+import 'package:random_movie/widgets/common/continuous_rrect.dart';
 
 // ==================== Toast ====================
 
@@ -104,8 +106,15 @@ class AppToast {
 
 // ==================== Soft Containers ====================
 
-/// Light skeuomorphism container — solid background with subtle shadow.
-/// Replaces the old GlassContainer (BackdropFilter) for better performance.
+/// 通用表面容器。
+///
+/// 视觉规格已升级到新的设计令牌体系：
+/// - 默认使用连续圆角（[ContinuousRRect]），在高像素密度屏幕上更柔和
+/// - 默认取 [SurfaceLevel.card] 的层次色，暗色下不再比背景更暗
+/// - 阴影更轻，层次主要靠颜色差异而非投影表达
+///
+/// 保留 [borderRadius] 参数以兼容既有调用点；一旦传入会退化为普通圆角
+/// （因为该参数是 [BorderRadius] 类型，无法表达连续圆角）。
 class SoftContainer extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry? padding;
@@ -117,6 +126,12 @@ class SoftContainer extends StatelessWidget {
   final Border? border;
   final bool showBorder;
   final bool showShadow;
+
+  /// 连续圆角的平滑度。
+  final double smoothing;
+
+  /// 使用的表面层级。
+  final SurfaceLevel level;
 
   const SoftContainer({
     super.key,
@@ -130,44 +145,126 @@ class SoftContainer extends StatelessWidget {
     this.border,
     this.showBorder = true,
     this.showShadow = true,
+    this.smoothing = 0.6,
+    this.level = SurfaceLevel.card,
   });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = colorScheme.brightness == Brightness.dark;
-    final radius = borderRadius ?? BorderRadius.circular(AppTheme.radiusLarge);
-    final effectiveColor = color ?? colorScheme.surfaceContainerLow;
+    final effectiveColor = color ?? level.colorOf(colorScheme);
 
-    final effectiveBorder = showBorder
-        ? (border ?? Border.all(color: colorScheme.outlineVariant, width: 1))
-        : null;
+    final side = showBorder
+        ? (border?.top ??
+              BorderSide(
+                color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+                width: 1,
+              ))
+        : BorderSide.none;
 
+    // 传了显式 borderRadius 就退化为普通圆角，保持既有调用点的观感可控。
+    if (borderRadius != null) {
+      return Container(
+        width: width,
+        height: height,
+        margin: margin,
+        padding: padding ?? const EdgeInsets.all(Spacing.lg),
+        decoration: BoxDecoration(
+          color: effectiveColor,
+          borderRadius: borderRadius,
+          border: showBorder ? border : null,
+          boxShadow: showShadow
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : null,
+        ),
+        child: child,
+      );
+    }
+
+    final shape = ContinuousRRect(
+      radius: Radii.lg,
+      smoothing: smoothing,
+      side: side,
+    );
+
+    // 性能要点：
+    // 不使用 Material(shape:..., clipBehavior: Clip.antiAlias)，
+    // 那会让每个卡片产生独立裁剪图层，列表滚动时逐帧重建，实测明显掉帧。
+    // 改用 CustomPaint 直接绘制形状 + 背景，绘制成本恒定且不进图层缓存。
+    final inset = side.strokeInset;
     return Container(
       width: width,
       height: height,
       margin: margin,
-      padding: padding ?? const EdgeInsets.all(AppTheme.spacingMedium),
-      decoration: BoxDecoration(
-        color: effectiveColor,
-        borderRadius: radius,
-        border: effectiveBorder,
-        boxShadow: showShadow
-            ? [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.08),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ]
-            : null,
+      child: CustomPaint(
+        painter: _ContinuousSurfacePainter(
+          shape: shape,
+          color: effectiveColor,
+          shadow: showShadow,
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: inset,
+            vertical: inset,
+          ).add(
+            padding ?? const EdgeInsets.all(Spacing.lg),
+          ),
+          child: child,
+        ),
       ),
-      child: child,
     );
   }
 }
 
-/// Light skeuomorphism card — wraps SoftContainer with optional tap
+/// 绘制连续圆角面板：底色 + 描边（可选投影）。
+///
+/// 用 CustomPaint 而不是 Material + clipBehavior，避免为每张卡片创建
+/// 独立裁剪图层。shouldRepaint 只在颜色/形状变化时为真。
+class _ContinuousSurfacePainter extends CustomPainter {
+  final ContinuousRRect shape;
+  final Color color;
+  final bool shadow;
+
+  const _ContinuousSurfacePainter({
+    required this.shape,
+    required this.color,
+    required this.shadow,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final path = shape.getOuterPath(rect);
+
+    // 性能：完全不用 canvas.drawShadow。
+    // drawShadow 会做模糊卷积，每张卡片每帧一次，滚动时是最大开销。
+    // 层次感改由「底色深浅差 + 1px 描边」表达，视觉差异极小但零成本。
+    canvas.drawPath(path, Paint()..color = color);
+
+    if (shape.side.style != BorderStyle.none) {
+      canvas.drawPath(
+        shape.getOuterPath(rect.deflate(shape.side.strokeInset / 2)),
+        shape.side.toPaint(),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ContinuousSurfacePainter old) =>
+      old.color != color ||
+      old.shape.radius != shape.radius ||
+      old.shape.smoothing != shape.smoothing ||
+      old.shape.side != shape.side;
+}
+
+/// 轻拟物卡片 —— 在 [SoftContainer] 外包一层点击态
 class SoftCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry? padding;
@@ -176,6 +273,7 @@ class SoftCard extends StatelessWidget {
   final double? height;
   final VoidCallback? onTap;
   final bool showShadow;
+  final SurfaceLevel level;
 
   const SoftCard({
     super.key,
@@ -186,24 +284,44 @@ class SoftCard extends StatelessWidget {
     this.height,
     this.onTap,
     this.showShadow = true,
+    this.level = SurfaceLevel.card,
   });
 
   @override
   Widget build(BuildContext context) {
+    final shape = ContinuousRRect(
+      radius: Radii.lg,
+      smoothing: 0.6,
+      side: BorderSide(
+        color: Theme.of(
+          context,
+        ).colorScheme.outlineVariant.withValues(alpha: 0.45),
+      ),
+    );
+
     Widget card = SoftContainer(
       width: width,
       height: height,
       padding: padding,
       margin: margin,
       showShadow: showShadow,
+      level: level,
       child: child,
     );
 
     if (onTap != null) {
-      card = InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-        child: card,
+      card = Stack(
+        children: [
+          card,
+          Positioned.fill(
+            child: Material(
+              color: Colors.transparent,
+              shape: shape,
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(onTap: onTap, customBorder: shape),
+            ),
+          ),
+        ],
       );
     }
 

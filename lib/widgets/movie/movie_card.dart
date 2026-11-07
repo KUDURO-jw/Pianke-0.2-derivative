@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:random_movie/config/api_config.dart';
 import 'package:random_movie/config/app_theme.dart';
+import 'package:random_movie/config/design_tokens.dart';
 import 'package:random_movie/models/movie.dart';
 import 'package:random_movie/services/watch_status.dart';
 
@@ -26,31 +27,14 @@ class MovieCard extends StatefulWidget {
 
 class _MovieCardState extends State<MovieCard> {
   bool _isPressed = false;
-  bool _posterReady = false;
 
+  /// 性能说明：原实现在 initState 里无条件 addPostFrameCallback 再 setState，
+  /// 让**每张卡片首帧都额外重建一次**。列表近百部影片时成批触发，是掉帧来源之一。
+  /// 现在海报直接在首帧渲染，依靠 CachedNetworkImage 自身的占位与淡入，
+  /// 不再需要额外的 setState 驱动。
   @override
   void initState() {
     super.initState();
-    _syncPosterState();
-  }
-
-  @override
-  void didUpdateWidget(covariant MovieCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.movie.poster == widget.movie.poster) return;
-    _syncPosterState();
-  }
-
-  void _syncPosterState() {
-    _posterReady = widget.movie.poster.isEmpty;
-    if (!_posterReady) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        setState(() {
-          _posterReady = true;
-        });
-      });
-    }
   }
 
   @override
@@ -109,31 +93,35 @@ class _MovieCardState extends State<MovieCard> {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      if (movie.poster.isNotEmpty && _posterReady)
+                      if (movie.poster.isNotEmpty)
                         CachedNetworkImage(
                           imageUrl: movie.poster,
                           httpHeaders: ApiConfig.imageHeaders,
                           fit: BoxFit.cover,
-                          memCacheWidth: 280,
-                          maxWidthDiskCache: 280,
-                          fadeInDuration: Duration.zero,
+                          // 性能：限制解码尺寸，避免按原图（常见 1000px+）解码，
+                          // 这是滚动时最大的内存与解码开销来源。
+                          memCacheWidth: 300,
+                          maxWidthDiskCache: 300,
+                          fadeInDuration: const Duration(milliseconds: 120),
                           placeholder: (_, _) => ColoredBox(
-                            color: colorScheme.surfaceContainerHighest,
+                            color: SurfaceLevel.inset.colorOf(colorScheme),
                           ),
                           errorWidget: (_, _, _) => ColoredBox(
-                            color: colorScheme.surfaceContainerHighest,
-                            child: const Icon(Icons.movie, size: 32),
+                            color: SurfaceLevel.inset.colorOf(colorScheme),
+                            child: Icon(
+                              Icons.movie_outlined,
+                              size: 30,
+                              color: colorScheme.secondaryText,
+                            ),
                           ),
                         )
                       else
                         ColoredBox(
-                          color: colorScheme.surfaceContainerHighest,
+                          color: SurfaceLevel.inset.colorOf(colorScheme),
                           child: Icon(
-                            Icons.movie,
-                            size: 32,
-                            color: colorScheme.onSurface.withValues(
-                              alpha: 0.38,
-                            ),
+                            Icons.movie_outlined,
+                            size: 30,
+                            color: colorScheme.secondaryText,
                           ),
                         ),
                       if (widget.showWatchedBadge)

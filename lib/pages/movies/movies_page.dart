@@ -5,11 +5,14 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:random_movie/config/api_config.dart';
 import 'package:random_movie/config/app_theme.dart';
+import 'package:random_movie/config/design_tokens.dart';
 import 'package:random_movie/models/models.dart';
 import 'package:random_movie/providers/collection_provider.dart';
 import 'package:random_movie/providers/movie_provider.dart';
 import 'package:random_movie/widgets/collection/collection_icon.dart';
+import 'package:random_movie/widgets/common/app_components.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
+import 'package:random_movie/widgets/common/continuous_rrect.dart';
 import 'package:random_movie/widgets/movie/movie_card.dart';
 
 /// 片库页面
@@ -59,11 +62,16 @@ class _MoviesPageState extends State<MoviesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
     final topInset = MediaQuery.of(context).padding.top;
 
     return Scaffold(
+      backgroundColor: scheme.pageSurface,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _navigateToAddMovie(context),
+        icon: const Icon(Icons.add_rounded, size: 22),
+        label: const Text('添加'),
+      ),
       body: CustomScrollView(
         key: const PageStorageKey('movies-grid'),
         controller: _scrollController,
@@ -71,41 +79,70 @@ class _MoviesPageState extends State<MoviesPage> {
           MediaQuery.of(context).size.height * 0.9,
         ),
         slivers: [
-          // --- 悬浮常驻搜索框（无顶栏 / 无标题）---
-          SliverPersistentHeader(
-            pinned: true,
-            delegate: _LibrarySearchHeader(
-              topInset: topInset,
-              colorScheme: colorScheme,
-              controller: _searchController,
-              onChanged: (value) {
-                final wasEmpty = _query.isEmpty;
-                final isEmpty = value.isEmpty;
-                if (wasEmpty != isEmpty) {
-                  setState(() => _query = value);
-                } else {
-                  _query = value;
-                }
-                context.read<MovieProvider>().setSearchQueryDebounced(value);
-              },
-              onClear: () async {
-                _searchController.clear();
-                setState(() => _query = '');
-                await context.read<MovieProvider>().setSearchQuery('');
-              },
+          // ── 页面头部：大标题 + 搜索 + 分段控件 ──
+          // 用 SliverToBoxAdapter 而非 pinned header：
+          // 滚动时让标题自然收起，只保留吸顶的分段控件，减少重绘。
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.only(top: topInset),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Selector<MovieProvider, (int, int)>(
+                    selector: (_, p) => (p.totalCount, p.watchedCount),
+                    builder: (context, data, _) => PageHeader(
+                      title: '片库',
+                      subtitle: data.$1 == 0
+                          ? '还没有影片'
+                          : '共 ${data.$1} 部 · 已看 ${data.$2} 部',
+                      trailing: RoundIconButton(
+                        icon: Icons.add_rounded,
+                        onPressed: () => _navigateToAddMovie(context),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: Spacing.page,
+                    ),
+                    child: AppSearchField(
+                      controller: _searchController,
+                      hint: '搜索片库',
+                      hasText: _query.isNotEmpty,
+                      onChanged: (value) {
+                        final wasEmpty = _query.isEmpty;
+                        final isEmpty = value.isEmpty;
+                        if (wasEmpty != isEmpty) {
+                          setState(() => _query = value);
+                        } else {
+                          _query = value;
+                        }
+                        context
+                            .read<MovieProvider>()
+                            .setSearchQueryDebounced(value);
+                      },
+                      onClear: () async {
+                        _searchController.clear();
+                        setState(() => _query = '');
+                        await context.read<MovieProvider>().setSearchQuery('');
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: Spacing.lg),
+
+                  // 合集横条（搜索时隐藏）
+                  if (_query.isEmpty) _buildCollectionStrip(context),
+                ],
+              ),
             ),
           ),
 
-          // --- 合集横条（搜索时隐藏，聚焦结果）---
-          if (_query.isEmpty)
-            SliverToBoxAdapter(child: _buildCollectionStrip(context)),
-
-          // --- 吸顶筛选头（带数量）---
+          // ── 吸顶分段筛选 ──
           SliverPersistentHeader(
             pinned: true,
             delegate: _LibraryFilterHeader(
-              colorScheme: colorScheme,
-              textTheme: textTheme,
+              colorScheme: scheme,
+              textTheme: Theme.of(context).textTheme,
               onFilterChanged: (filter) =>
                   context.read<MovieProvider>().setLibraryFilter(filter),
             ),
@@ -193,17 +230,18 @@ class _MoviesPageState extends State<MoviesPage> {
 
               return SliverPadding(
                 padding: const EdgeInsets.only(
-                  top: AppTheme.spacingSmall,
-                  left: AppTheme.spacingMedium,
-                  right: AppTheme.spacingMedium,
-                  bottom: 88,
+                  top: Spacing.md,
+                  left: Spacing.page,
+                  right: Spacing.page,
+                  bottom: 96,
                 ),
                 sliver: SliverGrid.builder(
                   gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 200,
-                    childAspectRatio: 0.60,
-                    crossAxisSpacing: AppTheme.spacingMedium,
-                    mainAxisSpacing: AppTheme.spacingMedium,
+                    // 高密度屏幕（如 3200×1440）上等比放大卡片宽度。
+                    maxCrossAxisExtent: 190,
+                    childAspectRatio: 0.58,
+                    crossAxisSpacing: Spacing.md,
+                    mainAxisSpacing: Spacing.lg,
                   ),
                   itemCount: itemCount,
                   addAutomaticKeepAlives: false,
@@ -232,11 +270,6 @@ class _MoviesPageState extends State<MoviesPage> {
             },
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _navigateToAddMovie(context),
-        icon: const Icon(Icons.add),
-        label: const Text('添加'),
       ),
     );
   }
@@ -335,159 +368,6 @@ class _MoviesPageState extends State<MoviesPage> {
 }
 
 /// 悬浮常驻搜索框的吸顶头 —— 占据状态栏安全区 + 圆角搜索框，滚动时始终悬浮顶部。
-class _LibrarySearchHeader extends SliverPersistentHeaderDelegate {
-  _LibrarySearchHeader({
-    required this.topInset,
-    required this.colorScheme,
-    required this.controller,
-    required this.onChanged,
-    required this.onClear,
-  });
-
-  final double topInset;
-  final ColorScheme colorScheme;
-  final TextEditingController controller;
-  final ValueChanged<String> onChanged;
-  final VoidCallback onClear;
-
-  static const double _zone = 64;
-
-  @override
-  double get minExtent => topInset + _zone;
-
-  @override
-  double get maxExtent => topInset + _zone;
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        boxShadow: overlapsContent
-            ? [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ]
-            : null,
-      ),
-      child: Padding(
-        padding: EdgeInsets.only(
-          top: topInset,
-          left: AppTheme.spacingMedium,
-          right: AppTheme.spacingMedium,
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _LibrarySearchField(
-              controller: controller,
-              onChanged: onChanged,
-              onClear: onClear,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  bool shouldRebuild(covariant _LibrarySearchHeader oldDelegate) {
-    return oldDelegate.topInset != topInset ||
-        oldDelegate.colorScheme != colorScheme ||
-        oldDelegate.controller != controller;
-  }
-}
-
-/// 常驻搜索框 —— MD3 圆角填充样式；自管清除按钮，避免吸顶重建时丢失焦点。
-class _LibrarySearchField extends StatefulWidget {
-  const _LibrarySearchField({
-    required this.controller,
-    required this.onChanged,
-    required this.onClear,
-  });
-
-  final TextEditingController controller;
-  final ValueChanged<String> onChanged;
-  final VoidCallback onClear;
-
-  @override
-  State<_LibrarySearchField> createState() => _LibrarySearchFieldState();
-}
-
-class _LibrarySearchFieldState extends State<_LibrarySearchField> {
-  bool _hasText = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _hasText = widget.controller.text.isNotEmpty;
-    widget.controller.addListener(_syncHasText);
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(_syncHasText);
-    super.dispose();
-  }
-
-  void _syncHasText() {
-    final has = widget.controller.text.isNotEmpty;
-    if (has != _hasText) setState(() => _hasText = has);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return TextField(
-      controller: widget.controller,
-      onChanged: widget.onChanged,
-      textInputAction: TextInputAction.search,
-      style: TextStyle(color: colorScheme.onSurface, fontSize: 15),
-      decoration: InputDecoration(
-        hintText: '搜索片库',
-        isDense: true,
-        filled: true,
-        fillColor: colorScheme.surfaceContainerHigh,
-        hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
-        prefixIcon: Icon(
-          Icons.search,
-          size: 22,
-          color: colorScheme.onSurfaceVariant,
-        ),
-        suffixIcon: _hasText
-            ? IconButton(
-                icon: const Icon(Icons.close, size: 20),
-                color: colorScheme.onSurfaceVariant,
-                tooltip: '清除',
-                onPressed: widget.onClear,
-              )
-            : null,
-        contentPadding: const EdgeInsets.symmetric(vertical: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(28),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(28),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(28),
-          borderSide: BorderSide(color: colorScheme.primary, width: 1.5),
-        ),
-      ),
-    );
-  }
-}
-
 /// 吸顶筛选头 —— 「全部 / 未看 / 已看」带全局数量的胶囊，滚动时常驻顶部。
 class _LibraryFilterHeader extends SliverPersistentHeaderDelegate {
   _LibraryFilterHeader({
@@ -514,79 +394,36 @@ class _LibraryFilterHeader extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    return DecoratedBox(
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Spacing.page,
+        vertical: Spacing.sm,
+      ),
       decoration: BoxDecoration(
-        color: colorScheme.surface,
-        border: Border(
-          bottom: BorderSide(color: colorScheme.outlineVariant, width: 1),
-        ),
+        // 吸顶时用页面底色垫底，避免内容从下方透出来
+        color: colorScheme.pageSurface,
       ),
       child: Selector<MovieProvider, (LibraryFilter, int, int)>(
         selector: (_, p) => (p.libraryFilter, p.totalCount, p.watchedCount),
         builder: (context, data, _) {
           final (filter, total, watched) = data;
-          return ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppTheme.spacingMedium,
-              vertical: AppTheme.spacingSmall,
+          return SegmentedSwitch(
+            labels: const ['全部', '未看', '已看'],
+            counts: [total, total - watched, watched],
+            selectedIndex: switch (filter) {
+              LibraryFilter.all => 0,
+              LibraryFilter.unwatched => 1,
+              LibraryFilter.watched => 2,
+            },
+            onChanged: (i) => onFilterChanged(
+              switch (i) {
+                0 => LibraryFilter.all,
+                1 => LibraryFilter.unwatched,
+                _ => LibraryFilter.watched,
+              },
             ),
-            children: [
-              _chip(LibraryFilter.all, '全部', total, filter),
-              const SizedBox(width: AppTheme.spacingSmall),
-              _chip(LibraryFilter.unwatched, '未看', total - watched, filter),
-              const SizedBox(width: AppTheme.spacingSmall),
-              _chip(LibraryFilter.watched, '已看', watched, filter),
-            ],
           );
         },
-      ),
-    );
-  }
-
-  Widget _chip(
-    LibraryFilter filter,
-    String label,
-    int count,
-    LibraryFilter current,
-  ) {
-    final selected = filter == current;
-    final bg = selected ? AppTheme.accent : colorScheme.surfaceContainerHighest;
-    final fg = selected ? Colors.white : colorScheme.onSurfaceVariant;
-
-    return Center(
-      child: GestureDetector(
-        onTap: () => onFilterChanged(filter),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: textTheme.bodyMedium?.copyWith(
-                  color: fg,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                '$count',
-                style: textTheme.bodySmall?.copyWith(
-                  color: selected
-                      ? Colors.white.withValues(alpha: 0.85)
-                      : colorScheme.onSurface.withValues(alpha: 0.45),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -704,30 +541,29 @@ class _MyCollectionsEntry extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    final scheme = Theme.of(context).colorScheme;
+    return ContinuousSurface(
+      radius: Radii.md,
+      level: SurfaceLevel.block,
       onTap: onTap,
-      child: Container(
+      border: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.4)),
+      child: SizedBox(
         width: 88,
-        decoration: BoxDecoration(
-          color: AppTheme.accent.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-          border: Border.all(color: AppTheme.accent.withValues(alpha: 0.25)),
-        ),
-        child: const Column(
+        child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               Icons.collections_bookmark_rounded,
               size: 24,
-              color: AppTheme.accent,
+              color: scheme.onSurfaceVariant,
             ),
-            SizedBox(height: 6),
+            const SizedBox(height: 6),
             Text(
               '我的合集',
               style: TextStyle(
-                fontSize: 12,
+                fontSize: TypeScale.caption,
                 fontWeight: FontWeight.w600,
-                color: AppTheme.accent,
+                color: scheme.onSurface,
               ),
             ),
           ],

@@ -10,6 +10,7 @@ import 'package:random_movie/pages/draw/draw_page.dart';
 import 'package:random_movie/pages/movies/add_movie_page.dart';
 import 'package:random_movie/pages/movies/movie_detail_page.dart';
 import 'package:random_movie/pages/movies/movies_page.dart';
+import 'package:random_movie/widgets/common/app_components.dart';
 import 'package:random_movie/pages/settings/settings_page.dart';
 import 'package:random_movie/providers/movie_provider.dart';
 
@@ -68,33 +69,34 @@ class _HomeShellState extends State<HomeShell> {
 
     return Scaffold(
       body: navigationShell,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: navigationShell.currentIndex,
-        onDestinationSelected: (index) {
+      extendBody: true,
+      bottomNavigationBar: FloatingNavBar(
+        currentIndex: navigationShell.currentIndex,
+        onSelected: (index) {
           navigationShell.goBranch(
             index,
             initialLocation: index == navigationShell.currentIndex,
           );
         },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.movie_outlined),
-            selectedIcon: Icon(Icons.movie),
+        items: const [
+          NavItemData(
+            icon: Icons.video_library_outlined,
+            selectedIcon: Icons.video_library_rounded,
             label: '片库',
           ),
-          NavigationDestination(
-            icon: Icon(Icons.casino_outlined),
-            selectedIcon: Icon(Icons.casino),
+          NavItemData(
+            icon: Icons.casino_outlined,
+            selectedIcon: Icons.casino_rounded,
             label: '抽片',
           ),
-          NavigationDestination(
-            icon: Icon(Icons.visibility_outlined),
-            selectedIcon: Icon(Icons.visibility),
+          NavItemData(
+            icon: Icons.insights_outlined,
+            selectedIcon: Icons.insights_rounded,
             label: '观影',
           ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
+          NavItemData(
+            icon: Icons.settings_outlined,
+            selectedIcon: Icons.settings_rounded,
             label: '设置',
           ),
         ],

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:random_movie/config/app_theme.dart';
+import 'package:random_movie/config/design_tokens.dart';
+import 'package:random_movie/widgets/common/app_components.dart';
 import 'package:random_movie/providers/providers.dart';
 import 'package:random_movie/services/backup_service.dart';
 import 'package:random_movie/services/storage_service.dart';
@@ -47,32 +49,30 @@ class _SettingsPageState extends State<SettingsPage> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('设置')),
+      backgroundColor: colorScheme.pageSurface,
       body: ListView(
         padding: EdgeInsets.fromLTRB(
-          AppTheme.spacingLarge,
-          AppTheme.spacingMedium,
-          AppTheme.spacingLarge,
-          MediaQuery.of(context).padding.bottom + AppTheme.spacingXLarge,
+          Spacing.page,
+          MediaQuery.of(context).padding.top + Spacing.sm,
+          Spacing.page,
+          MediaQuery.of(context).padding.bottom + 100,
         ),
         children: [
+          const PageHeader(title: '设置'),
           _SectionHeader(label: '外观'),
-          const SizedBox(height: AppTheme.spacingSmall),
-          SoftContainer(
-            padding: const EdgeInsets.symmetric(
-              vertical: AppTheme.spacingSmall,
-            ),
+          AppCard(
+            padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
             child: const _ThemeModeSelector(),
           ),
-          const SizedBox(height: AppTheme.spacingLarge),
+          const SizedBox(height: Spacing.xxl),
           _SectionHeader(label: '数据备份'),
-          const SizedBox(height: AppTheme.spacingSmall),
-          SoftContainer(
+          AppCard(
+            padding: EdgeInsets.zero,
             child: Column(
               children: [
                 _SettingsTile(
                   icon: Icons.upload_rounded,
-                  iconColor: const Color(0xFF4ECDC4),
+                  iconColor: const Color(0xFF2F6BFF),
                   title: '导出备份',
                   subtitle: '将片库和抽片记录导出为 JSON 文件',
                   loading: _exportLoading,
@@ -85,7 +85,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 _SettingsTile(
                   icon: Icons.download_rounded,
-                  iconColor: const Color(0xFF45B7D1),
+                  iconColor: const Color(0xFF34C759),
                   title: '从备份恢复',
                   subtitle: '从 JSON 备份文件合并恢复数据',
                   loading: _importLoading,
@@ -94,36 +94,35 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
-          const SizedBox(height: AppTheme.spacingMedium),
+          const SizedBox(height: Spacing.md),
           Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppTheme.spacingSmall,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: Spacing.xs),
             child: Text(
               '备份文件为明文 JSON，可手动查看。恢复时只补充不存在的数据，不会覆盖已有记录。',
               style: TextStyle(
-                fontSize: 12,
-                color: colorScheme.onSurface.withValues(alpha: 0.45),
+                fontSize: TypeScale.caption,
+                color: colorScheme.secondaryText,
                 height: 1.5,
               ),
             ),
           ),
-          const SizedBox(height: AppTheme.spacingLarge),
-          const _SectionHeader(label: '坚果云同步'),
-          const SizedBox(height: AppTheme.spacingSmall),
+          const SizedBox(height: Spacing.xxl),
+          _SectionHeader(label: '坚果云同步'),
+          const SizedBox(height: Spacing.sm),
           WebDavSyncSection(
             serviceFuture: _syncServiceFuture,
             onRestored: _refreshAfterWebDavRestore,
           ),
-          const SizedBox(height: AppTheme.spacingLarge),
+          const SizedBox(height: Spacing.xxl),
           _SectionHeader(label: '关于'),
-          const SizedBox(height: AppTheme.spacingSmall),
-          SoftContainer(
+          const SizedBox(height: Spacing.sm),
+          AppCard(
+            padding: EdgeInsets.zero,
             child: Column(
               children: [
                 _SettingsTile(
                   icon: Icons.system_update_rounded,
-                  iconColor: const Color(0xFFFFB703),
+                  iconColor: const Color(0xFFFFB020),
                   title: '检查更新',
                   subtitle: '检查片刻 0.2 二创版的新版本',
                   loading: _updateLoading,
@@ -136,7 +135,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 _SettingsTile(
                   icon: Icons.description_outlined,
-                  iconColor: const Color(0xFF6C88C4),
+                  iconColor: const Color(0xFF8A8D93),
                   title: '开源声明',
                   subtitle: '基于 ShareWinter/Pianke 二次创作 · Apache License 2.0',
                   loading: false,
@@ -161,7 +160,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   label,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: TypeScale.caption,
                     color: colorScheme.onSurface.withValues(alpha: 0.45),
                   ),
                 );
@@ -541,7 +540,7 @@ class _ThemeModeTile extends StatelessWidget {
                   Text(
                     subtitle,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: TypeScale.caption,
                       color: colorScheme.onSurfaceVariant,
                     ),
                   ),
@@ -622,7 +621,7 @@ class _SettingsTile extends StatelessWidget {
                   Text(
                     subtitle,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: TypeScale.caption,
                       color: colorScheme.onSurface.withValues(alpha: 0.5),
                     ),
                   ),
