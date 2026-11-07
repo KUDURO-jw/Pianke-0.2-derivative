@@ -7,6 +7,7 @@ import 'package:random_movie/config/api_config.dart';
 import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/models/models.dart';
 import 'package:random_movie/providers/providers.dart';
+import 'package:random_movie/services/watch_status.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
 import 'package:random_movie/widgets/movie/movie_tag_editor.dart';
 import 'package:random_movie/widgets/movie/viewing_session_editor.dart';
@@ -134,11 +135,9 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
     _episodes = List<MovieEpisode>.from(movie.episodes);
     _userRating = movie.userRating;
 
-    final isSeries = movie.subjectType == MovieSubjectType.tvSeries;
-    final hasEpisodes = isSeries && _episodes.isNotEmpty;
-    _watched = hasEpisodes
-        ? _episodes.every((episode) => episode.watched)
-        : movie.watched;
+    // 统一走 WatchStatus，与片库、抽片页保持同一套判定：
+    // 剧集要求所有分集都看完才算已看。
+    _watched = WatchStatus.isWatched(movie);
     _watchedAt = _watched ? movie.watchedAt : null;
     _reviewController = TextEditingController(text: movie.userReview ?? '');
     _initialized = true;

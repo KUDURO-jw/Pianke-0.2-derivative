@@ -693,15 +693,28 @@ class MovieProvider extends ChangeNotifier {
     }
   }
 
-  /// 切换「看过」：无会话则新建一条（now），有会话则清空全部会话。
+  /// 切换「看过」。
+  ///
+  /// 方向判定统一走 [WatchStatus.isWatched]，与片库、抽片页保持一致，
+  /// 避免剧集「分集已看完」却被判成未看而重复新增会话。
+  ///
+  /// 取消已看时会同时清空观影会话与剧集分集的已看标记，
+  /// 否则剧集的分集状态会残留，导致界面显示与数据不一致。
   Future<void> toggleWatched(String movieId) async {
     final movie = await getMovieById(movieId, forceRefresh: true);
     if (movie == null) return;
 
-    if (movie.watched) {
+    if (WatchStatus.isWatched(movie)) {
       await _storageService.deleteSessionsByMovie(movieId);
+      final clearedEpisodes = movie.episodes
+          .map((episode) => episode.copyWith(watched: false))
+          .toList(growable: false);
       await _storageService.updateMovie(
-        movie.copyWith(watched: false, clearWatchedAt: true),
+        movie.copyWith(
+          watched: false,
+          clearWatchedAt: true,
+          episodes: clearedEpisodes,
+        ),
       );
     } else {
       await _storageService.addSession(

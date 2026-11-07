@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:random_movie/services/backup_service.dart';
@@ -67,11 +68,18 @@ class _FakeCredentials implements SyncCredentialStore {
 class _FakeBackupStore implements SyncBackupStore {
   BackupSnapshot local;
   BackupSnapshot? restored;
+  int safetyBackupCount = 0;
 
   _FakeBackupStore(this.local);
 
   @override
   Future<BackupSnapshot> createSyncSnapshot() async => local;
+
+  @override
+  Future<String?> createLocalSafetyBackup() async {
+    safetyBackupCount++;
+    return '/tmp/safety_backup.json';
+  }
 
   @override
   Future<RestoreStats> restoreSyncSnapshot(BackupSnapshot snapshot) async {
@@ -278,4 +286,98 @@ void main() {
     expect(remoteChoice.isSuccess, isTrue);
     expect(localStore.restored?.checksum, remote.checksum);
   });
+
+  test('restoring from cloud writes a safety backup before overwriting', () async {
+    SharedPreferences.setMockInitialValues({
+      'pianke_webdav_account': 'user',
+      'pianke_webdav_directory': 'Pianke',
+    });
+    final preferences = await SharedPreferences.getInstance();
+    final localStore = _FakeBackupStore(_snapshot('local'));
+    final remote = _snapshot('remote');
+    final transport = _FakeTransport([
+      WebDavResponse(
+        statusCode: 200,
+        body: utf8.encode(jsonEncode(remote.toJson())),
+      ),
+    ]);
+    final service = WebDavSyncService(
+      backup: localStore,
+      preferences: preferences,
+      credentials: _FakeCredentials('secret'),
+      client: WebDavClient(
+        transport: transport,
+        endpointUri: Uri.parse('https://example.com/dav/'),
+      ),
+    );
+
+    final outcome = await service.synchronize(
+      direction: WebDavSyncDirection.download,
+    );
+
+    expect(outcome.isSuccess, isTrue);
+    expect(localStore.restored?.checksum, remote.checksum);
+    // 覆盖前必须先落一份兜底备份，否则选错一侧就无法找回。
+    expect(localStore.safetyBackupCount, 1);
+  });
+
+  test('safety backup failure does not block the restore', () async {
+    SharedPreferences.setMockInitialValues({
+      'pianke_webdav_account': 'user',
+      'pianke_webdav_directory': 'Pianke',
+    });
+    final preferences = await SharedPreferences.getInstance();
+    final localStore = _FailingSafetyBackupStore(_snapshot('local'));
+    final remote = _snapshot('remote');
+    final transport = _FakeTransport([
+      WebDavResponse(
+        statusCode: 200,
+        body: utf8.encode(jsonEncode(remote.toJson())),
+      ),
+    ]);
+    final service = WebDavSyncService(
+      backup: localStore,
+      preferences: preferences,
+      credentials: _FakeCredentials('secret'),
+      client: WebDavClient(
+        transport: transport,
+        endpointUri: Uri.parse('https://example.com/dav/'),
+      ),
+    );
+
+    final outcome = await service.synchronize(
+      direction: WebDavSyncDirection.download,
+    );
+
+    expect(outcome.isSuccess, isTrue);
+    expect(localStore.restored?.checksum, remote.checksum);
+  });
+}
+
+/// 兜底备份抛异常时应被吞掉，不阻断恢复流程。
+class _FailingSafetyBackupStore implements SyncBackupStore {
+  BackupSnapshot local;
+  BackupSnapshot? restored;
+
+  _FailingSafetyBackupStore(this.local);
+
+  @override
+  Future<BackupSnapshot> createSyncSnapshot() async => local;
+
+  @override
+  Future<String?> createLocalSafetyBackup() async {
+    throw const FileSystemException('disk full');
+  }
+
+  @override
+  Future<RestoreStats> restoreSyncSnapshot(BackupSnapshot snapshot) async {
+    restored = snapshot;
+    local = snapshot;
+    return const RestoreStats(
+      moviesImported: 1,
+      moviesSkipped: 0,
+      drawRecordsImported: 0,
+      drawRecordsSkipped: 0,
+    );
+  }
 }

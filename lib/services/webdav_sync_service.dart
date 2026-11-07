@@ -297,6 +297,14 @@ class WebDavSyncService {
       if (remote == null) {
         throw const WebDavException('云端没有可恢复的备份');
       }
+      // 覆盖前先落一份本机兜底备份：恢复是不可撤回操作，
+      // 一旦用户选错一侧，还能从文档目录里找回上一次数据。
+      // 兜底失败（磁盘满、权限异常等）不应阻断恢复本身，因此单独吞掉。
+      try {
+        await _backup.createLocalSafetyBackup();
+      } catch (_) {
+        // 兜底备份失败，继续执行恢复。
+      }
       await _backup.restoreSyncSnapshot(remote.snapshot);
       await _saveBase(remote.snapshot, remote.snapshot);
       return WebDavSyncOutcome(

@@ -60,12 +60,61 @@ class RestoreStats {
 abstract interface class SyncBackupStore {
   Future<BackupSnapshot> createSyncSnapshot();
   Future<RestoreStats> restoreSyncSnapshot(BackupSnapshot snapshot);
+
+  /// 覆盖本地数据前的兜底备份。实现返回落盘路径，失败返回 null。
+  /// 失败不应阻断同步流程。
+  Future<String?> createLocalSafetyBackup();
 }
 
 class BackupService implements SyncBackupStore {
   final StorageService _storage;
 
   BackupService(this._storage);
+
+  /// 启动兜底：「从云端恢复」会整份替换本地数据，这里先把当前状态
+  /// 静默写入应用文档目录，恢复后若发现选错，用户还能找回上一次数据。
+  ///
+  /// 与 [exportBackup] 的区别：不弹分享面板，直接落盘，返回文件路径。
+  @override
+  Future<String?> createLocalSafetyBackup() async {
+    try {
+      final payload = await _collectPayload(includeUserIdentity: true);
+      final jsonStr = const JsonEncoder.withIndent('  ').convert(payload);
+      final dir = await getApplicationDocumentsDirectory();
+      final folder = Directory('${dir.path}/pianke_safety');
+      if (!folder.existsSync()) {
+        await folder.create(recursive: true);
+      }
+      final stamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      final file = File('${folder.path}/safety_$stamp.json');
+      await file.writeAsString(jsonStr, encoding: utf8);
+      await _pruneSafetyBackups(folder);
+      return file.path;
+    } catch (_) {
+      // 兜底备份失败不应阻断同步流程，交由调用方继续。
+      return null;
+    }
+  }
+
+  /// 只保留最近 [keep] 份兜底备份，避免无限增长。
+  Future<void> _pruneSafetyBackups(Directory folder, {int keep = 5}) async {
+    try {
+      final files = <File>[];
+      await for (final entity in folder.list()) {
+        if (entity is File && entity.path.endsWith('.json')) {
+          files.add(entity);
+        }
+      }
+      files.sort(
+        (a, b) => b.statSync().modified.compareTo(a.statSync().modified),
+      );
+      for (final file in files.skip(keep)) {
+        await file.delete();
+      }
+    } catch (_) {
+      // 清理失败不影响主流程。
+    }
+  }
 
   /// 导出完整备份，通过系统分享面板让用户选择保存位置
   Future<BackupResult> exportBackup() async {

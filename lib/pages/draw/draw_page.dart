@@ -727,7 +727,7 @@ class _DrawPageState extends State<DrawPage> {
             children: [
               Expanded(
                 child: SecondaryButton(
-                  label: movie.watched ? '再记录一次' : '记录观影',
+                  label: WatchStatus.isWatched(movie) ? '再记录一次' : '记录观影',
                   icon: Icons.edit_note_rounded,
                   onPressed: () => _recordViewing(context, movie),
                 ),
@@ -814,7 +814,7 @@ class _DrawPageState extends State<DrawPage> {
     final draft = await showViewingSessionEditor(
       context,
       movieId: movie.id,
-      defaultIsRewatch: movie.watched,
+      defaultIsRewatch: WatchStatus.isWatched(movie),
     );
     if (draft == null || !mounted) return;
 

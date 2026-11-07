@@ -131,8 +131,12 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
       if (outcome.isSuccess) {
         if (outcome.action == WebDavSyncAction.download) {
           await widget.onRestored();
+          if (!mounted) return;
+          // 恢复是覆盖操作，明确告知兜底备份的位置，方便反悔时找回。
+          _setMessage('${outcome.message}（覆盖前的数据已备份到「片刻安全备份」）');
+        } else {
+          _setMessage(outcome.message);
         }
-        _setMessage(outcome.message);
       } else if (outcome.isConflict) {
         _setError('检测到新的冲突，请重新查看两侧版本');
       } else {
@@ -183,11 +187,14 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
     required WebDavSyncDirection direction,
   }) async {
     final remote = inspection.remote?.snapshot;
-    final action = direction == WebDavSyncDirection.upload ? '上传' : '恢复';
+    final isRestore = direction == WebDavSyncDirection.download;
+    final action = isRestore ? '恢复' : '上传';
+    final colorScheme = Theme.of(context).colorScheme;
+
     return await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
-            title: const Text('同步前确认'),
+            title: Text(isRestore ? '确认用云端覆盖本地？' : '同步前确认'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -198,7 +205,38 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
                   remote == null ? '云端：暂无备份' : '云端：${_snapshotSummary(remote)}',
                 ),
                 const SizedBox(height: AppTheme.spacingMedium),
-                Text('确认$action？未确认不会覆盖任何数据。'),
+                if (isRestore)
+                  Container(
+                    padding: const EdgeInsets.all(AppTheme.spacingMedium),
+                    decoration: BoxDecoration(
+                      color: colorScheme.errorContainer.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          size: 20,
+                          color: colorScheme.error,
+                        ),
+                        const SizedBox(width: AppTheme.spacingSmall),
+                        Expanded(
+                          child: Text(
+                            '本机的影片、观影记录、合集与标签将被云端备份'
+                            '整份替换，本地独有的内容会丢失，且无法撤回。',
+                            style: TextStyle(
+                              fontSize: 13,
+                              height: 1.5,
+                              color: colorScheme.onErrorContainer,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  const Text('将把本机数据上传覆盖云端备份。'),
               ],
             ),
             actions: [
@@ -208,7 +246,13 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
               ),
               FilledButton(
                 onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: Text(action),
+                style: isRestore
+                    ? FilledButton.styleFrom(
+                        backgroundColor: colorScheme.error,
+                        foregroundColor: colorScheme.onError,
+                      )
+                    : null,
+                child: Text(isRestore ? '覆盖并恢复' : action),
               ),
             ],
           ),
