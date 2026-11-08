@@ -241,7 +241,6 @@ class _AppLifecycleShellState extends State<_AppLifecycleShell>
   }) async {
     await Future.wait([
       movieProvider.refreshAfterSync(),
-      movieProvider.refreshWatchedHistory(),
       collectionProvider.refresh(),
       drawHistoryProvider.refresh(),
     ]);

@@ -42,8 +42,9 @@ class SelectableMovieGrid extends StatelessWidget {
       key: storageKey,
       controller: controller,
       padding: padding,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       scrollCacheExtent: ScrollCacheExtent.pixels(
-        MediaQuery.of(context).size.height * 1.1,
+        MediaQuery.sizeOf(context).height * 0.55,
       ),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
@@ -90,124 +91,129 @@ class _SelectableMovieTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedOpacity(
-        opacity: selected ? 1.0 : 0.52,
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 120),
-        child: Stack(
-          children: [
-            Container(
-              decoration: selected
-                  ? ShapeDecoration(
-                      shape: RoundedSuperellipseBorder(
-                        borderRadius: BorderRadius.circular(
-                          AppTheme.radiusLarge,
-                        ),
-                        side: BorderSide(color: AppTheme.accent, width: 2),
-                      ),
-                    )
-                  : null,
-              child: ClipRSuperellipse(
-                borderRadius: BorderRadius.circular(AppTheme.radiusLarge - 1),
-                child: AspectRatio(
-                  aspectRatio: 0.65,
-                  child: movie.poster.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: movie.poster,
-                          httpHeaders: ApiConfig.imageHeaders,
-                          fit: BoxFit.cover,
-                          memCacheWidth: 240,
-                          maxWidthDiskCache: 240,
-                          fadeInDuration: Duration.zero,
-                          placeholder: (_, _) => ColoredBox(
-                            color: colorScheme.surfaceContainerHighest,
+    return Semantics(
+      label: movie.title,
+      selected: selected,
+      button: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedOpacity(
+          opacity: selected ? 1.0 : 0.52,
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 120),
+          child: Stack(
+            children: [
+              Container(
+                decoration: selected
+                    ? ShapeDecoration(
+                        shape: RoundedSuperellipseBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusLarge,
                           ),
-                          errorWidget: (_, _, _) => ColoredBox(
+                          side: BorderSide(color: AppTheme.accent, width: 2),
+                        ),
+                      )
+                    : null,
+                child: ClipRSuperellipse(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusLarge - 1),
+                  child: AspectRatio(
+                    aspectRatio: 0.65,
+                    child: movie.poster.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: movie.poster,
+                            httpHeaders: ApiConfig.imageHeaders,
+                            fit: BoxFit.cover,
+                            memCacheWidth: 240,
+                            maxWidthDiskCache: 240,
+                            fadeInDuration: Duration.zero,
+                            placeholder: (_, _) => ColoredBox(
+                              color: colorScheme.surfaceContainerHighest,
+                            ),
+                            errorWidget: (_, _, _) => ColoredBox(
+                              color: colorScheme.surfaceContainerHighest,
+                              child: const Center(
+                                child: Icon(Icons.movie, size: 28),
+                              ),
+                            ),
+                          )
+                        : ColoredBox(
                             color: colorScheme.surfaceContainerHighest,
-                            child: const Center(
-                              child: Icon(Icons.movie, size: 28),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.movie, size: 28),
+                                const SizedBox(height: 4),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                  child: Text(
+                                    movie.title,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 11),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        )
-                      : ColoredBox(
-                          color: colorScheme.surfaceContainerHighest,
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.movie, size: 28),
-                              const SizedBox(height: 4),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
-                                child: Text(
-                                  movie.title,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 11),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                ),
-              ),
-            ),
-            Positioned(
-              top: 4,
-              right: 4,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: selected
-                      ? AppTheme.accent
-                      : Colors.black.withValues(alpha: 0.45),
-                ),
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: selected
-                      ? const Icon(Icons.check, size: 16, color: Colors.white)
-                      : null,
-                ),
-              ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: const ShapeDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black87],
                   ),
-                  shape: RoundedSuperellipseBorder(
-                    borderRadius: BorderRadius.vertical(
-                      bottom: Radius.circular(AppTheme.radiusLarge - 1),
+                ),
+              ),
+              Positioned(
+                top: 4,
+                right: 4,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: selected
+                        ? AppTheme.accent
+                        : Colors.black.withValues(alpha: 0.45),
+                  ),
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: selected
+                        ? const Icon(Icons.check, size: 16, color: Colors.white)
+                        : null,
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const ShapeDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.transparent, Colors.black87],
                     ),
-                    side: BorderSide.none,
+                    shape: RoundedSuperellipseBorder(
+                      borderRadius: BorderRadius.vertical(
+                        bottom: Radius.circular(AppTheme.radiusLarge - 1),
+                      ),
+                      side: BorderSide.none,
+                    ),
                   ),
-                ),
-                child: Text(
-                  movie.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                  child: Text(
+                    movie.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

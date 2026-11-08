@@ -1,4 +1,5 @@
 // Modified for the personal UI edition, 2026-11-08. Apache-2.0.
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +7,7 @@ import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/models/models.dart';
 import 'package:random_movie/providers/providers.dart';
 import 'package:random_movie/services/services.dart';
+import 'package:random_movie/services/local_data_guard.dart';
 import 'package:random_movie/widgets/collection/collection_icon.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
 import 'package:random_movie/widgets/movie/movie_card.dart';
@@ -15,17 +17,25 @@ import 'package:random_movie/widgets/movie/selectable_movie_grid.dart';
 /// 合集详情：展示合集内影片，支持编辑成员（手动合集）与「从本合集抽片」。
 class CollectionDetailPage extends StatefulWidget {
   final MovieCollection collection;
+  final StorageService? storage;
 
-  const CollectionDetailPage({super.key, required this.collection});
+  const CollectionDetailPage({
+    super.key,
+    required this.collection,
+    this.storage,
+  });
 
   @override
   State<CollectionDetailPage> createState() => _CollectionDetailPageState();
 }
 
 class _CollectionDetailPageState extends State<CollectionDetailPage> {
-  final StorageService _storageService = StorageService();
+  late final StorageService _storageService;
 
   bool _loading = true;
+  bool _saving = false;
+  bool _refreshing = false;
+  int _loadRevision = 0;
   String? _error;
   List<Movie> _movies = const [];
 
@@ -35,28 +45,34 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
   @override
   void initState() {
     super.initState();
+    _storageService = widget.storage ?? StorageService();
     _load();
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
+    final revision = ++_loadRevision;
     setState(() {
-      _loading = true;
+      _loading = _movies.isEmpty;
+      _refreshing = true;
       _error = null;
     });
     try {
       final provider = context.read<CollectionProvider>();
       final ids = await provider.memberIdsOf(_collection);
       final movies = await _storageService.getMoviesByIds(ids);
-      if (!mounted) return;
+      if (!mounted || revision != _loadRevision) return;
       setState(() {
         _movies = movies;
         _loading = false;
+        _refreshing = false;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || revision != _loadRevision) return;
       setState(() {
         _error = '加载失败: $error';
         _loading = false;
+        _refreshing = false;
       });
     }
   }
@@ -68,35 +84,52 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
   }
 
   Future<void> _manageMembers() async {
-    final provider = context.read<CollectionProvider>();
     final selectedIds = _movies.map((m) => m.id).toSet();
     final result = await showModalBottomSheet<Set<String>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _MemberPickerSheet(initialSelected: selectedIds),
+      builder: (_) => _MemberPickerSheet(
+        initialSelected: selectedIds,
+        storage: _storageService,
+      ),
     );
-    if (result == null) return;
+    if (result == null || !mounted || _saving) return;
 
     final before = _movies.map((m) => m.id).toSet();
     final toAdd = result.difference(before);
     final toRemove = before.difference(result);
     if (toAdd.isEmpty && toRemove.isEmpty) return;
 
-    for (final id in toAdd) {
-      await provider.addMovieToCollection(_collection.id, id);
-    }
-    for (final id in toRemove) {
-      await provider.removeMovieFromCollection(_collection.id, id);
-    }
-    await _load();
+    await _saveMembers(add: toAdd, remove: toRemove);
   }
 
-  Future<void> _removeMember(Movie movie) async {
-    final provider = context.read<CollectionProvider>();
-    await provider.removeMovieFromCollection(_collection.id, movie.id);
-    await _load();
+  Future<void> _saveMembers({
+    required Iterable<String> add,
+    required Iterable<String> remove,
+  }) async {
+    if (!mounted || _saving) return;
+    LocalDataGuard.hold(this);
+    setState(() => _saving = true);
+    try {
+      await context.read<CollectionProvider>().updateMembers(
+        _collection.id,
+        add: add,
+        remove: remove,
+      );
+      if (!mounted) return;
+      await _load();
+      if (mounted) AppToast.success(context, '合集已更新');
+    } catch (_) {
+      if (mounted) AppToast.error(context, '保存失败，未更改合集，请重试');
+    } finally {
+      LocalDataGuard.release(this);
+      if (mounted) setState(() => _saving = false);
+    }
   }
+
+  Future<void> _removeMember(Movie movie) =>
+      _saveMembers(add: const [], remove: [movie.id]);
 
   @override
   Widget build(BuildContext context) {
@@ -122,18 +155,31 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
             IconButton(
               icon: const Icon(Icons.playlist_add),
               tooltip: '管理影片',
-              onPressed: _manageMembers,
+              onPressed: _saving || _refreshing ? null : _manageMembers,
             ),
         ],
       ),
-      floatingActionButton: _movies.isEmpty
+      floatingActionButton:
+          _movies.isEmpty || _loading || _saving || _error != null
           ? null
           : FloatingActionButton.extended(
               onPressed: _drawFromCollection,
               icon: const Icon(Icons.casino),
               label: const Text('从本合集抽片'),
             ),
-      body: _buildBody(colorScheme),
+      body: Column(
+        children: [
+          if (_saving || (_refreshing && _movies.isNotEmpty))
+            const LinearProgressIndicator(minHeight: 2),
+          if (_error != null && _movies.isNotEmpty)
+            TextButton.icon(
+              onPressed: _load,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('刷新失败，点击重试'),
+            ),
+          Expanded(child: _buildBody(colorScheme)),
+        ],
+      ),
     );
   }
 
@@ -141,7 +187,7 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
     if (_loading) {
       return const LoadingState(message: '加载中…');
     }
-    if (_error != null) {
+    if (_error != null && _movies.isEmpty) {
       return ErrorState(message: _error!, onRetry: _load);
     }
     if (_movies.isEmpty) {
@@ -194,9 +240,11 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
               AppTheme.spacingMedium,
               100,
             ),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 0.60,
+            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 200,
+              childAspectRatio: MediaQuery.textScalerOf(context).scale(14) > 19
+                  ? 0.48
+                  : 0.60,
               crossAxisSpacing: AppTheme.spacingMedium,
               mainAxisSpacing: AppTheme.spacingMedium,
             ),
@@ -204,18 +252,26 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
             itemBuilder: (context, index) {
               final movie = _movies[index];
               return GestureDetector(
-                onLongPress: _canEdit ? () => _confirmRemove(movie) : null,
+                onLongPress: _canEdit && !_saving
+                    ? () => _confirmRemove(movie)
+                    : null,
                 child: MovieCard(
                   key: ValueKey(movie.id),
                   movie: movie,
                   posterHeroTag: 'collection:${_collection.id}:${movie.id}',
-                  onTap: () => context.push(
-                    '/movies/detail/${movie.id}',
-                    extra: MovieDetailArguments(
-                      movie,
-                      posterTag: 'collection:${_collection.id}:${movie.id}',
-                    ),
-                  ),
+                  onTap: () async {
+                    await context.push(
+                      '/movies/detail/${movie.id}',
+                      extra: MovieDetailArguments(
+                        movie,
+                        posterTag: 'collection:${_collection.id}:${movie.id}',
+                      ),
+                    );
+                    if (mounted && context.mounted) {
+                      _load();
+                      context.read<CollectionProvider>().refresh();
+                    }
+                  },
                 ),
               );
             },
@@ -317,63 +373,124 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
 /// 成员选择底部弹窗：从整个片库中勾选合集影片。
 class _MemberPickerSheet extends StatefulWidget {
   final Set<String> initialSelected;
+  final StorageService storage;
 
-  const _MemberPickerSheet({required this.initialSelected});
+  const _MemberPickerSheet({
+    required this.initialSelected,
+    required this.storage,
+  });
 
   @override
   State<_MemberPickerSheet> createState() => _MemberPickerSheetState();
 }
 
 class _MemberPickerSheetState extends State<_MemberPickerSheet> {
-  final StorageService _storageService = StorageService();
+  StorageService get _storageService => widget.storage;
   final TextEditingController _searchController = TextEditingController();
 
   late Set<String> _selected;
   bool _loading = true;
-  List<Movie> _all = const [];
+  String? _error;
+  final ScrollController _scrollController = ScrollController();
+  Timer? _debounce;
+  int _revision = 0;
+  bool _loadingMore = false;
+  bool _hasMore = false;
+  String _query = '';
   List<Movie> _visible = const [];
 
   @override
   void initState() {
     super.initState();
+    LocalDataGuard.hold(this);
+    _scrollController.addListener(_onScroll);
     _selected = {...widget.initialSelected};
     _load();
   }
 
   @override
   void dispose() {
+    LocalDataGuard.release(this);
+    ++_revision;
+    _debounce?.cancel();
+    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
+    final revision = ++_revision;
+    setState(() {
+      _loading = true;
+      _loadingMore = false;
+      _error = null;
+    });
     try {
-      // 拉取整库（MVP 规模为数百部，一次性加载足够）。
       final movies = await _storageService.queryMovies(
-        limit: 100000,
+        limit: 48,
         offset: 0,
+        searchQuery: _query,
       );
-      if (!mounted) return;
+      if (!mounted || revision != _revision) return;
       setState(() {
-        _all = movies;
         _visible = movies;
-        _loading = false;
+        _hasMore = movies.length == 48;
       });
     } catch (_) {
-      if (!mounted) return;
-      setState(() => _loading = false);
+      if (mounted && revision == _revision) {
+        setState(() => _error = '无法加载片库，请重试');
+      }
+    } finally {
+      if (mounted && revision == _revision) setState(() => _loading = false);
+    }
+  }
+
+  void _onScroll() {
+    if (_scrollController.hasClients &&
+        _scrollController.position.extentAfter < 320) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loading || _loadingMore || !_hasMore) return;
+    final revision = _revision;
+    setState(() {
+      _loadingMore = true;
+      _error = null;
+    });
+    try {
+      final movies = await _storageService.queryMovies(
+        limit: 48,
+        offset: _visible.length,
+        searchQuery: _query,
+      );
+      if (!mounted || revision != _revision) return;
+      setState(() {
+        _visible = [..._visible, ...movies];
+        _hasMore = movies.length == 48;
+      });
+    } catch (_) {
+      if (mounted && revision == _revision) {
+        setState(() => _error = '加载更多失败，请重试');
+      }
+    } finally {
+      if (mounted && revision == _revision) {
+        setState(() => _loadingMore = false);
+      }
     }
   }
 
   void _search(String query) {
-    final q = query.trim().toLowerCase();
+    _query = query.trim();
+    ++_revision;
+    _debounce?.cancel();
     setState(() {
-      _visible = q.isEmpty
-          ? _all
-          : _all
-                .where((m) => m.title.toLowerCase().contains(q))
-                .toList(growable: false);
+      _loading = true;
+      _loadingMore = false;
+      _visible = [];
     });
+    _debounce = Timer(const Duration(milliseconds: 250), _load);
   }
 
   void _toggle(Movie movie) {
@@ -461,13 +578,22 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
                       padding: EdgeInsets.all(AppTheme.spacingXLarge),
                       child: Center(child: CircularProgressIndicator()),
                     )
+                  : _error != null && _visible.isEmpty
+                  ? ErrorState(message: _error!, onRetry: _load)
                   : _visible.isEmpty
-                  ? const Padding(
-                      padding: EdgeInsets.all(AppTheme.spacingXLarge),
-                      child: Text('片库里还没有影片'),
+                  ? Padding(
+                      padding: const EdgeInsets.all(AppTheme.spacingXLarge),
+                      child: Text(
+                        _searchController.text.trim().isEmpty
+                            ? '片库里还没有影片'
+                            : '没有找到匹配的影片',
+                      ),
                     )
                   : SelectableMovieGrid(
                       movies: _visible,
+                      controller: _scrollController,
+                      hasMore: _hasMore && _error == null,
+                      isLoadingMore: _loadingMore,
                       selectedIds: _selected,
                       onToggle: _toggle,
                       padding: const EdgeInsets.symmetric(
@@ -476,6 +602,12 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
                       ),
                     ),
             ),
+            if (_error != null && _visible.isNotEmpty)
+              TextButton.icon(
+                onPressed: _loadMore,
+                icon: const Icon(Icons.refresh_rounded),
+                label: Text(_error!),
+              ),
             SafeArea(
               top: false,
               minimum: const EdgeInsets.fromLTRB(
@@ -487,7 +619,9 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
               child: PrimaryButton(
                 label: '完成',
                 icon: Icons.check,
-                onPressed: () => Navigator.of(context).pop(_selected),
+                onPressed: _loading || (_error != null && _visible.isEmpty)
+                    ? null
+                    : () => Navigator.of(context).pop(_selected),
               ),
             ),
           ],

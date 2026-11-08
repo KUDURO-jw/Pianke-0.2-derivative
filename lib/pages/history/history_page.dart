@@ -74,7 +74,7 @@ class _HistoryPageState extends State<HistoryPage> {
               isHistoryLoading: provider.isHistoryLoading,
               isHistoryLoadingMore: provider.isHistoryLoadingMore,
               hasMoreHistory: provider.hasMoreHistory,
-              error: provider.error,
+              error: provider.historyError,
             ),
             builder: (context, state, _) {
               return _HistoryListView(
@@ -169,7 +169,7 @@ class _HistoryCalendarPageState extends State<HistoryCalendarPage> {
               hasLoadedHistoryCalendar: provider.hasLoadedHistoryCalendar,
               visibleMonth: provider.visibleHistoryMonth,
               visibleMonthData: provider.visibleHistoryMonthData,
-              error: provider.error,
+              error: provider.calendarError,
             ),
             builder: (context, state, _) {
               return _HistoryCalendarView(
@@ -300,7 +300,7 @@ class _HistoryListView extends StatelessWidget {
         hasLoadedHistoryCalendar: p.hasLoadedHistoryCalendar,
         visibleMonth: p.visibleHistoryMonth,
         visibleMonthData: p.visibleHistoryMonthData,
-        error: p.error,
+        error: p.calendarError,
       ),
       builder: (context, s, _) => _HistoryCalendarView(
         embedded: true,

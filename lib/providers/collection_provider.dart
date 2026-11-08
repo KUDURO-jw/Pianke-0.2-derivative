@@ -1,16 +1,21 @@
-import 'package:flutter/foundation.dart';
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
+import 'package:random_movie/providers/app_notifier.dart';
 import 'package:random_movie/models/models.dart';
 import 'package:random_movie/services/services.dart';
 
 /// 合集与标签状态管理。
-class CollectionProvider extends ChangeNotifier {
-  final StorageService _storageService = StorageService();
+class CollectionProvider extends AppNotifier {
+  final StorageService _storageService;
+
+  CollectionProvider({StorageService? storage})
+    : _storageService = storage ?? StorageService();
 
   List<MovieCollection> _manualCollections = [];
   List<MovieCollection> _smartCollections = [];
   List<MovieTag> _allTags = [];
   bool _isLoading = false;
   bool _hasLoaded = false;
+  int _revision = 0;
   String? _error;
 
   List<MovieCollection> get manualCollections => _manualCollections;
@@ -26,6 +31,8 @@ class CollectionProvider extends ChangeNotifier {
   }
 
   Future<void> refresh() async {
+    if (isDisposed) return;
+    final revision = ++_revision;
     _isLoading = true;
     _error = null;
     if (_hasLoaded) notifyListeners();
@@ -35,15 +42,18 @@ class CollectionProvider extends ChangeNotifier {
         _storageService.querySmartCollections(),
         _storageService.queryAllTags(),
       ]);
+      if (isDisposed || revision != _revision) return;
       _manualCollections = results[0] as List<MovieCollection>;
       _smartCollections = results[1] as List<MovieCollection>;
       _allTags = results[2] as List<MovieTag>;
     } catch (error) {
-      _error = '加载合集失败: $error';
+      if (revision == _revision) _error = '加载合集失败: $error';
     } finally {
-      _hasLoaded = true;
-      _isLoading = false;
-      notifyListeners();
+      if (revision == _revision) {
+        _hasLoaded = true;
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -97,6 +107,19 @@ class CollectionProvider extends ChangeNotifier {
     String movieId,
   ) async {
     await _storageService.removeMovieFromCollection(collectionId, movieId);
+    await refresh();
+  }
+
+  Future<void> updateMembers(
+    String collectionId, {
+    required Iterable<String> add,
+    required Iterable<String> remove,
+  }) async {
+    await _storageService.updateCollectionMembers(
+      collectionId,
+      add: add,
+      remove: remove,
+    );
     await refresh();
   }
 

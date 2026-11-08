@@ -1,8 +1,10 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
+import 'package:random_movie/providers/app_notifier.dart';
 import 'package:flutter/material.dart';
 import 'package:random_movie/services/storage_service.dart';
 
 /// 主题模式 Provider —— 管理明暗切换并持久化到 SharedPreferences。
-class ThemeProvider extends ChangeNotifier {
+class ThemeProvider extends AppNotifier {
   ThemeProvider({StorageService? storage})
     : _storage = storage ?? StorageService();
 

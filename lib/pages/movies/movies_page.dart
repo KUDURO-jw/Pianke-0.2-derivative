@@ -104,6 +104,7 @@ class _MoviesPageState extends State<MoviesPage> {
         child: CustomScrollView(
           key: const PageStorageKey('movies-grid'),
           controller: _scrollController,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           scrollCacheExtent: ScrollCacheExtent.pixels(
             MediaQuery.sizeOf(context).height * 0.55,
           ),
@@ -132,7 +133,11 @@ class _MoviesPageState extends State<MoviesPage> {
                       ),
                       child: AppSearchField(
                         controller: _searchController,
-                        hint: '搜索片库',
+                        hint: '搜索片名、导演、演员',
+                        onSubmitted: (value) {
+                          FocusScope.of(context).unfocus();
+                          context.read<MovieProvider>().setSearchQuery(value);
+                        },
                         hasText: _query.isNotEmpty,
                         onChanged: (value) {
                           final wasEmpty = _query.isEmpty;
@@ -176,6 +181,17 @@ class _MoviesPageState extends State<MoviesPage> {
               ),
             ),
 
+            SliverToBoxAdapter(
+              child: Selector<MovieProvider, bool>(
+                selector: (_, p) => p.isLibraryLoading && p.movies.isNotEmpty,
+                builder: (_, loading, _) => SizedBox(
+                  height: 2,
+                  child: loading
+                      ? const LinearProgressIndicator(minHeight: 2)
+                      : null,
+                ),
+              ),
+            ),
             // --- 海报网格 ---
             Selector<
               MovieProvider,
@@ -196,7 +212,7 @@ class _MoviesPageState extends State<MoviesPage> {
                 isLibraryLoading: provider.isLibraryLoading,
                 isLibraryLoadingMore: provider.isLibraryLoadingMore,
                 hasMoreLibrary: provider.hasMoreLibrary,
-                error: provider.error,
+                error: provider.libraryError,
                 searchQuery: provider.searchQuery,
                 filter: provider.libraryFilter,
               ),
@@ -222,18 +238,25 @@ class _MoviesPageState extends State<MoviesPage> {
                 }
 
                 if (movies.isEmpty) {
-                  final emptyLabel = switch (state.filter) {
-                    LibraryFilter.watched => '还没有已看的影片',
-                    LibraryFilter.unwatched => '所有影片都看过啦',
-                    LibraryFilter.all =>
-                      state.searchQuery.isEmpty ? '片库还是空的' : '没有找到匹配的影片',
-                  };
-                  final emptySubtitle = switch (state.filter) {
-                    LibraryFilter.watched => '看完影片后标记一下吧',
-                    LibraryFilter.unwatched => '添加新影片继续探索',
-                    LibraryFilter.all =>
-                      state.searchQuery.isEmpty ? '添加你的第一部影片吧' : '试试其他搜索词',
-                  };
+                  final searching = state.searchQuery.trim().isNotEmpty;
+                  final emptyLabel = searching
+                      ? '没有找到匹配的影片'
+                      : switch (state.filter) {
+                          LibraryFilter.watched => '还没有已看的影片',
+                          LibraryFilter.unwatched => '所有影片都看过啦',
+                          LibraryFilter.all =>
+                            state.searchQuery.isEmpty ? '片库还是空的' : '没有找到匹配的影片',
+                        };
+                  final emptySubtitle = searching
+                      ? '可以清空搜索词，或切换到全部影片再试'
+                      : switch (state.filter) {
+                          LibraryFilter.watched => '看完影片后标记一下吧',
+                          LibraryFilter.unwatched => '添加新影片继续探索',
+                          LibraryFilter.all =>
+                            state.searchQuery.isEmpty
+                                ? '添加你的第一部影片吧'
+                                : '试试其他搜索词',
+                        };
 
                   return SliverFillRemaining(
                     hasScrollBody: false,
@@ -241,12 +264,23 @@ class _MoviesPageState extends State<MoviesPage> {
                       title: emptyLabel,
                       subtitle: emptySubtitle,
                       icon: Icons.movie_outlined,
-                      onAction:
-                          state.filter == LibraryFilter.all &&
-                              state.searchQuery.isEmpty
-                          ? () => _navigateToAddMovie(context)
-                          : null,
-                      actionLabel: '添加影片',
+                      onAction: searching || state.filter != LibraryFilter.all
+                          ? () {
+                              _searchController.clear();
+                              setState(() => _query = '');
+                              final provider = context.read<MovieProvider>();
+                              if (provider.libraryFilter != LibraryFilter.all) {
+                                provider.setSearchQueryDebounced('');
+                                provider.setLibraryFilter(LibraryFilter.all);
+                              } else {
+                                provider.setSearchQuery('');
+                              }
+                            }
+                          : () => _navigateToAddMovie(context),
+                      actionLabel:
+                          searching || state.filter != LibraryFilter.all
+                          ? '查看全部影片'
+                          : '添加影片',
                     ),
                   );
                 }
@@ -279,9 +313,21 @@ class _MoviesPageState extends State<MoviesPage> {
                     addRepaintBoundaries: false,
                     itemBuilder: (context, index) {
                       if (index >= movies.length) {
-                        return const Center(
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        );
+                        return state.error == null
+                            ? const Center(
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Center(
+                                child: TextButton.icon(
+                                  onPressed: context
+                                      .read<MovieProvider>()
+                                      .loadMoreLibrary,
+                                  icon: const Icon(Icons.refresh_rounded),
+                                  label: const Text('加载失败，重试'),
+                                ),
+                              );
                       }
 
                       final movie = movies[index];
@@ -289,13 +335,18 @@ class _MoviesPageState extends State<MoviesPage> {
                         key: ValueKey(movie.id),
                         movie: movie,
                         posterHeroTag: 'library:${movie.id}',
-                        onTap: () => context.push(
-                          '/movies/detail/${movie.id}',
-                          extra: MovieDetailArguments(
-                            movie,
-                            posterTag: 'library:${movie.id}',
-                          ),
-                        ),
+                        onTap: () async {
+                          await context.push(
+                            '/movies/detail/${movie.id}',
+                            extra: MovieDetailArguments(
+                              movie,
+                              posterTag: 'library:${movie.id}',
+                            ),
+                          );
+                          if (context.mounted) {
+                            context.read<CollectionProvider>().refresh();
+                          }
+                        },
                         onDelete: () => _confirmDelete(
                           context,
                           context.read<MovieProvider>(),
@@ -369,8 +420,9 @@ class _MoviesPageState extends State<MoviesPage> {
     );
   }
 
-  void _navigateToAddMovie(BuildContext context) {
-    context.push('/movies/add');
+  Future<void> _navigateToAddMovie(BuildContext context) async {
+    await context.push('/movies/add');
+    if (context.mounted) context.read<CollectionProvider>().refresh();
   }
 
   void _confirmDelete(
@@ -410,9 +462,16 @@ class _MoviesPageState extends State<MoviesPage> {
             ),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(dialogContext).pop();
-              provider.deleteMovie(movie.id);
+              await provider.deleteMovie(movie.id);
+              if (!context.mounted) return;
+              if (provider.error != null) {
+                AppToast.error(context, provider.error!);
+              } else {
+                AppToast.success(context, '已删除《${movie.title}》');
+                context.read<CollectionProvider>().refresh();
+              }
             },
             style: TextButton.styleFrom(foregroundColor: AppTheme.accent),
             child: const Text(

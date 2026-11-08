@@ -1,5 +1,8 @@
 // Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:flutter/material.dart';
+import 'package:random_movie/config/design_tokens.dart';
+import 'package:random_movie/services/local_data_guard.dart';
+import 'package:random_movie/widgets/common/app_components.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:random_movie/config/app_theme.dart';
@@ -37,7 +40,10 @@ class _AddMoviePageState extends State<AddMoviePage>
   final Set<String> _addedIds = {};
   String _searchQuery = '';
   int _searchStart = 0;
+  int _searchRevision = 0;
   bool _searchLoading = false;
+  bool _bulkAdding = false;
+  bool _manualSaving = false;
   bool _searchLoadingMore = false;
   bool _searchHasMore = false;
   bool _searchDone = false;
@@ -54,8 +60,10 @@ class _AddMoviePageState extends State<AddMoviePage>
   @override
   void initState() {
     super.initState();
+    LocalDataGuard.hold(this);
     _tabController = TabController(length: 3, vsync: this);
     _searchScrollController.addListener(_onSearchScroll);
+    _tabController.addListener(_syncPlaceholderAnimation);
     _placeholderController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1100),
@@ -65,7 +73,15 @@ class _AddMoviePageState extends State<AddMoviePage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (MediaQuery.disableAnimationsOf(context)) {
+    _syncPlaceholderAnimation();
+  }
+
+  void _syncPlaceholderAnimation() {
+    if (!mounted) return;
+    final showPlaceholder =
+        (_tabController.index == 0 && _searchLoadingMore) ||
+        (_tabController.index == 1 && _isDoulistLoading);
+    if (!showPlaceholder || MediaQuery.disableAnimationsOf(context)) {
       _placeholderController.stop();
       _placeholderController.value = 0.5;
     } else if (!_placeholderController.isAnimating) {
@@ -75,6 +91,9 @@ class _AddMoviePageState extends State<AddMoviePage>
 
   @override
   void dispose() {
+    LocalDataGuard.release(this);
+    ++_searchRevision;
+    _tabController.removeListener(_syncPlaceholderAnimation);
     _tabController.dispose();
     _placeholderController.dispose();
     _urlController.dispose();
@@ -91,6 +110,7 @@ class _AddMoviePageState extends State<AddMoviePage>
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    _syncPlaceholderAnimation();
 
     return Scaffold(
       appBar: AppBar(
@@ -126,31 +146,42 @@ class _AddMoviePageState extends State<AddMoviePage>
             AppTheme.spacingMedium,
             AppTheme.spacingSmall,
           ),
-          child: TextField(
+          child: AppSearchField(
             controller: _searchController,
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              hintText: '搜索影片 / 剧集名',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _searchController.text.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.close, size: 20),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() {
-                          _searchResults = [];
-                          _searchSeenIds.clear();
-                          _addedIds.clear();
-                          _searchDone = false;
-                          _searchError = null;
-                          _searchHasMore = false;
-                        });
-                      },
-                    )
-                  : null,
-            ),
+            hint: '搜索影片 / 剧集名',
+            hasText: _searchController.text.isNotEmpty,
             onChanged: (_) => setState(() {}),
             onSubmitted: (_) => _runSearch(),
+            onClear: () {
+              ++_searchRevision;
+              _searchController.clear();
+              setState(() {
+                _searchQuery = '';
+                _searchResults = [];
+                _searchSeenIds.clear();
+                _searchLoading = false;
+                _searchLoadingMore = false;
+                _searchDone = false;
+                _searchError = null;
+                _searchHasMore = false;
+              });
+            },
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            Spacing.page,
+            0,
+            Spacing.page,
+            Spacing.sm,
+          ),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: _searchLoading ? null : _runSearch,
+              icon: const Icon(Icons.search_rounded, size: 18),
+              label: const Text('搜索'),
+            ),
           ),
         ),
         Expanded(child: _buildSearchResults()),
@@ -168,7 +199,7 @@ class _AddMoviePageState extends State<AddMoviePage>
     if (!_searchDone) {
       return const EmptyState(
         title: '搜索豆瓣影片',
-        subtitle: '输入片名后回车即可搜索，点击结果加入片库。',
+        subtitle: '输入片名后点击搜索，使用结果上的加号加入片库。',
         icon: Icons.search,
       );
     }
@@ -181,37 +212,48 @@ class _AddMoviePageState extends State<AddMoviePage>
     }
 
     final itemCount = _searchResults.length + (_searchLoadingMore ? 2 : 0);
-    return GridView.builder(
-      controller: _searchScrollController,
-      padding: const EdgeInsets.fromLTRB(
-        AppTheme.spacingMedium,
-        AppTheme.spacingSmall,
-        AppTheme.spacingMedium,
-        AppTheme.spacingLarge,
-      ),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 200,
-        childAspectRatio: 0.60,
-        crossAxisSpacing: AppTheme.spacingMedium,
-        mainAxisSpacing: AppTheme.spacingMedium,
-      ),
-      itemCount: itemCount,
-      itemBuilder: (context, index) {
-        if (index >= _searchResults.length) {
-          return _buildMoviePlaceholderCard();
-        }
-        final movie = _searchResults[index];
-        return Stack(
-          children: [
-            MovieCard(movie: movie, showWatchedBadge: false, onTap: null),
-            Positioned(
-              right: 10,
-              bottom: 44,
-              child: _buildSearchAddButton(movie),
+    return Column(
+      children: [
+        if (_searchError != null)
+          _SearchRetryBanner(message: _searchError!, onRetry: _loadMoreSearch),
+        Expanded(
+          child: GridView.builder(
+            controller: _searchScrollController,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.fromLTRB(
+              AppTheme.spacingMedium,
+              AppTheme.spacingSmall,
+              AppTheme.spacingMedium,
+              AppTheme.spacingLarge,
             ),
-          ],
-        );
-      },
+            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 200,
+              childAspectRatio: MediaQuery.textScalerOf(context).scale(14) > 19
+                  ? 0.48
+                  : 0.60,
+              crossAxisSpacing: AppTheme.spacingMedium,
+              mainAxisSpacing: AppTheme.spacingMedium,
+            ),
+            itemCount: itemCount,
+            itemBuilder: (context, index) {
+              if (index >= _searchResults.length) {
+                return _buildMoviePlaceholderCard();
+              }
+              final movie = _searchResults[index];
+              return Stack(
+                children: [
+                  MovieCard(movie: movie, showWatchedBadge: false, onTap: null),
+                  Positioned(
+                    right: 4,
+                    top: 4,
+                    child: _buildSearchAddButton(movie),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -219,50 +261,37 @@ class _AddMoviePageState extends State<AddMoviePage>
     final added = _addedIds.contains(movie.id);
     final adding = _addingIds.contains(movie.id);
 
-    if (added) {
-      return Container(
-        width: 34,
-        height: 34,
-        decoration: BoxDecoration(
-          color: const Color(0xFF4CAF50),
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF4CAF50).withValues(alpha: 0.4),
-              blurRadius: 8,
-              spreadRadius: 1,
-            ),
-          ],
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      label: added
+          ? '已添加 ${movie.title}'
+          : adding
+          ? '正在添加 ${movie.title}'
+          : '添加 ${movie.title}',
+      button: true,
+      child: IconButton.filled(
+        tooltip: added
+            ? '已在片库'
+            : adding
+            ? '正在添加'
+            : '加入片库',
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        style: IconButton.styleFrom(
+          backgroundColor: added
+              ? scheme.surfaceContainerHighest
+              : scheme.primary,
+          disabledBackgroundColor: added
+              ? scheme.surfaceContainerHighest
+              : scheme.primaryContainer,
+          disabledForegroundColor: scheme.onSurfaceVariant,
         ),
-        child: const Icon(Icons.check_rounded, color: Colors.white, size: 22),
-      );
-    }
-
-    return GestureDetector(
-      onTap: adding ? null : () => _addFromSearch(movie),
-      child: Container(
-        width: 34,
-        height: 34,
-        decoration: BoxDecoration(
-          color: AppTheme.accent.withValues(alpha: 0.92),
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.accent.withValues(alpha: 0.4),
-              blurRadius: 8,
-              spreadRadius: 1,
-            ),
-          ],
-        ),
-        child: adding
-            ? const Padding(
-                padding: EdgeInsets.all(7),
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.4,
-                  color: Colors.white,
-                ),
+        onPressed: added || adding ? null : () => _addFromSearch(movie),
+        icon: adding
+            ? const SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
               )
-            : const Icon(Icons.add_rounded, color: Colors.white, size: 22),
+            : Icon(added ? Icons.check_rounded : Icons.add_rounded),
       ),
     );
   }
@@ -283,7 +312,9 @@ class _AddMoviePageState extends State<AddMoviePage>
     }
     FocusScope.of(context).unfocus();
     final provider = context.read<MovieProvider>();
+    final revision = ++_searchRevision;
     setState(() {
+      _searchLoadingMore = false;
       _searchQuery = query;
       _searchLoading = true;
       _searchError = null;
@@ -297,32 +328,43 @@ class _AddMoviePageState extends State<AddMoviePage>
 
     try {
       final results = await provider.searchDoubanMovies(query, start: 0);
-      if (!mounted) return;
+      if (!mounted || revision != _searchRevision) return;
       final fresh = results
-          .where((m) => _searchSeenIds.add(m.id))
+          .where((m) => !_searchSeenIds.contains(m.id))
           .toList(growable: false);
       final existing = await provider.getMoviesByIds(
         fresh.map((m) => m.id).toList(),
       );
-      if (!mounted) return;
+      if (!mounted || revision != _searchRevision) return;
       setState(() {
         _searchResults = fresh;
+        _searchSeenIds.addAll(fresh.map((m) => m.id));
         _addedIds.addAll(existing.map((m) => m.id));
         _searchStart = _searchPageSize;
         _searchHasMore = results.length >= _searchPageSize;
       });
     } on ScraperException catch (error) {
-      if (mounted) setState(() => _searchError = error.message);
+      if (mounted && revision == _searchRevision) {
+        setState(() => _searchError = error.message);
+      }
     } catch (error) {
-      if (mounted) setState(() => _searchError = '搜索失败: $error');
+      if (mounted && revision == _searchRevision) {
+        setState(() => _searchError = '搜索失败: $error');
+      }
     } finally {
-      if (mounted) setState(() => _searchLoading = false);
+      if (mounted && revision == _searchRevision) {
+        setState(() => _searchLoading = false);
+      }
     }
   }
 
   Future<void> _loadMoreSearch() async {
     if (_searchLoading || _searchLoadingMore || !_searchHasMore) return;
-    setState(() => _searchLoadingMore = true);
+    final revision = _searchRevision;
+    setState(() {
+      _searchLoadingMore = true;
+      _searchError = null;
+    });
     final provider = context.read<MovieProvider>();
 
     try {
@@ -330,24 +372,29 @@ class _AddMoviePageState extends State<AddMoviePage>
         _searchQuery,
         start: _searchStart,
       );
-      if (!mounted) return;
+      if (!mounted || revision != _searchRevision) return;
       final fresh = results
-          .where((m) => _searchSeenIds.add(m.id))
+          .where((m) => !_searchSeenIds.contains(m.id))
           .toList(growable: false);
       final existing = await provider.getMoviesByIds(
         fresh.map((m) => m.id).toList(),
       );
-      if (!mounted) return;
+      if (!mounted || revision != _searchRevision) return;
       setState(() {
         _searchResults = [..._searchResults, ...fresh];
+        _searchSeenIds.addAll(fresh.map((m) => m.id));
         _addedIds.addAll(existing.map((m) => m.id));
         _searchStart += _searchPageSize;
         _searchHasMore = results.length >= _searchPageSize && fresh.isNotEmpty;
       });
     } catch (_) {
-      // 分页出错就停止继续加载，不打断已有结果。
+      if (mounted && revision == _searchRevision) {
+        setState(() => _searchError = '加载下一页失败，已保留当前结果');
+      }
     } finally {
-      if (mounted) setState(() => _searchLoadingMore = false);
+      if (mounted && revision == _searchRevision) {
+        setState(() => _searchLoadingMore = false);
+      }
     }
   }
 
@@ -362,7 +409,7 @@ class _AddMoviePageState extends State<AddMoviePage>
       final full = await provider.fetchMoviePreview(movie.doubanUrl);
       if (!mounted) return;
       if (full == null) {
-        _showError(provider.error ?? 'Failed to fetch movie details');
+        _showError(provider.error ?? '获取影片详情失败，请重试');
         return;
       }
       toAdd = full;
@@ -411,7 +458,7 @@ class _AddMoviePageState extends State<AddMoviePage>
                     ),
                     const SizedBox(height: AppTheme.spacingXSmall),
                     Text(
-                      '支持影片链接、豆瓣 App 跳转链接和片单链接，如果失败请多尝试两次。',
+                      '支持影片、豆瓣 App 跳转和片单链接。获取失败时可重试，也可以手动添加。',
                       style: textTheme.bodySmall?.copyWith(height: 1.45),
                     ),
                     const SizedBox(height: AppTheme.spacingMedium),
@@ -482,7 +529,10 @@ class _AddMoviePageState extends State<AddMoviePage>
                 PrimaryButton(
                   label: '添加到片库',
                   icon: Icons.add,
-                  onPressed: () => _addMovie(_previewMovie!),
+                  isLoading: _addingIds.contains(_previewMovie!.id),
+                  onPressed: _addingIds.contains(_previewMovie!.id)
+                      ? null
+                      : () => _addMovie(_previewMovie!),
                 ),
                 const SizedBox(height: AppTheme.spacingMedium),
               ],
@@ -504,9 +554,12 @@ class _AddMoviePageState extends State<AddMoviePage>
             ),
             sliver: SliverGrid.builder(
               itemCount: _gridItemCount,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 0.60,
+              gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 200,
+                childAspectRatio:
+                    MediaQuery.textScalerOf(context).scale(14) > 19
+                    ? 0.48
+                    : 0.60,
                 crossAxisSpacing: AppTheme.spacingMedium,
                 mainAxisSpacing: AppTheme.spacingMedium,
               ),
@@ -625,10 +678,12 @@ class _AddMoviePageState extends State<AddMoviePage>
       title: title,
       subtitle: subtitle,
       trailing: PrimaryButton(
-        label: '全部添加',
+        label: _bulkAdding ? '正在添加…' : '全部添加',
+        isLoading: _bulkAdding,
         icon: Icons.add,
         isFullWidth: false,
-        onPressed: _isLoading || (_previewMovies?.isEmpty ?? true)
+        onPressed:
+            _isLoading || _bulkAdding || (_previewMovies?.isEmpty ?? true)
             ? null
             : () => _addAllMovies(_previewMovies!),
       ),
@@ -765,7 +820,8 @@ class _AddMoviePageState extends State<AddMoviePage>
           PrimaryButton(
             label: '添加影片',
             icon: Icons.add,
-            onPressed: () => _addManualMovie(),
+            isLoading: _manualSaving,
+            onPressed: _manualSaving ? null : _addManualMovie,
           ),
         ],
       ),
@@ -773,6 +829,7 @@ class _AddMoviePageState extends State<AddMoviePage>
   }
 
   Future<void> _scrapeFromUrl() async {
+    if (_isLoading || _bulkAdding) return;
     final url = _urlController.text.trim();
     if (url.isEmpty) {
       _showError('请输入链接');
@@ -900,6 +957,7 @@ class _AddMoviePageState extends State<AddMoviePage>
   }
 
   Future<void> _addManualMovie() async {
+    if (_manualSaving) return;
     final title = _titleController.text.trim();
     if (title.isEmpty) {
       _showError('请输入影片名称');
@@ -907,6 +965,7 @@ class _AddMoviePageState extends State<AddMoviePage>
     }
 
     final provider = context.read<MovieProvider>();
+    setState(() => _manualSaving = true);
     await provider.addManualMovie(
       title: title,
       year: _yearController.text.trim(),
@@ -914,6 +973,7 @@ class _AddMoviePageState extends State<AddMoviePage>
     );
 
     if (!mounted) return;
+    setState(() => _manualSaving = false);
     if (provider.error == null) {
       context.pop();
       _showSuccess('已添加 $title');
@@ -923,33 +983,47 @@ class _AddMoviePageState extends State<AddMoviePage>
   }
 
   Future<void> _addMovie(Movie movie) async {
+    if (_bulkAdding || _addingIds.contains(movie.id)) return;
+    setState(() => _addingIds.add(movie.id));
     final provider = context.read<MovieProvider>();
     final saved = await provider.addScrapedMovie(movie);
     if (!mounted) return;
+    setState(() => _addingIds.remove(movie.id));
 
     if (saved != null) {
       _showSuccess('已添加 ${movie.title}');
-      setState(() => _previewMovie = null);
+      setState(() {
+        _previewMovie = null;
+        _previewMovies = _previewMovies
+            ?.where((item) => item.id != movie.id)
+            .toList();
+      });
     } else if (provider.error != null) {
       _showError(provider.error!);
     }
   }
 
   Future<void> _addAllMovies(List<Movie> movies) async {
-    final provider = context.read<MovieProvider>();
-    final result = await provider.addScrapedMovies(movies);
-    if (!mounted) return;
-
-    if (result.added > 0 && result.skipped > 0) {
-      _showSuccess('已添加 ${result.added} 部，${result.skipped} 部已存在');
-    } else if (result.added > 0) {
-      _showSuccess('成功添加 ${result.added} 部影片');
-    } else {
-      _showError('所有影片均已在片库中');
-    }
-
-    if (result.added > 0 && result.skipped == 0) {
-      context.pop();
+    if (_bulkAdding || _addingIds.isNotEmpty) return;
+    setState(() => _bulkAdding = true);
+    try {
+      final result = await context.read<MovieProvider>().addScrapedMovies(
+        List.of(movies),
+      );
+      if (!mounted) return;
+      if (result.failed.isNotEmpty) {
+        setState(() => _previewMovies = result.failed);
+        _showError(
+          '已添加 ${result.added} 部，重复 ${result.skipped} 部，失败 ${result.failed.length} 部；已保留失败项，可再次添加',
+        );
+      } else {
+        _showSuccess('已添加 ${result.added} 部，${result.skipped} 部已在片库');
+        setState(() => _previewMovies = null);
+      }
+    } catch (_) {
+      if (mounted) _showError('刷新片库失败，请检查已添加内容后重试');
+    } finally {
+      if (mounted) setState(() => _bulkAdding = false);
     }
   }
 
@@ -960,4 +1034,24 @@ class _AddMoviePageState extends State<AddMoviePage>
   void _showSuccess(String message) {
     AppToast.success(context, message);
   }
+}
+
+class _SearchRetryBanner extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _SearchRetryBanner({required this.message, required this.onRetry});
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: Spacing.page),
+    child: Row(
+      children: [
+        const Icon(Icons.wifi_off_rounded, size: 18),
+        const SizedBox(width: Spacing.sm),
+        Expanded(
+          child: Text(message, style: Theme.of(context).textTheme.bodySmall),
+        ),
+        TextButton(onPressed: onRetry, child: const Text('重试')),
+      ],
+    ),
+  );
 }

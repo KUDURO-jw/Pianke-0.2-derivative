@@ -67,6 +67,7 @@ class _DrawPageState extends State<DrawPage> {
   bool _isInitialLoading = true;
   bool _initialLoadFailed = false;
   bool _isLoadingMore = false;
+  bool _startingDraw = false;
   bool _hasMore = true;
   int _page = 0;
   int _totalCount = 0;
@@ -195,6 +196,7 @@ class _DrawPageState extends State<DrawPage> {
         limit: _pageSize,
         offset: nextPage * _pageSize,
       );
+      if (!mounted) return;
       if (movies.isNotEmpty) {
         _loadedMovies = [..._loadedMovies, ...movies];
         _page = nextPage;
@@ -203,6 +205,8 @@ class _DrawPageState extends State<DrawPage> {
       } else {
         _hasMore = false;
       }
+    } catch (_) {
+      if (mounted) AppToast.error(context, '加载更多影片失败，可继续滚动重试');
     } finally {
       if (mounted) {
         setState(() => _isLoadingMore = false);
@@ -286,12 +290,15 @@ class _DrawPageState extends State<DrawPage> {
         title: Text(_appBarTitle),
         automaticallyImplyLeading: _phase != DrawPhase.animating,
       ),
-      body: switch (_phase) {
-        DrawPhase.selecting => _buildSelectingPhase(context),
-        DrawPhase.animating => _buildAnimatingPhase(context),
-        DrawPhase.picking => _buildPickingPhase(context),
-        DrawPhase.result => _buildResultPhase(context),
-      },
+      body: AbsorbPointer(
+        absorbing: _startingDraw,
+        child: switch (_phase) {
+          DrawPhase.selecting => _buildSelectingPhase(context),
+          DrawPhase.animating => _buildAnimatingPhase(context),
+          DrawPhase.picking => _buildPickingPhase(context),
+          DrawPhase.result => _buildResultPhase(context),
+        },
+      ),
     );
   }
 
@@ -584,7 +591,9 @@ class _DrawPageState extends State<DrawPage> {
                       ? '没有符合条件的影片'
                       : '${_mode.label} · 开始${ready ? '（$count 部）' : ''}',
                   icon: Icons.casino,
-                  onPressed: ready && count > 0 && !_selectionLoading
+                  isLoading: _startingDraw,
+                  onPressed:
+                      ready && count > 0 && !_selectionLoading && !_startingDraw
                       ? _startDraw
                       : null,
                 ),
@@ -597,12 +606,25 @@ class _DrawPageState extends State<DrawPage> {
   }
 
   Future<void> _startDraw() async {
+    if (_startingDraw || _phase != DrawPhase.selecting) return;
+    setState(() => _startingDraw = true);
+    try {
+      await _prepareDraw();
+    } catch (_) {
+      if (mounted) AppToast.error(context, '读取候选影片失败，请重试');
+    } finally {
+      if (mounted) setState(() => _startingDraw = false);
+    }
+  }
+
+  Future<void> _prepareDraw() async {
     // Re-read the selected set immediately before drawing to avoid stale state.
     final selectedIds = DrawSelection.restrictToScope(
       _selectedIds,
       scope: _presetScopeIds,
     );
     var selected = await _storageService.getMoviesByIds(selectedIds);
+    if (!mounted) return;
     if (_unwatchedOnlyByMode[_mode] == true) {
       selected = WatchStatus.unwatchedMovies(selected);
       _selectionState.replace(_mode, selected.map((movie) => movie.id));

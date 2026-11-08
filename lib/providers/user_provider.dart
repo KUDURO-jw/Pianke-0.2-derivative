@@ -1,9 +1,10 @@
-import 'package:flutter/foundation.dart';
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
+import 'package:random_movie/providers/app_notifier.dart';
 import 'package:random_movie/models/models.dart';
 import 'package:random_movie/services/services.dart';
 
 /// 用户状态管理
-class UserProvider extends ChangeNotifier {
+class UserProvider extends AppNotifier {
   final StorageService _storageService = StorageService();
 
   LocalUser? _user;

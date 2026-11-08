@@ -54,6 +54,8 @@ class MovieScraperService {
   final Dio _dio;
   final _CookieJarLite _doubanCookieJar = _CookieJarLite();
 
+  void dispose() => _dio.close(force: true);
+
   MovieScraperService({Dio? dio})
     : _dio =
           dio ??

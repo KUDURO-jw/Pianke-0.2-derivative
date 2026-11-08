@@ -35,6 +35,7 @@ class AppToast {
 
     // Delay so any dialog pop() animation completes first.
     Future.delayed(const Duration(milliseconds: 500), () {
+      if (!messenger.mounted) return;
       messenger.clearSnackBars();
       messenger.showSnackBar(
         SnackBar(

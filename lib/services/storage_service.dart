@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'dart:convert';
 import 'dart:math' show Random, min, max, pow;
 
@@ -577,8 +578,8 @@ class StorageService {
   /// 已看排序：最近观影优先；未看排序：未看在前，再按入库时间。
   String _movieOrderBy({required bool watchedOnly}) {
     return watchedOnly
-        ? 'derived_watched_at DESC, m.created_at DESC'
-        : 'derived_watched ASC, m.created_at DESC';
+        ? 'derived_watched_at DESC, m.created_at DESC, m.id ASC'
+        : 'derived_watched ASC, m.created_at DESC, m.id ASC';
   }
 
   Future<List<Movie>> queryMovies({
@@ -767,22 +768,16 @@ class StorageService {
 
   Future<void> deleteMovie(String movieId) async {
     _ensureInitialized();
-    await _db.delete(_moviesTable, where: 'id = ?', whereArgs: [movieId]);
-    await _db.delete(
-      _viewingSessionsTable,
-      where: 'movie_id = ?',
-      whereArgs: [movieId],
-    );
-    await _db.delete(
-      _collectionMembersTable,
-      where: 'movie_id = ?',
-      whereArgs: [movieId],
-    );
-    await _db.delete(
-      _movieTagsTable,
-      where: 'movie_id = ?',
-      whereArgs: [movieId],
-    );
+    await _db.transaction((txn) async {
+      for (final table in [
+        _viewingSessionsTable,
+        _collectionMembersTable,
+        _movieTagsTable,
+      ]) {
+        await txn.delete(table, where: 'movie_id = ?', whereArgs: [movieId]);
+      }
+      await txn.delete(_moviesTable, where: 'id = ?', whereArgs: [movieId]);
+    });
   }
 
   // ========== 抽奖历史 ==========
@@ -1308,16 +1303,19 @@ class StorageService {
       _collectionsTable,
       orderBy: 'sort_order ASC, created_at ASC',
     );
-
+    if (rows.isEmpty) return const [];
+    final countRows = await _db.rawQuery(
+      'SELECT collection_id, COUNT(*) AS count FROM $_collectionMembersTable GROUP BY collection_id',
+    );
+    final counts = {
+      for (final row in countRows)
+        row['collection_id']?.toString(): (row['count'] as num?)?.toInt() ?? 0,
+    };
     final result = <MovieCollection>[];
     for (final row in rows) {
       final id = row['id']?.toString() ?? '';
       if (id.isEmpty) continue;
-      final countResult = await _db.rawQuery(
-        'SELECT COUNT(*) AS count FROM $_collectionMembersTable WHERE collection_id = ?',
-        [id],
-      );
-      final count = (countResult.first['count'] as num?)?.toInt() ?? 0;
+      final count = counts[id] ?? 0;
       final posterRows = await _db.rawQuery(
         '''
         SELECT m.poster FROM $_collectionMembersTable cm
@@ -1396,16 +1394,18 @@ class StorageService {
 
   Future<void> deleteCollection(String collectionId) async {
     _ensureInitialized();
-    await _db.delete(
-      _collectionsTable,
-      where: 'id = ?',
-      whereArgs: [collectionId],
-    );
-    await _db.delete(
-      _collectionMembersTable,
-      where: 'collection_id = ?',
-      whereArgs: [collectionId],
-    );
+    await _db.transaction((txn) async {
+      await txn.delete(
+        _collectionMembersTable,
+        where: 'collection_id = ?',
+        whereArgs: [collectionId],
+      );
+      await txn.delete(
+        _collectionsTable,
+        where: 'id = ?',
+        whereArgs: [collectionId],
+      );
+    });
   }
 
   /// 合集成员影片 id（按 sort_order）。
@@ -1437,6 +1437,57 @@ class StorageService {
       'sort_order': nextOrder,
       'added_at': DateTime.now().toIso8601String(),
     }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  /// Apply just the member differences atomically, preserving existing ordering.
+  Future<void> updateCollectionMembers(
+    String collectionId, {
+    required Iterable<String> add,
+    required Iterable<String> remove,
+  }) async {
+    _ensureInitialized();
+    final additions = add.toSet();
+    final removals = remove.toSet()..removeAll(additions);
+    await _db.transaction((txn) async {
+      final collection = await txn.query(
+        _collectionsTable,
+        columns: ['id'],
+        where: 'id = ?',
+        whereArgs: [collectionId],
+        limit: 1,
+      );
+      if (collection.isEmpty) throw StateError('合集已不存在，请返回后重试');
+      for (final id in removals) {
+        await txn.delete(
+          _collectionMembersTable,
+          where: 'collection_id = ? AND movie_id = ?',
+          whereArgs: [collectionId, id],
+        );
+      }
+      final order = await txn.rawQuery(
+        'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM $_collectionMembersTable WHERE collection_id = ?',
+        [collectionId],
+      );
+      var next = (order.first['next'] as num).toInt();
+      final now = DateTime.now().toIso8601String();
+      for (final id in additions) {
+        // A movie may have been removed while the picker was open.
+        final movie = await txn.query(
+          _moviesTable,
+          columns: ['id'],
+          where: 'id = ?',
+          whereArgs: [id],
+          limit: 1,
+        );
+        if (movie.isEmpty) throw StateError('所选影片已被删除，请刷新后重试');
+        await txn.insert(_collectionMembersTable, {
+          'collection_id': collectionId,
+          'movie_id': id,
+          'sort_order': next++,
+          'added_at': now,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+    });
   }
 
   Future<void> removeMovieFromCollection(
@@ -1756,8 +1807,14 @@ class StorageService {
 
   Future<void> deleteTag(String tagId) async {
     _ensureInitialized();
-    await _db.delete(_tagsTable, where: 'id = ?', whereArgs: [tagId]);
-    await _db.delete(_movieTagsTable, where: 'tag_id = ?', whereArgs: [tagId]);
+    await _db.transaction((txn) async {
+      await txn.delete(
+        _movieTagsTable,
+        where: 'tag_id = ?',
+        whereArgs: [tagId],
+      );
+      await txn.delete(_tagsTable, where: 'id = ?', whereArgs: [tagId]);
+    });
   }
 
   /// 某影片挂的标签。

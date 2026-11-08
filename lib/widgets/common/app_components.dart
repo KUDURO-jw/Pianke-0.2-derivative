@@ -190,6 +190,7 @@ class RoundIconButton extends StatelessWidget {
 class AppSearchField extends StatelessWidget {
   final TextEditingController controller;
   final ValueChanged<String>? onChanged;
+  final ValueChanged<String>? onSubmitted;
   final String hint;
   final VoidCallback? onClear;
   final bool hasText;
@@ -198,6 +199,7 @@ class AppSearchField extends StatelessWidget {
     super.key,
     required this.controller,
     this.onChanged,
+    this.onSubmitted,
     this.hint = '搜索',
     this.onClear,
     this.hasText = false,
@@ -218,6 +220,7 @@ class AppSearchField extends StatelessWidget {
       child: TextField(
         controller: controller,
         onChanged: onChanged,
+        onSubmitted: onSubmitted,
         textInputAction: TextInputAction.search,
         style: TextStyle(fontSize: TypeScale.body, color: scheme.primaryText),
         decoration: InputDecoration(
@@ -246,6 +249,7 @@ class AppSearchField extends StatelessWidget {
                   icon: const Icon(Icons.close_rounded, size: 18),
                   color: scheme.secondaryText,
                   onPressed: onClear,
+                  tooltip: '清空搜索',
                 )
               : null,
         ),
