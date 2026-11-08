@@ -1,15 +1,15 @@
 {
-  "versionName": "0.2.10",
-  "versionCode": 16,
-  "title": "片刻·焕新版 0.2.10：记录与资料横滑切换",
+  "versionName": "0.2.11",
+  "versionCode": 17,
+  "title": "片刻·焕新版 0.2.11：详情页海报与页签布局修复",
   "changelog": [
-    "影片详情默认进入记录页，简介和选集优先显示",
-    "支持左右滑动或点击顶部记录、资料页签切换",
-    "详细年份、片长、地区、主创与上映信息集中在资料页",
-    "两个页面分别保留滚动位置，减少纵向查找",
-    "保留原有分集进度、观影记录、评分感想与海报转场"
+    "记录与资料页签移到海报下方，不再遮挡海报内容",
+    "选中页签改为细蓝色下划线，避免白色胶囊突兀覆盖",
+    "保留左右滑动和点击切换",
+    "保留两个页面的独立滚动位置",
+    "保留分集进度、观影记录、评分感想与海报转场"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.10-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "6f2b89d6b371ea4c9e2a39b9716ff7ade3d8a2c658f5b9aa66fcaa3b27a13868",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.11-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "c85018fd5c0100bec0dfb69cb341f8aecefe21a10253f11b0522737ad7bb9c13",
   "forceUpdate": false
 }
