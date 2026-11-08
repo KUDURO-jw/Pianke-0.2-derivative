@@ -92,15 +92,7 @@ class _MoviesPageState extends State<MoviesPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    PageHeader(
-                      title: '片库',
-                      trailing: RoundIconButton(
-                        filled: true,
-                        tooltip: '添加影片',
-                        icon: Icons.add_rounded,
-                        onPressed: () => _navigateToAddMovie(context),
-                      ),
-                    ),
+                    const PageHeader(title: '片库'),
                     Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: Spacing.page,

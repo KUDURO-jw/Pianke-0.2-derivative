@@ -1,14 +1,13 @@
 {
-  "versionName": "0.2.1",
-  "versionCode": 6,
-  "title": "片刻·焕新版 0.2.1",
+  "versionName": "0.2.2",
+  "versionCode": 7,
+  "title": "片刻·焕新版 0.2.2",
   "changelog": [
-    "简介展开改为离线显示，不再额外请求豆瓣；新增影片仍优先读取全文",
-    "修复分集保存时整组选集闪烁，并保留进度保存保护",
-    "底部导航支持拖动选框，增加透明模糊与高光玻璃质感",
-    "修复详情页收起后的黑灰顶栏及片库吸顶筛选无法点击",
-    "精简页面说明，接入焕新版独立手动更新渠道"
+    "修复 GitHub 文本格式更新清单解析，区分超时及连接失败提示",
+    "移除片库右上角重复加号，保留右下角添加入口",
+    "底部导航支持按速度甩动，松手后继续滑动并吸附到目标",
+    "保留简介离线展开及此前界面修复"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.1-ui.1/Pianke-UI-arm64-release.apk",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.2-ui.1/Pianke-UI-arm64-release.apk",
   "forceUpdate": false
 }

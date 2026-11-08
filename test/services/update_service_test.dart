@@ -1,8 +1,12 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:random_movie/config/api_config.dart';
 import 'package:random_movie/services/update_service.dart';
+
+class _RealHttpOverrides extends HttpOverrides {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -43,6 +47,51 @@ void main() {
     expect(result.hasUpdate, isTrue);
     expect(result.update!.forceUpdate, isFalse);
   });
+  test('parses text/plain JSON and BOM returned by raw GitHub', () async {
+    for (final prefix in ['', '\ufeff']) {
+      final result = await service(
+        '$prefix${jsonEncode(manifest(7))}',
+      ).checkForUpdate();
+      expect(result.update!.versionCode, 7);
+    }
+    expect(
+      (await service(jsonEncode(manifest(6))).checkForUpdate()).hasUpdate,
+      isFalse,
+    );
+  });
+  test(
+    'real HTTP text/plain response is decoded by the update service',
+    () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) {
+        request.response.headers.contentType = ContentType.text;
+        request.response.write(jsonEncode(manifest(7)));
+        request.response.close();
+      });
+      final dio = Dio();
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            options.baseUrl = '';
+            options.path = 'http://127.0.0.1:${server.port}/update-ui.json';
+            handler.next(options);
+          },
+        ),
+      );
+      try {
+        expect(
+          (await HttpOverrides.runWithHttpOverrides(
+            () => UpdateService(dio: dio).checkForUpdate(),
+            _RealHttpOverrides(),
+          )).hasUpdate,
+          isTrue,
+        );
+      } finally {
+        dio.close(force: true);
+        await server.close(force: true);
+      }
+    },
+  );
   test('same and older builds are not offered', () async {
     for (final code in [5, 6]) {
       expect(

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:random_movie/config/api_config.dart';
@@ -77,7 +79,14 @@ class UpdateService {
     }
 
     final response = await _dio.getUri(Uri.parse(url));
-    final data = response.data;
+    dynamic data = response.data;
+    if (data is String) {
+      try {
+        data = jsonDecode(data.trim().replaceFirst('\ufeff', ''));
+      } on FormatException {
+        throw const UpdateCheckException('更新清单格式不正确');
+      }
+    }
     if (data is! Map) {
       throw const UpdateCheckException('更新清单格式不正确');
     }

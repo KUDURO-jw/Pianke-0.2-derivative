@@ -27,6 +27,51 @@ const items = [
 ];
 
 void main() {
+  testWidgets(
+    'short fast fling travels beyond release position and clamps at ends',
+    (tester) async {
+      var selected = 0;
+      var calls = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatefulBuilder(
+            builder: (context, setState) => Scaffold(
+              body: Align(
+                alignment: Alignment.bottomCenter,
+                child: FloatingNavBar(
+                  currentIndex: selected,
+                  items: items,
+                  onSelected: (index) => setState(() {
+                    selected = index;
+                    calls++;
+                  }),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.fling(
+        find.text('片库'),
+        const Offset(60, 0),
+        1200,
+        frameInterval: const Duration(milliseconds: 5),
+      );
+      await tester.pumpAndSettle();
+      expect(selected, greaterThanOrEqualTo(2));
+      expect(calls, 1);
+      await tester.fling(
+        find.text(items[selected].label),
+        const Offset(-60, 0),
+        2400,
+        frameInterval: const Duration(milliseconds: 5),
+      );
+      await tester.pumpAndSettle();
+      expect(selected, 0);
+      expect(calls, 2);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets('drag previews the selection and switches only on release', (
     tester,
   ) async {

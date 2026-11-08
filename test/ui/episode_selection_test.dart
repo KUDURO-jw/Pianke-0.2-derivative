@@ -7,6 +7,7 @@ import 'package:random_movie/models/models.dart';
 import 'package:random_movie/providers/providers.dart';
 import 'package:random_movie/pages/movies/movie_detail_page.dart';
 import 'package:random_movie/pages/movies/movies_page.dart';
+import 'package:random_movie/widgets/common/app_components.dart';
 
 class EpisodeMovies extends MovieProvider {
   final saved = Completer<void>();
@@ -93,11 +94,11 @@ void main() {
               scrollable: find.byType(Scrollable).first,
             );
             await tester.pumpAndSettle();
-          await tester.tap(find.text('展开'));
+            await tester.tap(find.text('展开'));
             await tester.pumpAndSettle();
             await tester.ensureVisible(find.text('收起'));
             await tester.pumpAndSettle();
-          await tester.tap(find.text('收起'));
+            await tester.tap(find.text('收起'));
             await tester.pumpAndSettle();
           }
           await tester.pumpWidget(const SizedBox());
@@ -133,6 +134,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    expect(tester.widget<PageHeader>(find.byType(PageHeader)).trailing, isNull);
+    expect(find.byType(FloatingActionButton), findsOneWidget);
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -700));
     await tester.pumpAndSettle();
     expect(tester.getTopLeft(find.text('全部')).dy, greaterThanOrEqualTo(48));

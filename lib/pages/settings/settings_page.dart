@@ -1,5 +1,6 @@
 // Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:random_movie/config/app_theme.dart';
@@ -217,6 +218,16 @@ class _SettingsPageState extends State<SettingsPage> {
     } on UpdateCheckException catch (error) {
       if (!mounted) return;
       AppToast.show(context, error.message, type: ToastType.error);
+    } on DioException catch (error) {
+      if (!mounted) return;
+      final timeout =
+          error.type == DioExceptionType.connectionTimeout ||
+          error.type == DioExceptionType.receiveTimeout ||
+          error.type == DioExceptionType.sendTimeout;
+      AppToast.error(
+        context,
+        timeout ? '检查更新超时，请检查网络后重试' : '无法连接更新服务器，请检查网络后重试',
+      );
     } catch (_) {
       if (!mounted) return;
       AppToast.show(context, '检查更新失败，请稍后再试', type: ToastType.error);

@@ -124,10 +124,40 @@ class _FloatingNavBarState extends State<FloatingNavBar> {
                                 );
                               }
 
-                              void finishDrag() {
-                                final index = _dragPosition?.round();
+                              void finishDrag(DragEndDetails details) {
+                                final position = _dragPosition;
+                                if (position == null) return;
+                                final direction =
+                                    Directionality.of(context) ==
+                                        TextDirection.rtl
+                                    ? -1
+                                    : 1;
+                                final velocity =
+                                    (details.primaryVelocity ?? 0) * direction;
+                                var target = position.round();
+                                if (velocity.abs() >= 450) {
+                                  // Project the release speed, then settle at a destination.
+                                  final projected =
+                                      position +
+                                      velocity.clamp(-2400.0, 2400.0) *
+                                          0.18 /
+                                          itemWidth;
+                                  target = velocity > 0
+                                      ? math.max(
+                                          projected.round(),
+                                          position.floor() + 1,
+                                        )
+                                      : math.min(
+                                          projected.round(),
+                                          position.ceil() - 1,
+                                        );
+                                }
+                                target = target.clamp(
+                                  0,
+                                  widget.items.length - 1,
+                                );
                                 setState(() => _dragPosition = null);
-                                if (index != null) _select(index);
+                                _select(target);
                               }
 
                               return GestureDetector(
@@ -144,7 +174,7 @@ class _FloatingNavBarState extends State<FloatingNavBar> {
                                         details.localPosition.dx,
                                       );
                                     }),
-                                onHorizontalDragEnd: (_) => finishDrag(),
+                                onHorizontalDragEnd: finishDrag,
                                 onHorizontalDragCancel: () =>
                                     setState(() => _dragPosition = null),
                                 child: Stack(
