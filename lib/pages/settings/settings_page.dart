@@ -81,7 +81,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: Icons.upload_rounded,
                   iconColor: const Color(0xFF2F6BFF),
                   title: '导出备份',
-                  subtitle: '将片库和抽片记录导出为 JSON 文件',
                   loading: _exportLoading,
                   onTap: _handleExport,
                 ),
@@ -94,7 +93,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: Icons.download_rounded,
                   iconColor: const Color(0xFF34C759),
                   title: '从备份恢复',
-                  subtitle: '从 JSON 备份文件合并恢复数据',
                   loading: _importLoading,
                   onTap: _handleImport,
                 ),
@@ -119,7 +117,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: Icons.system_update_rounded,
                   iconColor: const Color(0xFFFFB020),
                   title: '检查更新',
-                  subtitle: '检查焕新版的新版本',
                   loading: _updateLoading,
                   onTap: _handleCheckUpdate,
                 ),
@@ -132,7 +129,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: Icons.description_outlined,
                   iconColor: const Color(0xFF8A8D93),
                   title: '开源声明',
-                  subtitle: '基于 ShareWinter/Pianke 二次创作 · Apache License 2.0',
                   loading: false,
                   onTap: _showLicenseNotice,
                 ),
@@ -460,114 +456,27 @@ class _ThemeModeSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final current = context.watch<ThemeProvider>().themeMode;
-    const options = <(ThemeMode, IconData, String, String)>[
-      (ThemeMode.system, Icons.brightness_auto_rounded, '跟随系统', '随系统深浅色自动切换'),
-      (ThemeMode.light, Icons.light_mode_rounded, '浅色', '始终使用浅色主题'),
-      (ThemeMode.dark, Icons.dark_mode_rounded, '深色', '始终使用深色主题'),
+    const options = [
+      (ThemeMode.system, Icons.brightness_auto_rounded, '跟随系统'),
+      (ThemeMode.light, Icons.light_mode_rounded, '浅色'),
+      (ThemeMode.dark, Icons.dark_mode_rounded, '深色'),
     ];
-
-    final colorScheme = Theme.of(context).colorScheme;
-    return Column(
-      children: [
-        for (var i = 0; i < options.length; i++) ...[
-          if (i > 0)
-            Divider(height: 1, indent: 56, color: colorScheme.outlineVariant),
-          _ThemeModeTile(
-            icon: options[i].$2,
-            title: options[i].$3,
-            subtitle: options[i].$4,
-            selected: current == options[i].$1,
-            onTap: () => context.read<ThemeProvider>().setMode(options[i].$1),
-          ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: SegmentedButton<ThemeMode>(
+        showSelectedIcon: false,
+        expandedInsets: EdgeInsets.zero,
+        segments: [
+          for (final option in options)
+            ButtonSegment(
+              value: option.$1,
+              label: Text(option.$3, textAlign: TextAlign.center),
+              icon: Icon(option.$2, size: 18),
+            ),
         ],
-      ],
-    );
-  }
-}
-
-class _ThemeModeTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _ThemeModeTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppTheme.spacingMedium,
-          vertical: AppTheme.spacingMedium,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: ShapeDecoration(
-                color: selected
-                    ? AppTheme.accent.withValues(alpha: 0.16)
-                    : colorScheme.surfaceContainerHighest,
-                shape: RoundedSuperellipseBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  side: BorderSide.none,
-                ),
-              ),
-              child: Icon(
-                icon,
-                size: 18,
-                color: selected
-                    ? AppTheme.accent
-                    : colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(width: AppTheme.spacingMedium),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: colorScheme.onSurface,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: TypeScale.caption,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: AppTheme.spacingSmall),
-            if (selected)
-              Icon(Icons.check_circle_rounded, size: 20, color: AppTheme.accent)
-            else
-              Icon(
-                Icons.circle_outlined,
-                size: 20,
-                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
-              ),
-          ],
-        ),
+        selected: {current},
+        onSelectionChanged: (values) =>
+            context.read<ThemeProvider>().setMode(values.single),
       ),
     );
   }
@@ -577,7 +486,6 @@ class _SettingsTile extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
   final String title;
-  final String subtitle;
   final bool loading;
   final VoidCallback onTap;
 
@@ -585,7 +493,6 @@ class _SettingsTile extends StatelessWidget {
     required this.icon,
     required this.iconColor,
     required this.title,
-    required this.subtitle,
     required this.loading,
     required this.onTap,
   });
@@ -628,14 +535,6 @@ class _SettingsTile extends StatelessWidget {
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
                       color: colorScheme.onSurface,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: TypeScale.caption,
-                      color: colorScheme.onSurface.withValues(alpha: 0.5),
                     ),
                   ),
                 ],

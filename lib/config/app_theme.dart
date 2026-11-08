@@ -584,13 +584,25 @@ class AppPageTransitionsBuilder extends PageTransitionsBuilder {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
+    return transition(context, animation, secondaryAnimation, child);
+  }
+
+  static Widget transition(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
     if (MediaQuery.disableAnimationsOf(context)) return child;
     final curved = animation.drive(CurveTween(curve: Curves.easeOutCubic));
+    final direction = Directionality.of(context) == TextDirection.rtl
+        ? -1.0
+        : 1.0;
     return FadeTransition(
       opacity: curved,
       child: SlideTransition(
         position: curved.drive(
-          Tween(begin: const Offset(0.035, 0), end: Offset.zero),
+          Tween(begin: Offset(0.035 * direction, 0), end: Offset.zero),
         ),
         child: child,
       ),

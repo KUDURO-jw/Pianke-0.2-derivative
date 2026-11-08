@@ -14,6 +14,7 @@ import 'package:random_movie/widgets/common/common_widgets.dart';
 import 'package:random_movie/widgets/draw/draw_filter_panel.dart';
 import 'package:random_movie/widgets/movie/draw_shuffle_card.dart';
 import 'package:random_movie/widgets/movie/movie_card.dart';
+import 'package:random_movie/router/movie_detail_arguments.dart';
 import 'package:random_movie/widgets/movie/selectable_movie_grid.dart';
 import 'package:random_movie/widgets/movie/viewing_session_editor.dart';
 
@@ -711,8 +712,15 @@ class _DrawPageState extends State<DrawPage> {
             height: 330,
             child: MovieCard(
               movie: movie,
+              posterHeroTag: 'draw-result:${movie.id}',
               showWatchedBadge: false,
-              onTap: () => context.push('/movies/detail/${movie.id}'),
+              onTap: () => context.push(
+                '/movies/detail/${movie.id}',
+                extra: MovieDetailArguments(
+                  movie,
+                  posterTag: 'draw-result:${movie.id}',
+                ),
+              ),
             ),
           ),
           const SizedBox(height: AppTheme.spacingMedium),

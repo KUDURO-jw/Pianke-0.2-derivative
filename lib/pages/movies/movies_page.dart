@@ -14,6 +14,7 @@ import 'package:random_movie/widgets/collection/collection_icon.dart';
 import 'package:random_movie/widgets/common/app_components.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
 import 'package:random_movie/widgets/movie/movie_card.dart';
+import 'package:random_movie/router/movie_detail_arguments.dart';
 
 /// 片库页面
 class MoviesPage extends StatefulWidget {
@@ -92,7 +93,15 @@ class _MoviesPageState extends State<MoviesPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const PageHeader(title: '片库'),
+                    const PageHeader(
+                      title: '片库',
+                      padding: EdgeInsets.fromLTRB(
+                        Spacing.page,
+                        8,
+                        Spacing.page,
+                        8,
+                      ),
+                    ),
                     Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: Spacing.page,
@@ -122,7 +131,7 @@ class _MoviesPageState extends State<MoviesPage> {
                         },
                       ),
                     ),
-                    const SizedBox(height: Spacing.lg),
+                    const SizedBox(height: Spacing.sm),
 
                     // 合集横条（搜索时隐藏）
                     if (_query.isEmpty) _buildCollectionStrip(context),
@@ -255,7 +264,14 @@ class _MoviesPageState extends State<MoviesPage> {
                       return MovieCard(
                         key: ValueKey(movie.id),
                         movie: movie,
-                        onTap: () => context.push('/movies/detail/${movie.id}'),
+                        posterHeroTag: 'library:${movie.id}',
+                        onTap: () => context.push(
+                          '/movies/detail/${movie.id}',
+                          extra: MovieDetailArguments(
+                            movie,
+                            posterTag: 'library:${movie.id}',
+                          ),
+                        ),
                         onDelete: () => _confirmDelete(
                           context,
                           context.read<MovieProvider>(),
@@ -275,11 +291,31 @@ class _MoviesPageState extends State<MoviesPage> {
 
   /// 片库顶部合集入口：横向滚动的合集卡片 + 「管理」入口。
   Widget _buildCollectionStrip(BuildContext context) {
-    return Selector<CollectionProvider, List<MovieCollection>>(
-      selector: (_, p) => [...p.manualCollections, ...p.smartCollections],
-      builder: (context, collections, _) {
+    return Selector<
+      CollectionProvider,
+      ({bool hasManual, List<MovieCollection> collections})
+    >(
+      selector: (_, p) => (
+        hasManual: p.manualCollections.isNotEmpty,
+        collections: [...p.manualCollections, ...p.smartCollections],
+      ),
+      builder: (context, state, _) {
+        final collections = state.collections;
+        if (!state.hasManual) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Spacing.page),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                onPressed: () => context.push('/collections'),
+                icon: const Icon(Icons.collections_bookmark_outlined, size: 18),
+                label: const Text('我的合集'),
+              ),
+            ),
+          );
+        }
         return SizedBox(
-          height: 96 + (MediaQuery.textScalerOf(context).scale(12) - 12) * 2,
+          height: 88 + (MediaQuery.textScalerOf(context).scale(12) - 12) * 2,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(

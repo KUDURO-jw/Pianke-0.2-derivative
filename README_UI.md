@@ -15,6 +15,8 @@
 
 ## 构建
 
+当前发布版本为 0.2.5（10）。本轮精简片库和设置、独立剧集分集，统一二级页面动画，新增海报往返转场并优化底栏弹簧吸附。详细变更与小米手机验收步骤见 `docs/UI_UPDATES.md`。自动化验证覆盖布局、手势、路由、海报和配置状态；实际手机帧率仍需安装验收。
+
 使用 Flutter 3.44.0、Dart 3.12.0、JDK 17、Android API 36、Android Build Tools 35.0.0。依赖以 `pubspec.lock` 为准。实际构建按原生依赖要求安装了 NDK 28.2.13676358、CMake 3.22.1 及 API 33–35 平台；不需要 Android Studio、模拟器或系统镜像。
 
 ```powershell
@@ -29,7 +31,7 @@ flutter build apk --release --target-platform android-arm64
 
 功能对照与验证边界见 `docs/FUNCTION_PARITY.md`。上游 README 保留作为原始说明。
 
-## 本次交付验证
+## 初版 0.2.0 交付验证
 
 - Android Release 编译成功；APK 仅含 arm64-v8a，最低 API 24，目标 API 36，版本 0.2.0（4）。
 - 静态分析零问题；完整测试 56 项通过，包括原业务测试、旧/新 JSON 备份回归、真实页面浅深色与小屏大字体、导航/会话编辑和组件视觉基线。

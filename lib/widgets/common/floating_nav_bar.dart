@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:random_movie/config/design_tokens.dart';
 import 'package:random_movie/widgets/common/continuous_rrect.dart';
@@ -35,7 +36,7 @@ class DockMetrics {
       : heightOf(context) + bottomOf(context) + 16;
 }
 
-class FloatingNavBar extends StatefulWidget {
+class FloatingNavBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onSelected;
   final List<NavItemData> items;
@@ -45,24 +46,7 @@ class FloatingNavBar extends StatefulWidget {
     required this.currentIndex,
     required this.onSelected,
     required this.items,
-  });
-
-  @override
-  State<FloatingNavBar> createState() => _FloatingNavBarState();
-}
-
-class _FloatingNavBarState extends State<FloatingNavBar> {
-  double? _dragPosition;
-  VelocityTracker? _gestureTracker;
-  double? _releaseVelocity;
-  int? _pressedIndex;
-
-  void _select(int index) {
-    if (index != widget.currentIndex) {
-      HapticFeedback.selectionClick();
-      widget.onSelected(index);
-    }
-  }
+  }) : assert(items.length > 0);
 
   @override
   Widget build(BuildContext context) {
@@ -71,11 +55,8 @@ class _FloatingNavBarState extends State<FloatingNavBar> {
     }
     final scheme = Theme.of(context).colorScheme;
     final dark = scheme.brightness == Brightness.dark;
-    final duration = MediaQuery.disableAnimationsOf(context)
-        ? Duration.zero
-        : const Duration(milliseconds: 240);
     final shape = const ContinuousRRect.all(Radii.pill);
-
+    // Glass, clipping and shadow stay outside the per-frame animation builder.
     return SafeArea(
       top: false,
       bottom: false,
@@ -112,193 +93,10 @@ class _FloatingNavBarState extends State<FloatingNavBar> {
                         height: DockMetrics.heightOf(context),
                         child: Padding(
                           padding: const EdgeInsets.all(4),
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              final itemWidth =
-                                  constraints.maxWidth / widget.items.length;
-                              double position(double x) {
-                                final logicalX =
-                                    Directionality.of(context) ==
-                                        TextDirection.rtl
-                                    ? constraints.maxWidth - x
-                                    : x;
-                                return (logicalX / itemWidth - 0.5).clamp(
-                                  0.0,
-                                  (widget.items.length - 1).toDouble(),
-                                );
-                              }
-
-                              void finishDrag(DragEndDetails details) {
-                                final position = _dragPosition;
-                                if (position == null) return;
-                                final direction =
-                                    Directionality.of(context) ==
-                                        TextDirection.rtl
-                                    ? -1
-                                    : 1;
-                                final velocity =
-                                    (_releaseVelocity ??
-                                        _gestureTracker
-                                            ?.getVelocity()
-                                            .pixelsPerSecond
-                                            .dx ??
-                                        details.primaryVelocity ??
-                                        0) *
-                                    direction;
-                                final releaseIndex = position.round();
-                                // A flick may carry the selection one neighbour beyond
-                                // the finger, never skip across the whole dock.
-                                final projectedIndex =
-                                    (position + velocity * 0.1 / itemWidth)
-                                        .round();
-                                final carry = (projectedIndex - releaseIndex)
-                                    .clamp(-1, 1);
-                                var target = releaseIndex + carry;
-                                target = target.clamp(
-                                  0,
-                                  widget.items.length - 1,
-                                );
-                                setState(() => _dragPosition = null);
-                                _select(target);
-                              }
-
-                              return Listener(
-                                onPointerDown: (event) {
-                                  setState(
-                                    () => _pressedIndex = position(
-                                      event.localPosition.dx,
-                                    ).round(),
-                                  );
-                                  _releaseVelocity = null;
-                                  _gestureTracker =
-                                      VelocityTracker.withKind(event.kind)
-                                        ..addPosition(
-                                          event.timeStamp,
-                                          event.localPosition,
-                                        );
-                                },
-                                onPointerMove: (event) {
-                                  _gestureTracker?.addPosition(
-                                    event.timeStamp,
-                                    event.localPosition,
-                                  );
-                                  final index = position(
-                                    event.localPosition.dx,
-                                  ).round();
-                                  if (_pressedIndex != index) {
-                                    HapticFeedback.selectionClick();
-                                    setState(() => _pressedIndex = index);
-                                  }
-                                },
-                                onPointerUp: (_) {
-                                  _releaseVelocity = _gestureTracker
-                                      ?.getVelocity()
-                                      .pixelsPerSecond
-                                      .dx;
-                                  _gestureTracker = null;
-                                  setState(() => _pressedIndex = null);
-                                },
-                                onPointerCancel: (_) {
-                                  _gestureTracker = null;
-                                  setState(() => _pressedIndex = null);
-                                },
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onHorizontalDragStart: (details) =>
-                                      setState(() {
-                                        _dragPosition = position(
-                                          details.localPosition.dx,
-                                        );
-                                      }),
-                                  onHorizontalDragUpdate: (details) =>
-                                      setState(() {
-                                        _dragPosition = position(
-                                          details.localPosition.dx,
-                                        );
-                                      }),
-                                  onHorizontalDragEnd: finishDrag,
-                                  onHorizontalDragCancel: () =>
-                                      setState(() => _dragPosition = null),
-                                  child: Stack(
-                                    children: [
-                                      AnimatedPositionedDirectional(
-                                        duration: _dragPosition == null
-                                            ? duration
-                                            : Duration.zero,
-                                        curve: Motion.emphasized,
-                                        start:
-                                            (_dragPosition ??
-                                                widget.currentIndex
-                                                    .toDouble()) *
-                                            itemWidth,
-                                        top: 0,
-                                        bottom: 0,
-                                        width: itemWidth,
-                                        child: AnimatedScale(
-                                          key: const ValueKey(
-                                            'dock-lens-scale',
-                                          ),
-                                          scale: _pressedIndex != null
-                                              ? 1.06
-                                              : 1,
-                                          duration: duration,
-                                          curve: Curves.easeOutBack,
-                                          child: DecoratedBox(
-                                            decoration: ShapeDecoration(
-                                              gradient: LinearGradient(
-                                                begin: Alignment.topLeft,
-                                                end: Alignment.bottomRight,
-                                                colors: [
-                                                  Colors.white.withValues(
-                                                    alpha: dark ? 0.22 : 0.9,
-                                                  ),
-                                                  scheme.blockSurface
-                                                      .withValues(alpha: 0.45),
-                                                ],
-                                              ),
-                                              shape: ContinuousRRect.all(
-                                                Radii.pill,
-                                                side: BorderSide(
-                                                  color: Colors.white
-                                                      .withValues(
-                                                        alpha: dark
-                                                            ? 0.22
-                                                            : 0.85,
-                                                      ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      Row(
-                                        children: [
-                                          for (
-                                            var i = 0;
-                                            i < widget.items.length;
-                                            i++
-                                          )
-                                            Expanded(
-                                              child: _DockItem(
-                                                data: widget.items[i],
-                                                selected:
-                                                    (_dragPosition?.round() ??
-                                                        widget.currentIndex) ==
-                                                    i,
-                                                duration: duration,
-                                                pressed: _pressedIndex == i,
-                                                onTap: () {
-                                                  _select(i);
-                                                },
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
+                          child: _DockTrack(
+                            currentIndex: currentIndex,
+                            onSelected: onSelected,
+                            items: items,
                           ),
                         ),
                       ),
@@ -314,94 +112,333 @@ class _FloatingNavBarState extends State<FloatingNavBar> {
   }
 }
 
-class _DockItem extends StatefulWidget {
-  final NavItemData data;
-  final bool selected;
-  final Duration duration;
-  final bool pressed;
-  final VoidCallback onTap;
-
-  const _DockItem({
-    required this.data,
-    required this.selected,
-    required this.duration,
-    required this.pressed,
-    required this.onTap,
+class _DockTrack extends StatefulWidget {
+  final int currentIndex;
+  final ValueChanged<int> onSelected;
+  final List<NavItemData> items;
+  const _DockTrack({
+    required this.currentIndex,
+    required this.onSelected,
+    required this.items,
   });
 
   @override
-  State<_DockItem> createState() => _DockItemState();
+  State<_DockTrack> createState() => _DockTrackState();
 }
 
-class _DockItemState extends State<_DockItem> {
-  bool _pressed = false;
+class _DockTrackState extends State<_DockTrack> with TickerProviderStateMixin {
+  late final AnimationController _position = AnimationController.unbounded(
+    vsync: this,
+    value: widget.currentIndex.toDouble(),
+  );
+  late final AnimationController _press = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 160),
+    reverseDuration: const Duration(milliseconds: 140),
+  );
+  final ValueNotifier<int?> _pressedIndex = ValueNotifier(null);
+  late final Listenable _motion = Listenable.merge([
+    _position,
+    _press,
+    _pressedIndex,
+  ]);
+  VelocityTracker? _tracker;
+  double? _releaseVelocity;
+  double _target = 0;
+  bool _dragging = false;
+  bool _cancelled = false;
+  int? _lastHapticIndex;
+  bool _reduceMotion = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _target = widget.currentIndex.toDouble();
+    _position.addStatusListener((status) {
+      if (status == AnimationStatus.completed) _position.value = _target;
+    });
+    _press.addStatusListener((status) {
+      if (status == AnimationStatus.dismissed) _pressedIndex.value = null;
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (_reduceMotion) {
+      _position.value = widget.currentIndex.toDouble();
+      _press.value = _pressedIndex.value == null ? 0 : 1;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _DockTrack oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentIndex != widget.currentIndex &&
+        !_dragging &&
+        _target != widget.currentIndex.toDouble()) {
+      _settle(widget.currentIndex);
+    }
+  }
+
+  void _settle(int index, [double velocity = 0]) {
+    _target = index.toDouble();
+    if (_reduceMotion) {
+      _position.value = _target;
+    } else {
+      _position.animateWith(
+        SpringSimulation(
+          const SpringDescription(mass: 1, stiffness: 350, damping: 30),
+          _position.value,
+          _target,
+          velocity.clamp(-8.0, 8.0),
+          tolerance: const Tolerance(distance: 0.001, velocity: 0.001),
+        ),
+      );
+    }
+  }
+
+  void _select(int index, {bool haptic = true}) {
+    _settle(index);
+    if (index != widget.currentIndex) {
+      if (haptic) HapticFeedback.selectionClick();
+      widget.onSelected(index);
+    }
+  }
+
+  void _releasePress() {
+    if (_reduceMotion || _press.value == 0) {
+      _pressedIndex.value = null;
+      _press.value = 0;
+    } else {
+      _press.reverse();
+    }
+  }
+
+  @override
+  void dispose() {
+    _position.dispose();
+    _press.dispose();
+    _pressedIndex.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final color = widget.selected ? scheme.accent : scheme.secondaryText;
-    return Semantics(
-      button: true,
-      selected: widget.selected,
-      label: widget.data.label,
-      child: ExcludeSemantics(
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkResponse(
-            onTap: widget.onTap,
-            onHighlightChanged: (value) => setState(() => _pressed = value),
-            containedInkWell: true,
-            customBorder: const ContinuousRRect.all(Radii.pill),
-            splashColor: Colors.transparent,
-            highlightColor: scheme.onSurface.withValues(alpha: 0.04),
-            child: AnimatedScale(
-              key: ValueKey('dock-item-scale-${widget.data.label}'),
-              scale: _pressed || widget.pressed
-                  ? 1.16
-                  : widget.selected
-                  ? 1.09
-                  : 1,
-              duration: widget.duration,
-              curve: Curves.easeOutBack,
-              child: SizedBox.expand(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+    final dark = scheme.brightness == Brightness.dark;
+    final rtl = Directionality.of(context) == TextDirection.rtl;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final itemWidth = constraints.maxWidth / widget.items.length;
+        double position(double x) =>
+            ((rtl ? constraints.maxWidth - x : x) / itemWidth - 0.5).clamp(
+              0.0,
+              (widget.items.length - 1).toDouble(),
+            );
+        void dragTo(double x) {
+          final next = position(x);
+          final index = next.round();
+          _position.value = next;
+          _pressedIndex.value = index;
+          if (_lastHapticIndex != index) {
+            HapticFeedback.selectionClick();
+            _lastHapticIndex = index;
+          }
+        }
+
+        void cancel() {
+          _cancelled = true;
+          _dragging = false;
+          _tracker = null;
+          _releaseVelocity = null;
+          _releasePress();
+          _settle(widget.currentIndex);
+        }
+
+        return Listener(
+          onPointerDown: (event) {
+            _cancelled = false;
+            _releaseVelocity = null;
+            _lastHapticIndex = position(event.localPosition.dx).round();
+            _pressedIndex.value = _lastHapticIndex;
+            _tracker = VelocityTracker.withKind(event.kind)
+              ..addPosition(event.timeStamp, event.localPosition);
+            if (_reduceMotion) {
+              _press.value = 1;
+            } else {
+              _press.forward();
+            }
+          },
+          onPointerMove: (event) =>
+              _tracker?.addPosition(event.timeStamp, event.localPosition),
+          onPointerUp: (_) {
+            _releaseVelocity = _tracker?.getVelocity().pixelsPerSecond.dx;
+            _tracker = null;
+            _releasePress();
+          },
+          onPointerCancel: (_) => cancel(),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragStart: (details) {
+              _dragging = true;
+              dragTo(details.localPosition.dx);
+            },
+            onHorizontalDragUpdate: (details) =>
+                dragTo(details.localPosition.dx),
+            onHorizontalDragCancel: cancel,
+            onHorizontalDragEnd: (details) {
+              if (_cancelled) return;
+              final velocity =
+                  (_releaseVelocity ??
+                      _tracker?.getVelocity().pixelsPerSecond.dx ??
+                      details.primaryVelocity ??
+                      0) *
+                  (rtl ? -1 : 1);
+              final releaseIndex = _position.value.round();
+              final projected = (_position.value + velocity * 0.1 / itemWidth)
+                  .round();
+              final target =
+                  (releaseIndex + (projected - releaseIndex).clamp(-1, 1))
+                      .clamp(0, widget.items.length - 1);
+              _dragging = false;
+              if (_lastHapticIndex != target) HapticFeedback.selectionClick();
+              _settle(target, velocity / itemWidth);
+              if (target != widget.currentIndex) widget.onSelected(target);
+            },
+            child: AnimatedBuilder(
+              animation: _motion,
+              builder: (context, _) {
+                final location = _position.value.clamp(
+                  0.0,
+                  (widget.items.length - 1).toDouble(),
+                );
+                final lift = Curves.easeOutCubic.transform(_press.value);
+                final preview = _dragging
+                    ? location.round()
+                    : widget.currentIndex;
+                return Stack(
                   children: [
-                    AnimatedSlide(
-                      offset: widget.selected || widget.pressed
-                          ? const Offset(0, -0.06)
-                          : Offset.zero,
-                      duration: widget.duration,
-                      curve: Curves.easeOutCubic,
-                      child: Icon(
-                        widget.selected
-                            ? widget.data.selectedIcon
-                            : widget.data.icon,
-                        size: 26,
-                        color: color,
+                    PositionedDirectional(
+                      start: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: itemWidth,
+                      child: Transform.translate(
+                        offset: Offset(
+                          location * itemWidth * (rtl ? -1 : 1),
+                          0,
+                        ),
+                        child: Transform.scale(
+                          key: const ValueKey('dock-lens-scale'),
+                          scale: 1 + lift * 0.06,
+                          child: DecoratedBox(
+                            decoration: ShapeDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Colors.white.withValues(
+                                    alpha: dark ? 0.22 : 0.9,
+                                  ),
+                                  scheme.blockSurface.withValues(alpha: 0.45),
+                                ],
+                              ),
+                              shape: ContinuousRRect.all(
+                                Radii.pill,
+                                side: BorderSide(
+                                  color: Colors.white.withValues(
+                                    alpha: dark ? 0.22 : 0.85,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      widget.data.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11,
-                        height: 1.25,
-                        fontWeight: widget.selected
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                        color: color,
-                      ),
+                    Row(
+                      children: [
+                        for (var i = 0; i < widget.items.length; i++)
+                          Expanded(
+                            child: Semantics(
+                              button: true,
+                              selected: widget.currentIndex == i,
+                              label: widget.items[i].label,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => _select(i),
+                                child: Transform.scale(
+                                  key: ValueKey(
+                                    'dock-item-scale-${widget.items[i].label}',
+                                  ),
+                                  scale:
+                                      1 +
+                                      0.09 *
+                                          (1 - (location - i).abs()).clamp(
+                                            0.0,
+                                            1.0,
+                                          ) +
+                                      (_pressedIndex.value == i
+                                          ? lift * 0.12
+                                          : 0),
+                                  child: SizedBox.expand(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Transform.translate(
+                                          offset: Offset(
+                                            0,
+                                            -1.5 *
+                                                    (1 - (location - i).abs())
+                                                        .clamp(0.0, 1.0) -
+                                                (_pressedIndex.value == i
+                                                    ? lift * 1.5
+                                                    : 0),
+                                          ),
+                                          child: Icon(
+                                            preview == i
+                                                ? widget.items[i].selectedIcon
+                                                : widget.items[i].icon,
+                                            size: 26,
+                                            color: preview == i
+                                                ? scheme.accent
+                                                : scheme.secondaryText,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          widget.items[i].label,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: preview == i
+                                                ? FontWeight.w700
+                                                : FontWeight.w500,
+                                            color: preview == i
+                                                ? scheme.accent
+                                                : scheme.secondaryText,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ],
-                ),
-              ),
+                );
+              },
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

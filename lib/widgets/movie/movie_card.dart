@@ -1,9 +1,7 @@
 // Modified for the personal UI edition, 2026-11-08. Apache-2.0.
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:random_movie/config/api_config.dart';
 import 'package:random_movie/config/app_theme.dart';
-import 'package:random_movie/config/design_tokens.dart';
+import 'package:random_movie/widgets/movie/movie_poster.dart';
 import 'package:random_movie/models/movie.dart';
 import 'package:random_movie/services/watch_status.dart';
 
@@ -13,6 +11,7 @@ class MovieCard extends StatefulWidget {
   final VoidCallback? onTap;
   final VoidCallback? onDelete;
   final bool showWatchedBadge;
+  final String? posterHeroTag;
 
   const MovieCard({
     super.key,
@@ -20,6 +19,7 @@ class MovieCard extends StatefulWidget {
     this.onTap,
     this.onDelete,
     this.showWatchedBadge = true,
+    this.posterHeroTag,
   });
 
   @override
@@ -96,37 +96,11 @@ class _MovieCardState extends State<MovieCard> {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      if (movie.poster.isNotEmpty)
-                        CachedNetworkImage(
-                          imageUrl: movie.poster,
-                          httpHeaders: ApiConfig.imageHeaders,
-                          fit: BoxFit.cover,
-                          // 性能：限制解码尺寸，避免按原图（常见 1000px+）解码，
-                          // 这是滚动时最大的内存与解码开销来源。
-                          memCacheWidth: 300,
-                          maxWidthDiskCache: 300,
-                          fadeInDuration: const Duration(milliseconds: 120),
-                          placeholder: (_, _) => ColoredBox(
-                            color: SurfaceLevel.inset.colorOf(colorScheme),
-                          ),
-                          errorWidget: (_, _, _) => ColoredBox(
-                            color: SurfaceLevel.inset.colorOf(colorScheme),
-                            child: Icon(
-                              Icons.movie_outlined,
-                              size: 30,
-                              color: colorScheme.secondaryText,
-                            ),
-                          ),
-                        )
-                      else
-                        ColoredBox(
-                          color: SurfaceLevel.inset.colorOf(colorScheme),
-                          child: Icon(
-                            Icons.movie_outlined,
-                            size: 30,
-                            color: colorScheme.secondaryText,
-                          ),
-                        ),
+                      MoviePoster(
+                        url: movie.poster,
+                        heroTag: widget.posterHeroTag,
+                        radius: AppTheme.radiusLarge,
+                      ),
                       if (widget.showWatchedBadge)
                         Positioned(
                           top: 6,

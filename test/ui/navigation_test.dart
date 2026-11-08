@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/widgets/common/floating_nav_bar.dart';
@@ -47,32 +48,108 @@ void main() {
           ),
         ),
       );
-      AnimatedScale item(String label) => tester.widget<AnimatedScale>(
-        find.byKey(ValueKey('dock-item-scale-$label')),
-      );
-      expect(item('片库').scale, greaterThan(1));
-      expect(item('抽片').scale, 1);
+      double item(String label) => tester
+          .widget<Transform>(find.byKey(ValueKey('dock-item-scale-$label')))
+          .transform
+          .storage[0];
+      expect(item('片库'), greaterThan(1));
+      expect(item('抽片'), 1);
       final gesture = await tester.startGesture(
         tester.getCenter(find.text('抽片')),
       );
+      await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      expect(item('抽片').scale, greaterThan(item('片库').scale));
+      expect(item('抽片'), greaterThan(item('片库')));
       expect(
         tester
-            .widget<AnimatedScale>(
-              find.byKey(const ValueKey('dock-lens-scale')),
-            )
-            .scale,
+            .widget<Transform>(find.byKey(const ValueKey('dock-lens-scale')))
+            .transform
+            .storage[0],
         greaterThan(1),
       );
       await gesture.up();
       await tester.pumpAndSettle();
       expect(selected, 1);
-      expect(item('抽片').scale, greaterThan(1));
-      expect(item('片库').scale, 1);
+      expect(item('抽片'), greaterThan(1));
+      expect(item('片库'), 1);
       expect(tester.takeException(), isNull);
     },
   );
+  testWidgets('cancel restores selection and one crossing gives one haptic', (
+    tester,
+  ) async {
+    var selected = 0;
+    var haptics = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'HapticFeedback.vibrate') haptics++;
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) => Scaffold(
+            bottomNavigationBar: FloatingNavBar(
+              currentIndex: selected,
+              items: items,
+              onSelected: (i) => setState(() => selected = i),
+            ),
+          ),
+        ),
+      ),
+    );
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('片库')),
+    );
+    await gesture.moveTo(tester.getCenter(find.text('抽片')));
+    await tester.pump();
+    await gesture.cancel();
+    await tester.pumpAndSettle();
+    expect(selected, 0);
+    haptics = 0;
+    final drag = await tester.startGesture(tester.getCenter(find.text('片库')));
+    await drag.moveTo(tester.getCenter(find.text('抽片')));
+    await tester.pump(const Duration(seconds: 1));
+    await drag.up();
+    await tester.pumpAndSettle();
+    expect(selected, 1);
+    expect(haptics, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('reduced motion snaps without a running spring', (tester) async {
+    var selected = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) => MediaQuery(
+            data: const MediaQueryData(disableAnimations: true),
+            child: Scaffold(
+              bottomNavigationBar: FloatingNavBar(
+                currentIndex: selected,
+                items: items,
+                onSelected: (i) => setState(() => selected = i),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('设置'));
+    await tester.pump();
+    expect(selected, 3);
+    final scale = tester
+        .widget<Transform>(find.byKey(const ValueKey('dock-item-scale-设置')))
+        .transform
+        .storage[0];
+    expect(scale, closeTo(1.09, 0.0001));
+    expect(tester.binding.transientCallbackCount, 0);
+  });
+
   for (final direction in TextDirection.values) {
     testWidgets('short flick is bounded to one neighbour in $direction', (
       tester,

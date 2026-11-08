@@ -9,6 +9,7 @@ import 'package:random_movie/services/services.dart';
 import 'package:random_movie/widgets/collection/collection_icon.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
 import 'package:random_movie/widgets/movie/movie_card.dart';
+import 'package:random_movie/router/movie_detail_arguments.dart';
 import 'package:random_movie/widgets/movie/selectable_movie_grid.dart';
 
 /// 合集详情：展示合集内影片，支持编辑成员（手动合集）与「从本合集抽片」。
@@ -207,7 +208,14 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
                 child: MovieCard(
                   key: ValueKey(movie.id),
                   movie: movie,
-                  onTap: () => context.push('/movies/detail/${movie.id}'),
+                  posterHeroTag: 'collection:${_collection.id}:${movie.id}',
+                  onTap: () => context.push(
+                    '/movies/detail/${movie.id}',
+                    extra: MovieDetailArguments(
+                      movie,
+                      posterTag: 'collection:${_collection.id}:${movie.id}',
+                    ),
+                  ),
                 ),
               );
             },

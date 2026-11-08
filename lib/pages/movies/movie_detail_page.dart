@@ -10,6 +10,7 @@ import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/models/models.dart';
 import 'package:random_movie/providers/providers.dart';
 import 'package:random_movie/services/watch_status.dart';
+import 'package:random_movie/widgets/movie/movie_poster.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
 import 'package:random_movie/widgets/movie/movie_tag_editor.dart';
 import 'package:random_movie/widgets/movie/viewing_session_editor.dart';
@@ -18,8 +19,15 @@ import 'package:url_launcher/url_launcher.dart';
 /// 影片详情页
 class MovieDetailPage extends StatefulWidget {
   final String movieId;
+  final Movie? initialMovie;
+  final String? posterHeroTag;
 
-  const MovieDetailPage({super.key, required this.movieId});
+  const MovieDetailPage({
+    super.key,
+    required this.movieId,
+    this.initialMovie,
+    this.posterHeroTag,
+  });
 
   @override
   State<MovieDetailPage> createState() => _MovieDetailPageState();
@@ -42,6 +50,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
   bool _sessionsLoading = true;
   bool _summaryExpanded = false;
   bool _initialized = false;
+  Movie? _lastLoadedMovie;
   bool _hasChanges = false;
   bool _isSyncingWatchState = false;
   bool _posterReady = false;
@@ -52,7 +61,9 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
   @override
   void initState() {
     super.initState();
-    _seedMovie = context.read<MovieProvider>().peekMovieById(widget.movieId);
+    _seedMovie = widget.initialMovie?.id == widget.movieId
+        ? widget.initialMovie
+        : context.read<MovieProvider>().peekMovieById(widget.movieId);
     _movieFuture = _loadMovie();
     _loadSessions();
   }
@@ -82,7 +93,8 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
     _routeAnimation = nextAnimation;
 
     if (_deferredSectionsScheduled) return;
-    if (nextAnimation == null ||
+    if (MediaQuery.disableAnimationsOf(context) ||
+        nextAnimation == null ||
         nextAnimation.status == AnimationStatus.completed) {
       _beginDeferredReveal();
       return;
@@ -133,7 +145,13 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
   }
 
   void _initFromMovie(Movie movie) {
-    if (_initialized) return;
+    if (_initialized &&
+        (identical(_lastLoadedMovie, movie) ||
+            _hasChanges ||
+            _isSyncingWatchState)) {
+      return;
+    }
+    _lastLoadedMovie = movie;
     _episodes = List<MovieEpisode>.from(movie.episodes);
     _userRating = movie.userRating;
 
@@ -141,7 +159,11 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
     // 剧集要求所有分集都看完才算已看。
     _watched = WatchStatus.isWatched(movie);
     _watchedAt = _watched ? movie.watchedAt : null;
-    _reviewController = TextEditingController(text: movie.userReview ?? '');
+    if (_initialized) {
+      _reviewController.text = movie.userReview ?? '';
+    } else {
+      _reviewController = TextEditingController(text: movie.userReview ?? '');
+    }
     _initialized = true;
   }
 
@@ -290,7 +312,14 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    _buildPosterThumb(movie, colorScheme, hasPoster),
+                    HeroMode(
+                      enabled: !collapsed,
+                      child: _buildPosterThumb(
+                        movie,
+                        colorScheme,
+                        movie.poster.isNotEmpty,
+                      ),
+                    ),
                     const SizedBox(width: AppTheme.spacingMedium),
                     Expanded(
                       child: Column(
@@ -392,31 +421,10 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
           ),
         ),
       ),
-      child: ClipRSuperellipse(
-        borderRadius: BorderRadius.circular(AppTheme.radiusMedium - 1.5),
-        child: hasPoster
-            ? CachedNetworkImage(
-                imageUrl: movie.poster,
-                httpHeaders: ApiConfig.imageHeaders,
-                fit: BoxFit.cover,
-                memCacheWidth: 220,
-                maxWidthDiskCache: 220,
-                fadeInDuration: Duration.zero,
-                placeholder: (_, _) =>
-                    ColoredBox(color: colorScheme.surfaceContainerHighest),
-                errorWidget: (_, _, _) => ColoredBox(
-                  color: colorScheme.surfaceContainerHighest,
-                  child: const Icon(
-                    Icons.movie,
-                    size: 32,
-                    color: Colors.white38,
-                  ),
-                ),
-              )
-            : ColoredBox(
-                color: colorScheme.surfaceContainerHighest,
-                child: const Icon(Icons.movie, size: 32, color: Colors.white38),
-              ),
+      child: MoviePoster(
+        url: hasPoster ? movie.poster : '',
+        heroTag: widget.posterHeroTag,
+        radius: AppTheme.radiusMedium - 1.5,
       ),
     );
   }
@@ -449,6 +457,18 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
   ) {
     final sectionBuilders = <WidgetBuilder>[
       (context) => _buildInfoSection(context, movie),
+      if (movie.subjectType == MovieSubjectType.tvSeries)
+        (context) => RepaintBoundary(
+          child: SoftCard(
+            showShadow: false,
+            padding: const EdgeInsets.all(AppTheme.spacingMedium),
+            child: _buildEpisodeControls(
+              context,
+              movie,
+              Theme.of(context).colorScheme,
+            ),
+          ),
+        ),
       (context) => _buildWatchSection(context, movie),
       if (_secondarySectionsReady && movie.summary.isNotEmpty)
         (context) => _buildSummarySection(context, movie),
@@ -660,7 +680,6 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
 
   Widget _buildWatchSection(BuildContext context, Movie movie) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isSeries = movie.subjectType == MovieSubjectType.tvSeries;
 
     return RepaintBoundary(
       child: SoftCard(
@@ -710,12 +729,6 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
                 ),
               ),
             ),
-            if (isSeries) ...[
-              const SizedBox(height: AppTheme.spacingMedium),
-              const Divider(height: 1),
-              const SizedBox(height: AppTheme.spacingMedium),
-              _buildEpisodeControls(context, movie, colorScheme),
-            ],
           ],
         ),
       ),
@@ -1089,9 +1102,11 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
           ),
           const SizedBox(width: AppTheme.spacingSmall),
         ],
-        Text(
-          title,
-          style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        Expanded(
+          child: Text(
+            title,
+            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
         ),
       ],
     );
@@ -1108,23 +1123,31 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        Wrap(
+          spacing: AppTheme.spacingSmall,
+          runSpacing: 4,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Icon(
-              Icons.list_alt_rounded,
-              size: 18,
-              color: colorScheme.onSurface.withValues(alpha: 0.55),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.list_alt_rounded,
+                  size: 18,
+                  color: colorScheme.onSurface.withValues(alpha: 0.55),
+                ),
+                const SizedBox(width: AppTheme.spacingSmall),
+                Text(
+                  '分集',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onSurface.withValues(alpha: 0.75),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: AppTheme.spacingSmall),
-            Text(
-              '分集',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: colorScheme.onSurface.withValues(alpha: 0.75),
-              ),
-            ),
-            const Spacer(),
             Text(
               total > 0 ? '已看 $watchedCount/$total' : '未获取到分集列表',
               style: TextStyle(
@@ -1407,24 +1430,33 @@ class _SessionTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Icon(
-                Icons.calendar_today,
-                size: 14,
-                color: colorScheme.onSurface.withValues(alpha: 0.6),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.calendar_today,
+                    size: 14,
+                    color: colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      DateFormat('yyyy 年 M 月 d 日').format(session.watchedAt),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 6),
-              Text(
-                DateFormat('yyyy 年 M 月 d 日').format(session.watchedAt),
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.onSurface,
-                ),
-              ),
-              if (session.isRewatch) ...[
-                const SizedBox(width: 8),
+              if (session.isRewatch)
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 6,
@@ -1448,29 +1480,38 @@ class _SessionTile extends StatelessWidget {
                     ),
                   ),
                 ),
-              ],
-              const Spacer(),
-              IconButton(
-                icon: Icon(
-                  Icons.edit_outlined,
-                  size: 16,
-                  color: colorScheme.onSurface.withValues(alpha: 0.5),
-                ),
-                onPressed: onEdit,
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-              ),
-              IconButton(
-                icon: Icon(
-                  Icons.delete_outline,
-                  size: 16,
-                  color: colorScheme.error.withValues(alpha: 0.7),
-                ),
-                onPressed: onDelete,
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      Icons.edit_outlined,
+                      size: 16,
+                      color: colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                    onPressed: onEdit,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 28,
+                      minHeight: 28,
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Icons.delete_outline,
+                      size: 16,
+                      color: colorScheme.error.withValues(alpha: 0.7),
+                    ),
+                    onPressed: onDelete,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 28,
+                      minHeight: 28,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

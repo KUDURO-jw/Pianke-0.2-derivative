@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:random_movie/models/models.dart';
+import 'package:random_movie/config/app_theme.dart';
+import 'package:random_movie/router/movie_detail_arguments.dart';
 import 'package:random_movie/pages/collections/collections_page.dart';
 import 'package:random_movie/pages/collections/collection_detail_page.dart';
 import 'package:random_movie/pages/history/history_page.dart';
@@ -115,6 +117,22 @@ class _HomeShellState extends State<HomeShell> {
   }
 }
 
+CustomTransitionPage<void> _secondaryPage(
+  BuildContext context,
+  GoRouterState state,
+  Widget child,
+) => CustomTransitionPage<void>(
+  key: state.pageKey,
+  transitionDuration: MediaQuery.disableAnimationsOf(context)
+      ? Duration.zero
+      : const Duration(milliseconds: 280),
+  reverseTransitionDuration: MediaQuery.disableAnimationsOf(context)
+      ? Duration.zero
+      : const Duration(milliseconds: 220),
+  transitionsBuilder: AppPageTransitionsBuilder.transition,
+  child: child,
+);
+
 final appRouter = GoRouter(
   navigatorKey: rootNavigatorKey,
   initialLocation: '/movies',
@@ -139,32 +157,28 @@ final appRouter = GoRouter(
                 GoRoute(
                   path: 'add',
                   parentNavigatorKey: rootNavigatorKey,
-                  builder: (context, state) => const AddMoviePage(),
+                  pageBuilder: (context, state) =>
+                      _secondaryPage(context, state, const AddMoviePage()),
                 ),
                 GoRoute(
                   path: 'detail/:movieId',
                   parentNavigatorKey: rootNavigatorKey,
                   pageBuilder: (context, state) {
                     final movieId = state.pathParameters['movieId']!;
-                    return CustomTransitionPage<void>(
-                      key: state.pageKey,
-                      transitionDuration: const Duration(milliseconds: 160),
-                      reverseTransitionDuration: const Duration(
-                        milliseconds: 120,
+                    final extra = state.extra;
+                    final args =
+                        extra is MovieDetailArguments &&
+                            extra.movie.id == movieId
+                        ? extra
+                        : null;
+                    return _secondaryPage(
+                      context,
+                      state,
+                      MovieDetailPage(
+                        movieId: movieId,
+                        initialMovie: args?.movie,
+                        posterHeroTag: args?.posterTag,
                       ),
-                      child: MovieDetailPage(movieId: movieId),
-                      transitionsBuilder:
-                          (context, animation, secondaryAnimation, child) {
-                            final fade = CurvedAnimation(
-                              parent: animation,
-                              curve: Curves.easeOutCubic,
-                              reverseCurve: Curves.easeInCubic,
-                            );
-                            if (MediaQuery.disableAnimationsOf(context)) {
-                              return child;
-                            }
-                            return FadeTransition(opacity: fade, child: child);
-                          },
                     );
                   },
                 ),
@@ -182,7 +196,8 @@ final appRouter = GoRouter(
                 GoRoute(
                   path: 'start',
                   parentNavigatorKey: rootNavigatorKey,
-                  builder: (context, state) => const DrawPage(),
+                  pageBuilder: (context, state) =>
+                      _secondaryPage(context, state, const DrawPage()),
                 ),
               ],
             ),
@@ -198,7 +213,11 @@ final appRouter = GoRouter(
                 GoRoute(
                   path: 'calendar',
                   parentNavigatorKey: rootNavigatorKey,
-                  builder: (context, state) => const HistoryCalendarPage(),
+                  pageBuilder: (context, state) => _secondaryPage(
+                    context,
+                    state,
+                    const HistoryCalendarPage(),
+                  ),
                 ),
               ],
             ),
@@ -218,14 +237,19 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/collections',
       parentNavigatorKey: rootNavigatorKey,
-      builder: (context, state) => const CollectionsPage(),
+      pageBuilder: (context, state) =>
+          _secondaryPage(context, state, const CollectionsPage()),
       routes: [
         GoRoute(
           path: 'detail',
           parentNavigatorKey: rootNavigatorKey,
-          builder: (context, state) {
+          pageBuilder: (context, state) {
             final collection = state.extra as MovieCollection;
-            return CollectionDetailPage(collection: collection);
+            return _secondaryPage(
+              context,
+              state,
+              CollectionDetailPage(collection: collection),
+            );
           },
         ),
       ],
@@ -233,9 +257,13 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/draw-from',
       parentNavigatorKey: rootNavigatorKey,
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final args = state.extra as ({List<String> movieIds, String title});
-        return DrawPage(presetMovieIds: args.movieIds, presetTitle: args.title);
+        return _secondaryPage(
+          context,
+          state,
+          DrawPage(presetMovieIds: args.movieIds, presetTitle: args.title),
+        );
       },
     ),
   ],
@@ -290,60 +318,59 @@ class _BranchTransitionState extends State<_BranchTransition>
 
   @override
   Widget build(BuildContext context) {
-    return ClipRect(
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          final progress = MediaQuery.disableAnimationsOf(context)
-              ? 1.0
-              : Curves.easeInOutCubic.transform(_controller.value);
-          final direction = Directionality.of(context) == TextDirection.rtl
-              ? -_direction
-              : _direction;
-          Widget branch(int index) {
-            final active = index == widget.index;
-            final visible = active || (index == _outgoing && progress < 1);
-            return Offstage(
-              key: ValueKey('branch-$index'),
-              offstage: !visible,
-              child: TickerMode(
-                enabled: active,
-                child: IgnorePointer(
-                  ignoring: !active,
-                  child: ExcludeSemantics(
-                    excluding: !active,
-                    child: ExcludeFocus(
-                      excluding: !active,
-                      child: FractionalTranslation(
-                        translation: Offset(
-                          direction *
-                              (active
-                                  ? (1 - progress) * 0.08
-                                  : -progress * 0.04),
-                          0,
-                        ),
-                        child: Opacity(
-                          opacity: active ? progress : 1,
-                          child: RepaintBoundary(child: widget.children[index]),
-                        ),
+    final direction = Directionality.of(context) == TextDirection.rtl
+        ? -_direction
+        : _direction;
+    Widget branch(int index) {
+      final active = index == widget.index;
+      final visible = active || index == _outgoing;
+      return Offstage(
+        key: ValueKey('branch-$index'),
+        offstage: !visible,
+        child: TickerMode(
+          enabled: active,
+          child: IgnorePointer(
+            ignoring: !active,
+            child: ExcludeSemantics(
+              excluding: !active,
+              child: ExcludeFocus(
+                excluding: !active,
+                child: AnimatedBuilder(
+                  animation: _controller,
+                  // The Navigator subtree is stable throughout the animation.
+                  child: RepaintBoundary(child: widget.children[index]),
+                  builder: (context, child) {
+                    final progress = MediaQuery.disableAnimationsOf(context)
+                        ? 1.0
+                        : Curves.easeInOutCubic.transform(_controller.value);
+                    return FractionalTranslation(
+                      translation: Offset(
+                        direction *
+                            (active ? (1 - progress) * 0.08 : -progress * 0.04),
+                        0,
                       ),
-                    ),
-                  ),
+                      child: Opacity(
+                        opacity: active ? progress : 1,
+                        child: child,
+                      ),
+                    );
+                  },
                 ),
               ),
-            );
-          }
+            ),
+          ),
+        ),
+      );
+    }
 
-          // Stable keys retain each Navigator; only the incoming page paints last.
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              for (var i = 0; i < widget.children.length; i++)
-                if (i != widget.index) branch(i),
-              branch(widget.index),
-            ],
-          );
-        },
+    return ClipRect(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          for (var i = 0; i < widget.children.length; i++)
+            if (i != widget.index) branch(i),
+          branch(widget.index),
+        ],
       ),
     );
   }

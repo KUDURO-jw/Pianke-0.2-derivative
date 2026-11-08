@@ -28,6 +28,8 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
 
   WebDavSyncService? _service;
   bool _busy = false;
+  bool _configExpanded = true;
+  bool _configured = false;
   String? _message;
   bool _messageIsError = false;
   double? _progress;
@@ -43,6 +45,8 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
     final config = await _service!.readConfig();
     _accountController.text = config.account;
     _directoryController.text = config.remoteDirectory;
+    _configured = (config.hasPassword && config.account.trim().isNotEmpty);
+    _configExpanded = !_configured;
   }
 
   @override
@@ -62,6 +66,13 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
           : _passwordController.text,
     );
     _passwordController.clear();
+    final config = await _service!.readConfig();
+    if (mounted) {
+      setState(
+        () => _configured =
+            (config.hasPassword && config.account.trim().isNotEmpty),
+      );
+    }
   }
 
   Future<void> _testConnection() async {
@@ -327,44 +338,76 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'WebDAV 地址：${WebDavClient.endpoint}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: colorScheme.onSurface.withValues(alpha: 0.55),
-                ),
+              Row(
+                children: [
+                  Icon(Icons.cloud_outlined, color: colorScheme.primary),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(_configured ? '已配置坚果云' : '尚未配置坚果云')),
+                  TextButton.icon(
+                    onPressed: _busy
+                        ? null
+                        : () => setState(
+                            () => _configExpanded = !_configExpanded,
+                          ),
+                    icon: Icon(
+                      _configExpanded ? Icons.expand_less : Icons.expand_more,
+                    ),
+                    label: const Text('配置'),
+                  ),
+                ],
               ),
-              const SizedBox(height: AppTheme.spacingMedium),
-              TextField(
-                controller: _accountController,
-                enabled: !_busy,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: '坚果云账号',
-                  prefixIcon: Icon(Icons.person_outline_rounded),
+              if (_configExpanded)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'WebDAV 地址：${WebDavClient.endpoint}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.onSurface.withValues(alpha: 0.55),
+                        ),
+                      ),
+                      const SizedBox(height: AppTheme.spacingMedium),
+                      TextField(
+                        controller: _accountController,
+                        enabled: !_busy,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          labelText: '坚果云账号',
+                          prefixIcon: Icon(Icons.person_outline_rounded),
+                        ),
+                      ),
+                      const SizedBox(height: AppTheme.spacingSmall),
+                      TextField(
+                        controller: _passwordController,
+                        enabled: !_busy,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                          labelText: '应用密码',
+                          hintText: '留空表示使用已保存的应用密码',
+                          prefixIcon: Icon(Icons.lock_outline_rounded),
+                        ),
+                      ),
+                      const SizedBox(height: AppTheme.spacingSmall),
+                      TextField(
+                        controller: _directoryController,
+                        enabled: !_busy,
+                        decoration: const InputDecoration(
+                          labelText: '远程备份目录',
+                          prefixIcon: Icon(Icons.folder_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: AppTheme.spacingMedium),
+                      OutlinedButton.icon(
+                        onPressed: _busy ? null : _testConnection,
+                        icon: const Icon(Icons.link_rounded),
+                        label: const Text('保存并测试连接'),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: AppTheme.spacingSmall),
-              TextField(
-                controller: _passwordController,
-                enabled: !_busy,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: '应用密码',
-                  hintText: '留空表示使用已保存的应用密码',
-                  prefixIcon: Icon(Icons.lock_outline_rounded),
-                ),
-              ),
-              const SizedBox(height: AppTheme.spacingSmall),
-              TextField(
-                controller: _directoryController,
-                enabled: !_busy,
-                decoration: const InputDecoration(
-                  labelText: '远程备份目录',
-                  prefixIcon: Icon(Icons.folder_outlined),
-                ),
-              ),
-              const SizedBox(height: AppTheme.spacingMedium),
               if (_progress != null) ...[
                 LinearProgressIndicator(value: _progress),
                 const SizedBox(height: AppTheme.spacingSmall),
@@ -385,11 +428,6 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
                 spacing: AppTheme.spacingSmall,
                 runSpacing: AppTheme.spacingSmall,
                 children: [
-                  OutlinedButton.icon(
-                    onPressed: _busy ? null : _testConnection,
-                    icon: const Icon(Icons.link_rounded),
-                    label: const Text('测试连接'),
-                  ),
                   FilledButton.icon(
                     onPressed: _busy
                         ? null
