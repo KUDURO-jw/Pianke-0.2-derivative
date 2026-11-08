@@ -10,16 +10,22 @@ import 'package:random_movie/providers/providers.dart';
 import 'package:random_movie/services/backup_service.dart';
 import 'package:random_movie/services/storage_service.dart';
 import 'package:random_movie/services/update_service.dart';
+import 'package:random_movie/services/update_download_service.dart';
 import 'package:random_movie/services/webdav_sync_service.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
 import 'package:random_movie/widgets/settings/webdav_sync_section.dart';
+import 'package:random_movie/widgets/settings/update_download_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class SettingsPage extends StatefulWidget {
   final UpdateService? updateService;
+  final UpdateDownloadService? updateDownloadService;
 
-  const SettingsPage({super.key, this.updateService});
+  const SettingsPage({
+    super.key,
+    this.updateService,
+    this.updateDownloadService,
+  });
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -33,6 +39,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _exportLoading = false;
   bool _importLoading = false;
   bool _updateLoading = false;
+  bool _updateDialogOpen = false;
 
   @override
   void initState() {
@@ -197,7 +204,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _handleCheckUpdate() async {
-    if (_updateLoading) return;
+    if (_updateLoading || _updateDialogOpen) return;
     setState(() => _updateLoading = true);
     try {
       final result = await _updateService.checkForUpdate();
@@ -210,6 +217,8 @@ class _SettingsPageState extends State<SettingsPage> {
         );
         return;
       }
+      setState(() => _updateLoading = false);
+      _updateDialogOpen = true;
       await _showUpdateDialog(result.update!);
     } on UpdateCheckException catch (error) {
       if (!mounted) return;
@@ -228,75 +237,19 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
       AppToast.show(context, '检查更新失败，请稍后再试', type: ToastType.error);
     } finally {
+      _updateDialogOpen = false;
       if (mounted) setState(() => _updateLoading = false);
     }
   }
 
   Future<void> _showUpdateDialog(AppUpdateInfo update) async {
-    final colorScheme = Theme.of(context).colorScheme;
     await showDialog<void>(
       context: context,
-      barrierDismissible: !update.forceUpdate,
+      barrierDismissible: false,
       barrierColor: Colors.black.withValues(alpha: 0.3),
-      builder: (ctx) => AlertDialog(
-        shape: RoundedSuperellipseBorder(
-          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-          side: BorderSide(color: colorScheme.outlineVariant),
-        ),
-        title: const Text('发现焕新版更新'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${update.displayTitle}\n版本 ${update.versionName}\n片刻·焕新版',
-              style: TextStyle(
-                fontSize: 13,
-                color: colorScheme.onSurface.withValues(alpha: 0.55),
-              ),
-            ),
-            if (update.changelog.isNotEmpty) ...[
-              const SizedBox(height: AppTheme.spacingMedium),
-              for (final item in update.changelog)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Text('• $item'),
-                ),
-            ],
-          ],
-        ),
-        actions: [
-          if (!update.forceUpdate)
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('稍后'),
-            ),
-          TextButton(
-            onPressed: () async {
-              final url = Uri.tryParse(update.downloadUrl);
-              if (url == null || url.scheme != 'https' || url.host.isEmpty) {
-                AppToast.show(context, '下载地址无效', type: ToastType.error);
-                return;
-              }
-              final launched = await launchUrl(
-                url,
-                mode: LaunchMode.externalApplication,
-              );
-              if (!launched && mounted) {
-                AppToast.show(context, '无法打开下载地址', type: ToastType.error);
-                return;
-              }
-              if (launched && ctx.mounted) {
-                Navigator.of(ctx).pop();
-              }
-            },
-            style: TextButton.styleFrom(foregroundColor: AppTheme.accent),
-            child: const Text(
-              '下载新版',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
+      builder: (ctx) => UpdateDownloadDialog(
+        update: update,
+        service: widget.updateDownloadService ?? UpdateDownloadService(),
       ),
     );
   }

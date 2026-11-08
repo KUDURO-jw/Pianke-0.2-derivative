@@ -38,7 +38,7 @@
 | WebDAV 手动同步 | 上传/恢复/同步 → 同入口 | WebDavClient / SyncPlanner | SHA-256、临时文件/MOVE、进度、异常 |
 | WebDAV 自动同步 | 启动与前台恢复 → 同生命周期 | AppLifecycleShell | 不阻塞启动、下载后刷新 Provider |
 | 冲突与覆盖 | 原同步弹窗 → 对应新样式弹窗 | synchronize / replaceBackupData | 选择本地/云端、取消、覆盖确认与安全备份 |
-| 更新检查 | 设置/检查更新 → 焕新版独立渠道 | UpdateService | 手动读取 update-ui.json，浏览器下载，不影响旧版 update.json |
+| 更新检查 | 设置/检查更新 → 焕新版独立渠道 | UpdateService / UpdateDownloadService | 手动读取 update-ui.json，应用内进度、取消、重试，校验后由 Android 确认安装；旧 update.json 不变 |
 | 开源信息与版本 | 设置/关于 → 同入口 | PackageInfo / LICENSE / NOTICE | 上游作者、协议、UI 来源、独立包名与版本 |
 
 ## 数据与接口兼容

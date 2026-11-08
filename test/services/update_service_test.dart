@@ -113,6 +113,7 @@ void main() {
       'not a manifest',
       {...manifest(7), 'versionName': ''},
       {...manifest(7), 'downloadUrl': 'file:///wrong.apk'},
+      {...manifest(7), 'sha256': 'invalid'},
     ]) {
       await expectLater(
         service(data).checkForUpdate(),

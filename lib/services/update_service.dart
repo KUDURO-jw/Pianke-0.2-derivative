@@ -11,6 +11,7 @@ class AppUpdateInfo {
   final List<String> changelog;
   final String downloadUrl;
   final bool forceUpdate;
+  final String sha256;
 
   const AppUpdateInfo({
     required this.versionName,
@@ -19,6 +20,7 @@ class AppUpdateInfo {
     required this.changelog,
     required this.downloadUrl,
     required this.forceUpdate,
+    this.sha256 = '',
   });
 
   factory AppUpdateInfo.fromJson(Map<String, dynamic> json) {
@@ -35,6 +37,7 @@ class AppUpdateInfo {
           : const [],
       downloadUrl: json['downloadUrl']?.toString().trim() ?? '',
       forceUpdate: json['forceUpdate'] == true,
+      sha256: json['sha256']?.toString().trim().toLowerCase() ?? '',
     );
   }
 
@@ -92,6 +95,10 @@ class UpdateService {
     }
 
     final info = AppUpdateInfo.fromJson(Map<String, dynamic>.from(data));
+    if (info.sha256.isNotEmpty &&
+        !RegExp(r'^[a-f0-9]{64}$').hasMatch(info.sha256)) {
+      throw const UpdateCheckException('更新清单校验信息无效');
+    }
     if (info.versionName.isEmpty) {
       throw const UpdateCheckException('更新清单缺少版本号');
     }

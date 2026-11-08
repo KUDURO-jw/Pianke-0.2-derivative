@@ -1,12 +1,13 @@
 {
-  "versionName": "0.2.5",
-  "versionCode": 10,
-  "title": "片刻·焕新版 0.2.5",
+  "versionName": "0.2.6",
+  "versionCode": 11,
+  "title": "片刻·焕新版 0.2.6",
   "changelog": [
-    "片库首页更紧凑，剧集分集独立排版，设置和同步配置精简",
-    "统一二级页面转场，新增片库、合集和抽片结果海报往返动画",
-    "底栏拖动直接跟手、松手弹簧吸附，优化动画更新范围并保留有界甩动"
+    "新增应用内下载进度、取消及失败重试，不再依赖浏览器下载",
+    "安装包校验后点击安装新版，由 Android 确认；首次可能需允许此来源",
+    "保留 0.2.5 的排版、海报转场与底栏动效优化"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.5-ui.1/Pianke-UI-arm64-release.apk",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.6-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "9e3d6d4b1fc8cef40799c23fcde1a7fe9519e74d82cbf503a77c7fa20de39a8b",
   "forceUpdate": false
 }

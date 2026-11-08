@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dio/dio.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:random_movie/pages/settings/settings_page.dart';
 import 'package:random_movie/services/update_service.dart';
+import 'package:random_movie/services/update_download_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'pages_test.dart' show providers;
 
@@ -34,6 +36,22 @@ class FakeUpdateService extends UpdateService {
   }
 }
 
+class _Downloads extends UpdateDownloadService {
+  int downloads = 0;
+  @override
+  Future<String> download(
+    AppUpdateInfo update, {
+    required CancelToken cancelToken,
+    required ProgressCallback onProgress,
+    VoidCallback? onVerifying,
+  }) async {
+    downloads++;
+    onProgress(100, 100);
+    onVerifying?.call();
+    return '/cache/updates/Pianke-UI-7.apk';
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() {
@@ -52,23 +70,31 @@ void main() {
     );
   });
   testWidgets(
-    'only manual check opens update dialog and launches external browser',
+    'manual check offers an in-app download and installation requires another tap',
     (tester) async {
       final service = FakeUpdateService();
+      final downloads = _Downloads();
       MethodCall? launch;
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(
-            const MethodChannel('plugins.flutter.io/url_launcher'),
-            (call) async {
-              launch = call;
-              return true;
-            },
-          );
+          .setMockMethodCallHandler(UpdateDownloadService.installerChannel, (
+            call,
+          ) async {
+            launch = call;
+            return 'launched';
+          });
       await tester.pumpWidget(
-        providers(MaterialApp(home: SettingsPage(updateService: service))),
+        providers(
+          MaterialApp(
+            home: SettingsPage(
+              updateService: service,
+              updateDownloadService: downloads,
+            ),
+          ),
+        ),
       );
       await tester.pumpAndSettle();
       expect(service.checks, 0);
+      expect(downloads.downloads, 0);
       await tester.scrollUntilVisible(
         find.text('检查更新'),
         300,
@@ -83,12 +109,15 @@ void main() {
       expect(find.text('稍后'), findsOneWidget);
       await tester.tap(find.text('下载新版'));
       await tester.pumpAndSettle();
-      expect(launch?.method, 'launch');
-      expect(
-        launch?.arguments['url'],
-        'https://github.com/example/app/releases/download/v7/app.apk',
-      );
-      expect(launch?.arguments['useWebView'], isFalse);
+      expect(downloads.downloads, 1);
+      expect(launch, isNull);
+      expect(find.text('安装新版'), findsOneWidget);
+      await tester.tap(find.text('安装新版'));
+      await tester.pumpAndSettle();
+      expect(launch?.method, 'installUpdate');
+      expect(launch?.arguments['path'], '/cache/updates/Pianke-UI-7.apk');
+      await tester.tap(find.text('关闭'));
+      await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsNothing);
       service.fail = true;
       await tester.pumpAndSettle();
