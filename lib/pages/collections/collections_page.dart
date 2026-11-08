@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -134,9 +135,10 @@ class _CollectionsPageState extends State<CollectionsPage> {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 1.35,
+      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 280,
+        mainAxisExtent:
+            150 + (MediaQuery.textScalerOf(context).scale(16) - 16) * 2,
         crossAxisSpacing: AppTheme.spacingMedium,
         mainAxisSpacing: AppTheme.spacingMedium,
       ),
@@ -232,7 +234,7 @@ class _CollectionCard extends StatelessWidget {
       onLongPress: onLongPress,
       child: SoftContainer(
         padding: EdgeInsets.zero,
-        child: ClipRRect(
+        child: ClipRSuperellipse(
           borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
           child: Stack(
             fit: StackFit.expand,
@@ -258,9 +260,12 @@ class _CollectionCard extends StatelessWidget {
                   children: [
                     Container(
                       padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
+                      decoration: ShapeDecoration(
                         color: Colors.black.withValues(alpha: 0.35),
-                        borderRadius: BorderRadius.circular(12),
+                        shape: RoundedSuperellipseBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide.none,
+                        ),
                       ),
                       child: Icon(
                         collectionIcon(collection.iconKey),
@@ -364,7 +369,7 @@ class _CollectionEditorDialogState extends State<_CollectionEditorDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      shape: RoundedRectangleBorder(
+      shape: RoundedSuperellipseBorder(
         borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
       ),
       title: Text(widget.existing == null ? '新建合集' : '编辑合集'),
@@ -392,11 +397,14 @@ class _CollectionEditorDialogState extends State<_CollectionEditorDialog> {
                   child: Container(
                     width: 42,
                     height: 42,
-                    decoration: BoxDecoration(
+                    decoration: ShapeDecoration(
                       color: _iconKey == key
                           ? AppTheme.accent
                           : AppTheme.accent.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
+                      shape: RoundedSuperellipseBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide.none,
+                      ),
                     ),
                     child: Icon(
                       collectionIcon(key),

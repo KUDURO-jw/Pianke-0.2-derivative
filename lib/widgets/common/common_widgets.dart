@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:flutter/material.dart';
 import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/config/design_tokens.dart';
@@ -56,7 +57,7 @@ class AppToast {
           behavior: SnackBarBehavior.floating,
           margin: EdgeInsets.fromLTRB(16, 0, 16, bottomInset),
           backgroundColor: bgColor,
-          shape: RoundedRectangleBorder(
+          shape: RoundedSuperellipseBorder(
             borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
           ),
           elevation: 6,
@@ -95,7 +96,7 @@ class AppToast {
         Icons.check_circle_rounded,
         const Color(0xFF4CAF50),
       ),
-      ToastType.error => (Icons.error_rounded, AppTheme.accent),
+      ToastType.error => (Icons.error_rounded, scheme.error),
       ToastType.info => (
         Icons.info_rounded,
         scheme.onInverseSurface.withValues(alpha: 0.7),
@@ -113,8 +114,7 @@ class AppToast {
 /// - 默认取 [SurfaceLevel.card] 的层次色，暗色下不再比背景更暗
 /// - 阴影更轻，层次主要靠颜色差异而非投影表达
 ///
-/// 保留 [borderRadius] 参数以兼容既有调用点；一旦传入会退化为普通圆角
-/// （因为该参数是 [BorderRadius] 类型，无法表达连续圆角）。
+/// 显式圆角也使用 Flutter 的连续超椭圆绘制。
 class SoftContainer extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry? padding;
@@ -143,8 +143,8 @@ class SoftContainer extends StatelessWidget {
     this.borderRadius,
     this.color,
     this.border,
-    this.showBorder = true,
-    this.showShadow = true,
+    this.showBorder = false,
+    this.showShadow = false,
     this.smoothing = 0.6,
     this.level = SurfaceLevel.card,
   });
@@ -152,116 +152,28 @@ class SoftContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isDark = colorScheme.brightness == Brightness.dark;
-    final effectiveColor = color ?? level.colorOf(colorScheme);
-
-    final side = showBorder
-        ? (border?.top ??
-              BorderSide(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-                width: 1,
-              ))
-        : BorderSide.none;
-
-    // 传了显式 borderRadius 就退化为普通圆角，保持既有调用点的观感可控。
-    if (borderRadius != null) {
-      return Container(
-        width: width,
-        height: height,
-        margin: margin,
-        padding: padding ?? const EdgeInsets.all(Spacing.lg),
-        decoration: BoxDecoration(
-          color: effectiveColor,
-          borderRadius: borderRadius,
-          border: showBorder ? border : null,
-          boxShadow: showShadow
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ]
-              : null,
-        ),
-        child: child,
-      );
-    }
-
-    final shape = ContinuousRRect(
-      radius: Radii.lg,
-      smoothing: smoothing,
-      side: side,
-    );
-
-    // 性能要点：
-    // 不使用 Material(shape:..., clipBehavior: Clip.antiAlias)，
-    // 那会让每个卡片产生独立裁剪图层，列表滚动时逐帧重建，实测明显掉帧。
-    // 改用 CustomPaint 直接绘制形状 + 背景，绘制成本恒定且不进图层缓存。
-    final inset = side.strokeInset;
     return Container(
       width: width,
       height: height,
       margin: margin,
-      child: CustomPaint(
-        painter: _ContinuousSurfacePainter(
-          shape: shape,
-          color: effectiveColor,
-          shadow: showShadow,
+      child: DecoratedBox(
+        decoration: ShapeDecoration(
+          color: color ?? level.colorOf(colorScheme),
+          shape: RoundedSuperellipseBorder(
+            borderRadius: borderRadius ?? BorderRadius.circular(Radii.xl),
+            side: showBorder
+                ? (border?.top ?? BorderSide(color: colorScheme.hairline))
+                : BorderSide.none,
+          ),
+          shadows: showShadow ? Shadows.card(colorScheme) : null,
         ),
         child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: inset,
-            vertical: inset,
-          ).add(
-            padding ?? const EdgeInsets.all(Spacing.lg),
-          ),
+          padding: padding ?? const EdgeInsets.all(Spacing.lg),
           child: child,
         ),
       ),
     );
   }
-}
-
-/// 绘制连续圆角面板：底色 + 描边（可选投影）。
-///
-/// 用 CustomPaint 而不是 Material + clipBehavior，避免为每张卡片创建
-/// 独立裁剪图层。shouldRepaint 只在颜色/形状变化时为真。
-class _ContinuousSurfacePainter extends CustomPainter {
-  final ContinuousRRect shape;
-  final Color color;
-  final bool shadow;
-
-  const _ContinuousSurfacePainter({
-    required this.shape,
-    required this.color,
-    required this.shadow,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final path = shape.getOuterPath(rect);
-
-    // 性能：完全不用 canvas.drawShadow。
-    // drawShadow 会做模糊卷积，每张卡片每帧一次，滚动时是最大开销。
-    // 层次感改由「底色深浅差 + 1px 描边」表达，视觉差异极小但零成本。
-    canvas.drawPath(path, Paint()..color = color);
-
-    if (shape.side.style != BorderStyle.none) {
-      canvas.drawPath(
-        shape.getOuterPath(rect.deflate(shape.side.strokeInset / 2)),
-        shape.side.toPaint(),
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_ContinuousSurfacePainter old) =>
-      old.color != color ||
-      old.shape.radius != shape.radius ||
-      old.shape.smoothing != shape.smoothing ||
-      old.shape.side != shape.side;
 }
 
 /// 轻拟物卡片 —— 在 [SoftContainer] 外包一层点击态
@@ -283,7 +195,7 @@ class SoftCard extends StatelessWidget {
     this.width,
     this.height,
     this.onTap,
-    this.showShadow = true,
+    this.showShadow = false,
     this.level = SurfaceLevel.card,
   });
 
@@ -380,7 +292,7 @@ class PrimaryButton extends StatelessWidget {
                     Icon(icon, size: 20),
                     const SizedBox(width: AppTheme.spacingSmall),
                   ],
-                  Text(label),
+                  Flexible(child: Text(label, textAlign: TextAlign.center)),
                 ],
               ),
       ),
@@ -422,7 +334,7 @@ class SecondaryButton extends StatelessWidget {
             Icon(icon, size: 18),
             const SizedBox(width: AppTheme.spacingSmall),
           ],
-          Text(label),
+          Flexible(child: Text(label)),
         ],
       ),
     );

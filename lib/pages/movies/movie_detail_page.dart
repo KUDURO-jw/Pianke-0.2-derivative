@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -205,9 +206,11 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
     final hasPoster = movie.poster.isNotEmpty && _posterReady;
 
     return SliverAppBar(
-      expandedHeight: _expandedPosterHeight,
+      expandedHeight:
+          _expandedPosterHeight +
+          (MediaQuery.textScalerOf(context).scale(22) - 22) * 4,
       pinned: true,
-      backgroundColor: colorScheme.surface,
+      backgroundColor: const Color(0xFF242529),
       surfaceTintColor: Colors.transparent,
       foregroundColor: Colors.white,
       flexibleSpace: FlexibleSpaceBar(
@@ -344,21 +347,23 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
     return Container(
       width: 96,
       height: 144,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.65),
-          width: 1.5,
-        ),
-        boxShadow: [
+      decoration: ShapeDecoration(
+        shadows: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.45),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
         ],
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+          side: BorderSide(
+            color: Colors.white.withValues(alpha: 0.65),
+            width: 1.5,
+          ),
+        ),
       ),
-      child: ClipRRect(
+      child: ClipRSuperellipse(
         borderRadius: BorderRadius.circular(AppTheme.radiusMedium - 1.5),
         child: hasPoster
             ? CachedNetworkImage(
@@ -390,9 +395,12 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
   Widget _chipLabel(String text) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: Colors.white.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(20),
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide.none,
+        ),
       ),
       child: Text(
         text,
@@ -527,11 +535,14 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: accent
             ? AppTheme.accent.withValues(alpha: 0.12)
             : colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+          side: BorderSide.none,
+        ),
       ),
       child: Text(
         text,
@@ -700,9 +711,12 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingMedium),
-        decoration: BoxDecoration(
+        decoration: ShapeDecoration(
           color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-          borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+            side: BorderSide.none,
+          ),
         ),
         child: Text(
           '还没有观影记录，看完后记录一次吧',
@@ -746,10 +760,12 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppTheme.spacingMedium),
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: colorScheme.primaryContainer.withValues(alpha: 0.22),
-        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.12)),
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+          side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.12)),
+        ),
       ),
       child: Wrap(
         spacing: AppTheme.spacingSmall,
@@ -782,9 +798,12 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: colorScheme.surface.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(999),
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(999),
+          side: BorderSide.none,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -922,10 +941,13 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
               constraints: BoxConstraints(
                 maxHeight: MediaQuery.of(sheetContext).size.height * 0.7,
               ),
-              decoration: BoxDecoration(
+              decoration: ShapeDecoration(
                 color: colorScheme.surfaceContainerLow,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(AppTheme.radiusXLarge),
+                shape: RoundedSuperellipseBorder(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(AppTheme.radiusXLarge),
+                  ),
+                  side: BorderSide.none,
                 ),
               ),
               child: Column(
@@ -966,20 +988,23 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
                         shrinkWrap: true,
                         children: [
                           for (final collection in manual)
-                            CheckboxListTile(
-                              value: selected.contains(collection.id),
-                              activeColor: AppTheme.accent,
-                              title: Text(collection.name),
-                              subtitle: Text('${collection.memberCount} 部'),
-                              onChanged: (checked) {
-                                setSheetState(() {
-                                  if (checked == true) {
-                                    selected.add(collection.id);
-                                  } else {
-                                    selected.remove(collection.id);
-                                  }
-                                });
-                              },
+                            Material(
+                              type: MaterialType.transparency,
+                              child: CheckboxListTile(
+                                value: selected.contains(collection.id),
+                                activeColor: AppTheme.accent,
+                                title: Text(collection.name),
+                                subtitle: Text('${collection.memberCount} 部'),
+                                onChanged: (checked) {
+                                  setSheetState(() {
+                                    if (checked == true) {
+                                      selected.add(collection.id);
+                                    } else {
+                                      selected.remove(collection.id);
+                                    }
+                                  });
+                                },
+                              ),
                             ),
                         ],
                       ),
@@ -1086,9 +1111,12 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
             height: 40,
             alignment: Alignment.centerLeft,
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
+            decoration: ShapeDecoration(
               color: colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+              shape: RoundedSuperellipseBorder(
+                borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                side: BorderSide.none,
+              ),
             ),
             child: Text(
               '分集内容正在准备…',
@@ -1336,12 +1364,14 @@ class _SessionTile extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: AppTheme.spacingSmall),
       padding: const EdgeInsets.all(AppTheme.spacingMedium),
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: isDark
             ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.3)
             : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-        border: Border.all(color: colorScheme.outline.withValues(alpha: 0.1)),
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+          side: BorderSide(color: colorScheme.outline.withValues(alpha: 0.1)),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1369,11 +1399,14 @@ class _SessionTile extends StatelessWidget {
                     horizontal: 6,
                     vertical: 2,
                   ),
-                  decoration: BoxDecoration(
+                  decoration: ShapeDecoration(
                     color: AppTheme.accent.withValues(
                       alpha: isDark ? 0.2 : 0.15,
                     ),
-                    borderRadius: BorderRadius.circular(4),
+                    shape: RoundedSuperellipseBorder(
+                      borderRadius: BorderRadius.circular(4),
+                      side: BorderSide.none,
+                    ),
                   ),
                   child: Text(
                     '重看',
@@ -1450,9 +1483,12 @@ class _SessionTile extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: colorScheme.primaryContainer.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(6),
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(6),
+          side: BorderSide.none,
+        ),
       ),
       child: Text(
         text,

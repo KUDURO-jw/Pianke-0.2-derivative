@@ -77,7 +77,7 @@ class _LibraryMock extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Container(
+                  SizedBox(
                     width: 38, height: 38,
                     child: Material(
                       color: scheme.cardSurface,

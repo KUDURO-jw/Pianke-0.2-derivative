@@ -1,4 +1,4 @@
-package com.example.random_movie
+package app.pianke.personal
 
 import io.flutter.embedding.android.FlutterActivity
 

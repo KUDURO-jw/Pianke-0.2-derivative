@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -231,9 +232,12 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
             Container(
               width: 42,
               height: 42,
-              decoration: BoxDecoration(
+              decoration: ShapeDecoration(
                 color: AppTheme.accent.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                shape: RoundedSuperellipseBorder(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                  side: BorderSide.none,
+                ),
               ),
               child: const Icon(Icons.casino_rounded, color: AppTheme.accent),
             ),
@@ -275,7 +279,7 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
+        shape: RoundedSuperellipseBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
         ),
         title: const Text('移出合集'),
@@ -383,10 +387,13 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
       padding: EdgeInsets.only(bottom: mediaQuery.viewInsets.bottom),
       child: Container(
         constraints: BoxConstraints(maxHeight: mediaQuery.size.height * 0.85),
-        decoration: BoxDecoration(
+        decoration: ShapeDecoration(
           color: colorScheme.surfaceContainerLow,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppTheme.radiusXLarge),
+          shape: RoundedSuperellipseBorder(
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppTheme.radiusXLarge),
+            ),
+            side: BorderSide.none,
           ),
         ),
         child: Column(

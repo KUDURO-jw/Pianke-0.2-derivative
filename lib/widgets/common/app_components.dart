@@ -1,4 +1,6 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:flutter/material.dart';
+export 'floating_nav_bar.dart';
 import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/config/design_tokens.dart';
 import 'package:random_movie/widgets/common/continuous_rrect.dart';
@@ -26,7 +28,7 @@ class AppCard extends StatelessWidget {
     this.onTap,
     this.color,
     this.radius = Radii.xl,
-    this.shadow = true,
+    this.shadow = false,
     this.border,
   });
 
@@ -36,7 +38,7 @@ class AppCard extends StatelessWidget {
     return MellowPanel(
       color: color ?? scheme.cardSurface,
       radius: radius,
-      border: border ?? BorderSide(color: scheme.hairline),
+      border: border ?? BorderSide.none,
       padding: padding ?? const EdgeInsets.all(Spacing.cardPadding),
       shadow: shadow,
       onTap: onTap,
@@ -56,9 +58,12 @@ class AppTileGroup extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: scheme.blockSurface,
-        borderRadius: BorderRadius.circular(Radii.lg),
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(Radii.lg),
+          side: BorderSide.none,
+        ),
       ),
       padding: padding ?? const EdgeInsets.all(Spacing.lg),
       child: child,
@@ -89,7 +94,8 @@ class PageHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: padding ??
+      padding:
+          padding ??
           const EdgeInsets.fromLTRB(
             Spacing.page,
             Spacing.md,
@@ -126,7 +132,7 @@ class PageHeader extends StatelessWidget {
               ],
             ),
           ),
-          if (trailing != null) trailing!,
+          ?trailing,
         ],
       ),
     );
@@ -201,11 +207,13 @@ class AppSearchField extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      height: 46,
-      decoration: BoxDecoration(
+      height: 48 + (MediaQuery.textScalerOf(context).scale(14) - 14),
+      decoration: ShapeDecoration(
         color: scheme.cardSurface,
-        borderRadius: BorderRadius.circular(Radii.pill),
-        border: Border.all(color: scheme.hairline),
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(Radii.pill),
+          side: BorderSide(color: scheme.hairline),
+        ),
       ),
       child: TextField(
         controller: controller,
@@ -229,8 +237,10 @@ class AppSearchField extends StatelessWidget {
             size: 20,
             color: scheme.secondaryText,
           ),
-          prefixIconConstraints:
-              const BoxConstraints(minWidth: 44, minHeight: 44),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 44,
+            minHeight: 44,
+          ),
           suffixIcon: hasText
               ? IconButton(
                   icon: const Icon(Icons.close_rounded, size: 18),
@@ -266,14 +276,16 @@ class SegmentedSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final isDark = scheme.brightness == Brightness.dark;
 
     return Container(
-      height: 40,
+      height: 44 + (MediaQuery.textScalerOf(context).scale(13) - 13),
       padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: SurfaceLevel.inset.colorOf(scheme),
-        borderRadius: BorderRadius.circular(Radii.pill),
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(Radii.pill),
+          side: BorderSide.none,
+        ),
       ),
       child: Row(
         children: [
@@ -283,22 +295,19 @@ class SegmentedSwitch extends StatelessWidget {
                 onTap: () => onChanged(i),
                 behavior: HitTestBehavior.opaque,
                 child: AnimatedContainer(
-                  duration: Motion.normal,
+                  duration: MediaQuery.disableAnimationsOf(context)
+                      ? Duration.zero
+                      : Motion.normal,
                   curve: Motion.emphasized,
-                  decoration: BoxDecoration(
+                  decoration: ShapeDecoration(
                     color: i == selectedIndex
-                        ? (isDark ? SurfaceLevel.block.colorOf(scheme) : Colors.white)
+                        ? scheme.accent
                         : Colors.transparent,
-                    borderRadius: BorderRadius.circular(Radii.pill),
-                    boxShadow: i == selectedIndex && !isDark
-                        ? [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.06),
-                              blurRadius: 4,
-                              offset: const Offset(0, 1),
-                            ),
-                          ]
-                        : null,
+
+                    shape: RoundedSuperellipseBorder(
+                      borderRadius: BorderRadius.circular(Radii.pill),
+                      side: BorderSide.none,
+                    ),
                   ),
                   alignment: Alignment.center,
                   child: Row(
@@ -312,7 +321,7 @@ class SegmentedSwitch extends StatelessWidget {
                               ? FontWeight.w600
                               : FontWeight.w500,
                           color: i == selectedIndex
-                              ? scheme.primaryText
+                              ? scheme.onPrimary
                               : scheme.secondaryText,
                         ),
                       ),
@@ -323,7 +332,9 @@ class SegmentedSwitch extends StatelessWidget {
                           style: TextStyle(
                             fontSize: TypeScale.caption,
                             fontWeight: FontWeight.w500,
-                            color: scheme.secondaryText,
+                            color: i == selectedIndex
+                                ? scheme.onPrimary.withValues(alpha: 0.8)
+                                : scheme.secondaryText,
                           ),
                         ),
                       ],
@@ -341,131 +352,6 @@ class SegmentedSwitch extends StatelessWidget {
 // ────────────────────────────────────────────
 // 底部导航
 // ────────────────────────────────────────────
-
-class NavItemData {
-  final IconData icon;
-  final IconData selectedIcon;
-  final String label;
-
-  const NavItemData({
-    required this.icon,
-    required this.selectedIcon,
-    required this.label,
-  });
-}
-
-/// 悬浮底部导航条。
-///
-/// 形态参照目标设计：不贴屏幕底边、整条胶囊、选中项图标有胶囊底色、
-/// 图标在上文字在下（横排图标+文字在 4 项时会溢出）。
-class FloatingNavBar extends StatelessWidget {
-  final int currentIndex;
-  final ValueChanged<int> onSelected;
-  final List<NavItemData> items;
-
-  const FloatingNavBar({
-    super.key,
-    required this.currentIndex,
-    required this.onSelected,
-    required this.items,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final bottomInset = MediaQuery.of(context).padding.bottom;
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        Spacing.lg,
-        Spacing.sm,
-        Spacing.lg,
-        bottomInset > 0 ? bottomInset * 0.55 : Spacing.md,
-      ),
-      child: Container(
-        height: 68,
-        decoration: BoxDecoration(
-          color: scheme.cardSurface,
-          borderRadius: BorderRadius.circular(Radii.pill),
-          boxShadow: Shadows.floating(scheme),
-          border: Border.all(color: scheme.hairline),
-        ),
-        padding: const EdgeInsets.symmetric(
-          horizontal: Spacing.sm,
-          vertical: 6,
-        ),
-        child: Row(
-          children: [
-            for (var i = 0; i < items.length; i++)
-              Expanded(
-                child: _NavItem(
-                  data: items[i],
-                  selected: i == currentIndex,
-                  onTap: () => onSelected(i),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _NavItem extends StatelessWidget {
-  final NavItemData data;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _NavItem({
-    required this.data,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final accent = scheme.accent;
-
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          AnimatedContainer(
-            duration: Motion.normal,
-            curve: Motion.emphasized,
-            padding: const EdgeInsets.symmetric(
-              horizontal: Spacing.lg,
-              vertical: 3,
-            ),
-            decoration: BoxDecoration(
-              color: selected
-                  ? accent.withValues(alpha: 0.12)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(Radii.pill),
-            ),
-            child: Icon(
-              selected ? data.selectedIcon : data.icon,
-              size: 21,
-              color: selected ? accent : scheme.secondaryText,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            data.label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-              color: selected ? accent : scheme.secondaryText,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ────────────────────────────────────────────
 // 统计块
@@ -541,12 +427,7 @@ class CompactStats extends StatelessWidget {
       child: Row(
         children: [
           for (var i = 0; i < items.length; i++) ...[
-            if (i > 0)
-              Container(
-                width: 1,
-                height: 30,
-                color: scheme.hairline,
-              ),
+            if (i > 0) Container(width: 1, height: 30, color: scheme.hairline),
             Expanded(
               child: Column(
                 children: [

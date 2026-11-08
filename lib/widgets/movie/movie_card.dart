@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:random_movie/config/api_config.dart';
@@ -81,13 +82,15 @@ class _MovieCardState extends State<MovieCard> {
               },
         child: AnimatedScale(
           scale: _isPressed ? 0.975 : 1.0,
-          duration: const Duration(milliseconds: 90),
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 90),
           curve: Curves.easeOut,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: ClipRRect(
+                child: ClipRSuperellipse(
                   clipBehavior: Clip.hardEdge,
                   borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
                   child: Stack(
@@ -129,9 +132,12 @@ class _MovieCardState extends State<MovieCard> {
                           top: 6,
                           left: 6,
                           child: DecoratedBox(
-                            decoration: BoxDecoration(
+                            decoration: ShapeDecoration(
                               color: statusBackground,
-                              borderRadius: BorderRadius.circular(6),
+                              shape: RoundedSuperellipseBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                side: BorderSide.none,
+                              ),
                             ),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
@@ -167,9 +173,12 @@ class _MovieCardState extends State<MovieCard> {
                           top: 6,
                           right: 6,
                           child: DecoratedBox(
-                            decoration: BoxDecoration(
+                            decoration: ShapeDecoration(
                               color: Colors.black.withValues(alpha: 0.66),
-                              borderRadius: BorderRadius.circular(6),
+                              shape: RoundedSuperellipseBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                side: BorderSide.none,
+                              ),
                             ),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
@@ -228,7 +237,7 @@ class _MovieCardState extends State<MovieCard> {
               ],
               if (hasEpisodeProgress) ...[
                 const SizedBox(height: 6),
-                ClipRRect(
+                ClipRSuperellipse(
                   borderRadius: BorderRadius.circular(999),
                   child: LinearProgressIndicator(
                     value: progressValue,

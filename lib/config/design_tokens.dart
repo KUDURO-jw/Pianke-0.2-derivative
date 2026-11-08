@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:flutter/material.dart';
 
 /// 设计令牌 —— 全应用的视觉基准。
@@ -20,8 +21,8 @@ class AppColors {
   const AppColors._();
 
   /// 主强调色（蓝）。
-  static const Color primary = Color(0xFF2F6BFF);
-  static const Color primaryDark = Color(0xFF4C86FF);
+  static const Color primary = Color(0xFF3478F6);
+  static const Color primaryDark = Color(0xFF6A9CFF);
 
   /// 次要强调（红）。仅用于危险操作、未看标记等。
   static const Color danger = Color(0xFFE94560);
@@ -34,24 +35,24 @@ class AppColors {
   static const Color warning = Color(0xFFFFB020);
 
   /// 页面底色（浅灰，让白色卡片浮起来）。
-  static const Color pageLight = Color(0xFFF2F3F5);
-  static const Color pageDark = Color(0xFF0E0E10);
+  static const Color pageLight = Color(0xFFF0F1F4);
+  static const Color pageDark = Color(0xFF101114);
 
   /// 卡片底色。
-  static const Color cardLight = Color(0xFFFFFFFF);
-  static const Color cardDark = Color(0xFF1A1A1D);
+  static const Color cardLight = Color(0xFFFAFAFC);
+  static const Color cardDark = Color(0xFF242529);
 
   /// 柔和色块（卡片内二级容器）。
-  static const Color softLight = Color(0xFFF5F6F8);
-  static const Color softDark = Color(0xFF242428);
+  static const Color softLight = Color(0xFFEFF0F3);
+  static const Color softDark = Color(0xFF323338);
 
   /// 主文字。
   static const Color textLight = Color(0xFF111114);
   static const Color textDark = Color(0xFFF3F3F5);
 
   /// 次文字。
-  static const Color subTextLight = Color(0xFF8A8D93);
-  static const Color subTextDark = Color(0xFF9A9DA3);
+  static const Color subTextLight = Color(0xFF6F737C);
+  static const Color subTextDark = Color(0xFFA9ADB7);
 
   /// 描边（极淡，只用来分隔，不抢视觉）。
   static const Color borderLight = Color(0x0F000000);
@@ -91,20 +92,19 @@ enum SurfaceLevel {
         SurfaceLevel.page => AppColors.pageDark,
         SurfaceLevel.card => AppColors.cardDark,
         SurfaceLevel.block => AppColors.softDark,
-        SurfaceLevel.inset => const Color(0xFF2E2E33),
+        SurfaceLevel.inset => const Color(0xFF42434A),
       };
     }
     return switch (this) {
       SurfaceLevel.page => AppColors.pageLight,
       SurfaceLevel.card => AppColors.cardLight,
       SurfaceLevel.block => AppColors.softLight,
-      SurfaceLevel.inset => const Color(0xFFECEEF1),
+      SurfaceLevel.inset => const Color(0xFFE3E5EA),
     };
   }
 
   /// 主文字色。
-  Color textColorOf(ColorScheme scheme) =>
-      scheme.brightness == Brightness.dark
+  Color textColorOf(ColorScheme scheme) => scheme.brightness == Brightness.dark
       ? AppColors.textDark
       : AppColors.textLight;
 
@@ -144,9 +144,8 @@ extension SurfaceColorExt on ColorScheme {
   Color get hairline => SurfaceLevel.card.borderColorOf(this);
 
   /// 当前主题的强调色（蓝色系）。
-  Color get accent => brightness == Brightness.dark
-      ? AppColors.primaryDark
-      : AppColors.primary;
+  Color get accent =>
+      brightness == Brightness.dark ? AppColors.primaryDark : AppColors.primary;
 }
 
 /// ─────────────────────────────────────────────
@@ -206,21 +205,27 @@ class TypeScale {
   static const double lineHeight = 1.45;
   static const double lineHeightTight = 1.25;
 
-  static TextStyle captionStyle(ColorScheme scheme, {Color? color, FontWeight? weight}) =>
-      TextStyle(
-        fontSize: caption,
-        height: lineHeightTight,
-        fontWeight: weight ?? FontWeight.w400,
-        color: color ?? scheme.secondaryText,
-      );
+  static TextStyle captionStyle(
+    ColorScheme scheme, {
+    Color? color,
+    FontWeight? weight,
+  }) => TextStyle(
+    fontSize: caption,
+    height: lineHeightTight,
+    fontWeight: weight ?? FontWeight.w400,
+    color: color ?? scheme.secondaryText,
+  );
 
-  static TextStyle bodyStyle(ColorScheme scheme, {Color? color, FontWeight? weight}) =>
-      TextStyle(
-        fontSize: body,
-        height: lineHeight,
-        fontWeight: weight ?? FontWeight.w400,
-        color: color ?? scheme.primaryText,
-      );
+  static TextStyle bodyStyle(
+    ColorScheme scheme, {
+    Color? color,
+    FontWeight? weight,
+  }) => TextStyle(
+    fontSize: body,
+    height: lineHeight,
+    fontWeight: weight ?? FontWeight.w400,
+    color: color ?? scheme.primaryText,
+  );
 }
 
 /// ─────────────────────────────────────────────

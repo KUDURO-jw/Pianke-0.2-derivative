@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -179,18 +180,23 @@ class _DrawHistoryCardState extends State<_DrawHistoryCard> {
       onTap: widget.onTap,
       child: AnimatedScale(
         scale: _pressed ? 0.98 : 1.0,
-        duration: const Duration(milliseconds: 120),
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 120),
         curve: Curves.easeInOut,
         child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-            boxShadow: [
+          decoration: ShapeDecoration(
+            shadows: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.1),
                 blurRadius: 10,
                 offset: const Offset(0, 3),
               ),
             ],
+            shape: RoundedSuperellipseBorder(
+              borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+              side: BorderSide.none,
+            ),
           ),
           child: SoftContainer(
             padding: const EdgeInsets.all(12),
@@ -200,7 +206,7 @@ class _DrawHistoryCardState extends State<_DrawHistoryCard> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ClipRRect(
+                  ClipRSuperellipse(
                     clipBehavior: Clip.hardEdge,
                     borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                     child: SizedBox(

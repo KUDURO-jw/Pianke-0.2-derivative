@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
@@ -55,10 +56,14 @@ class _SettingsPageState extends State<SettingsPage> {
           Spacing.page,
           MediaQuery.of(context).padding.top + Spacing.sm,
           Spacing.page,
-          MediaQuery.of(context).padding.bottom + 100,
+          DockMetrics.insetOf(context) + Spacing.xxl,
         ),
         children: [
-          const PageHeader(title: '设置'),
+          const PageHeader(
+            title: '设置',
+            subtitle: '让片刻，更合你的习惯',
+            padding: EdgeInsets.symmetric(vertical: Spacing.lg),
+          ),
           _SectionHeader(label: '外观'),
           AppCard(
             padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
@@ -124,7 +129,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: Icons.system_update_rounded,
                   iconColor: const Color(0xFFFFB020),
                   title: '检查更新',
-                  subtitle: '检查片刻 0.2 二创版的新版本',
+                  subtitle: '查看功能上游的更新，不是焕新版更新',
                   loading: _updateLoading,
                   onTap: _handleCheckUpdate,
                 ),
@@ -154,8 +159,8 @@ class _SettingsPageState extends State<SettingsPage> {
               builder: (context, snapshot) {
                 final info = snapshot.data;
                 final label = info == null
-                    ? '片刻 0.2'
-                    : '片刻 0.2 · 版本 ${info.version}（${info.buildNumber}）';
+                    ? '片刻·焕新版'
+                    : '片刻·焕新版 · ${info.version}（${info.buildNumber}）';
                 return Text(
                   label,
                   textAlign: TextAlign.center,
@@ -180,6 +185,8 @@ class _SettingsPageState extends State<SettingsPage> {
         title: const Text('开源声明'),
         content: const SingleChildScrollView(
           child: Text(
+            '片刻·焕新版以 KUDURO-jw/Pianke-0.2-derivative 为功能基础，保留原有功能与数据格式。'
+            'UI 独立实现，视觉与交互参考 FlClash，未复制其 GPL 源码。\n\n'
             '片刻 0.2 是基于 ShareWinter/Pianke 的二次创作版本，'
             '遵循 Apache License 2.0 分发。\n\n'
             '原始项目：github.com/ShareWinter/Pianke\n'
@@ -212,7 +219,7 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!result.hasUpdate) {
         AppToast.show(
           context,
-          '当前已是最新版本 ${result.current.version}',
+          '功能上游暂无更高版本（本机 ${result.current.version}）',
           type: ToastType.success,
         );
         return;
@@ -236,17 +243,17 @@ class _SettingsPageState extends State<SettingsPage> {
       barrierDismissible: !update.forceUpdate,
       barrierColor: Colors.black.withValues(alpha: 0.3),
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
+        shape: RoundedSuperellipseBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
           side: BorderSide(color: colorScheme.outlineVariant),
         ),
-        title: Text(update.displayTitle),
+        title: const Text('功能上游有新版本'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '版本 ${update.versionName}',
+              '${update.displayTitle}\n版本 ${update.versionName}\n来源：KUDURO-jw/Pianke-0.2-derivative。下载的是上游应用，会与焕新版独立安装。',
               style: TextStyle(
                 fontSize: 13,
                 color: colorScheme.onSurface.withValues(alpha: 0.55),
@@ -289,7 +296,7 @@ class _SettingsPageState extends State<SettingsPage> {
             },
             style: TextButton.styleFrom(foregroundColor: AppTheme.accent),
             child: const Text(
-              '去下载',
+              '查看上游下载',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
@@ -391,7 +398,7 @@ class _SettingsPageState extends State<SettingsPage> {
           context: context,
           barrierColor: Colors.black.withValues(alpha: 0.3),
           builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(
+            shape: RoundedSuperellipseBorder(
               borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
               side: BorderSide(color: colorScheme.outlineVariant),
             ),
@@ -509,11 +516,14 @@ class _ThemeModeTile extends StatelessWidget {
             Container(
               width: 36,
               height: 36,
-              decoration: BoxDecoration(
+              decoration: ShapeDecoration(
                 color: selected
                     ? AppTheme.accent.withValues(alpha: 0.16)
                     : colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(10),
+                shape: RoundedSuperellipseBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide.none,
+                ),
               ),
               child: Icon(
                 icon,
@@ -598,9 +608,12 @@ class _SettingsTile extends StatelessWidget {
             Container(
               width: 36,
               height: 36,
-              decoration: BoxDecoration(
+              decoration: ShapeDecoration(
                 color: iconColor.withValues(alpha: isDark ? 0.2 : 0.12),
-                borderRadius: BorderRadius.circular(10),
+                shape: RoundedSuperellipseBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide.none,
+                ),
               ),
               child: Icon(icon, size: 18, color: iconColor),
             ),

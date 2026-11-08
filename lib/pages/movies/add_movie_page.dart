@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -58,7 +59,18 @@ class _AddMoviePageState extends State<AddMoviePage>
     _placeholderController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1100),
-    )..repeat(reverse: true);
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _placeholderController.stop();
+      _placeholderController.value = 0.5;
+    } else if (!_placeholderController.isAnimating) {
+      _placeholderController.repeat(reverse: true);
+    }
   }
 
   @override
@@ -606,7 +618,7 @@ class _AddMoviePageState extends State<AddMoviePage>
         ? '已获取 ${_previewMovies?.length ?? 0}/$_doulistTotal 部影片'
         : '找到 ${_previewMovies?.length ?? 0} 部影片';
     final subtitle = _isDoulistLoading
-        ? '真实卡片会先显示，未完成的条目用占位卡补齐。'
+        ? '已获取的影片会陆续显示，请稍候。'
         : '支持逐部添加，也可以一次性加入片库。';
 
     return _buildSectionHeader(
@@ -647,7 +659,7 @@ class _AddMoviePageState extends State<AddMoviePage>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: ClipRRect(
+                child: ClipRSuperellipse(
                   borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                   child: Container(
                     decoration: BoxDecoration(
@@ -680,7 +692,7 @@ class _AddMoviePageState extends State<AddMoviePage>
                 color: surface,
               ),
               const SizedBox(height: 10),
-              ClipRRect(
+              ClipRSuperellipse(
                 borderRadius: BorderRadius.circular(999),
                 child: LinearProgressIndicator(
                   value: null,
@@ -707,9 +719,12 @@ class _AddMoviePageState extends State<AddMoviePage>
       widthFactor: widthFactor,
       child: Container(
         height: height,
-        decoration: BoxDecoration(
+        decoration: ShapeDecoration(
           color: color,
-          borderRadius: BorderRadius.circular(999),
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(999),
+            side: BorderSide.none,
+          ),
         ),
       ),
     );
@@ -859,7 +874,7 @@ class _AddMoviePageState extends State<AddMoviePage>
             ),
           ),
           const SizedBox(height: AppTheme.spacingMedium),
-          ClipRRect(
+          ClipRSuperellipse(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
               value: progressValue,

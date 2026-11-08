@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:random_movie/config/app_theme.dart';
@@ -101,10 +102,12 @@ class _MovieTagEditorState extends State<MovieTagEditor> {
                   horizontal: AppTheme.spacingMedium,
                   vertical: AppTheme.spacingSmall,
                 ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-                  border: Border.all(
-                    color: colorScheme.outline.withValues(alpha: 0.4),
+                decoration: ShapeDecoration(
+                  shape: RoundedSuperellipseBorder(
+                    borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+                    side: BorderSide(
+                      color: colorScheme.outline.withValues(alpha: 0.4),
+                    ),
                   ),
                 ),
                 child: Row(
@@ -150,15 +153,19 @@ class _TagChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(
           horizontal: AppTheme.spacingMedium,
           vertical: AppTheme.spacingSmall,
         ),
-        decoration: BoxDecoration(
+        decoration: ShapeDecoration(
           color: selected ? tag.color : tag.color.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-          border: Border.all(color: tag.color),
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+            side: BorderSide(color: tag.color),
+          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -203,7 +210,7 @@ class _TagCreatorDialogState extends State<_TagCreatorDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      shape: RoundedRectangleBorder(
+      shape: RoundedSuperellipseBorder(
         borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
       ),
       title: const Text('新建标签'),

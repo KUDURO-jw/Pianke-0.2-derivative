@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -6,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:random_movie/config/api_config.dart';
 import 'package:random_movie/config/app_theme.dart';
+import 'package:random_movie/widgets/common/app_components.dart';
 import 'package:random_movie/models/models.dart';
 import 'package:random_movie/providers/movie_provider.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
@@ -235,13 +237,26 @@ class _HistoryListView extends StatelessWidget {
         MediaQuery.of(context).size.height * 1.25,
       ),
       slivers: [
-        SliverAppBar(
-          pinned: true,
-          title: const Text('观影记录'),
+        SliverToBoxAdapter(
+          child: SafeArea(
+            bottom: false,
+            child: PageHeader(
+              title: '观影记录',
+              subtitle: '每一次观看，都值得留下',
+              trailing: RoundIconButton(
+                icon: Icons.calendar_month_outlined,
+                tooltip: '打开观影日历',
+                onPressed: () => context.push('/history/calendar'),
+              ),
+            ),
+          ),
         ),
         // 日历内嵌在标题正下方
         SliverToBoxAdapter(child: _buildCalendar(context)),
         _buildContent(context),
+        SliverToBoxAdapter(
+          child: SizedBox(height: DockMetrics.insetOf(context)),
+        ),
       ],
     );
   }
@@ -310,8 +325,7 @@ class _HistoryListView extends StatelessWidget {
         hasScrollBody: false,
         child: EmptyState(
           title: '还没有观影记录',
-          subtitle:
-              '在影片详情页「记录一次观影」后，时间线会出现在这里。',
+          subtitle: '在影片详情页「记录一次观影」后，时间线会出现在这里。',
           icon: Icons.visibility_outlined,
         ),
       );
@@ -379,17 +393,11 @@ class _StatsDashboard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _StatCell(
-                  value: '${stats.monthlyCount}',
-                  label: '本月观影',
-                ),
+                child: _StatCell(value: '${stats.monthlyCount}', label: '本月观影'),
               ),
               _divider(colorScheme),
               Expanded(
-                child: _StatCell(
-                  value: '${stats.totalCount}',
-                  label: '累计观影',
-                ),
+                child: _StatCell(value: '${stats.totalCount}', label: '累计观影'),
               ),
               _divider(colorScheme),
               Expanded(
@@ -403,9 +411,7 @@ class _StatsDashboard extends StatelessWidget {
               _divider(colorScheme),
               Expanded(
                 child: _StatCell(
-                  value: stats.streakDays > 0
-                      ? '${stats.streakDays}'
-                      : '—',
+                  value: stats.streakDays > 0 ? '${stats.streakDays}' : '—',
                   label: '连续天数',
                 ),
               ),
@@ -445,9 +451,12 @@ class _StatsDashboard extends StatelessWidget {
                             horizontal: 8,
                             vertical: 3,
                           ),
-                          decoration: BoxDecoration(
+                          decoration: ShapeDecoration(
                             color: AppTheme.accent.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(6),
+                            shape: RoundedSuperellipseBorder(
+                              borderRadius: BorderRadius.circular(6),
+                              side: BorderSide.none,
+                            ),
                           ),
                           child: Text(
                             '${genre.key} ${genre.value}',
@@ -509,15 +518,7 @@ class _StatCell extends StatelessWidget {
 }
 
 class _HistoryCalendarView extends StatelessWidget {
-  static const List<String> _weekdays = [
-    '日',
-    '一',
-    '二',
-    '三',
-    '四',
-    '五',
-    '六',
-  ];
+  static const List<String> _weekdays = ['日', '一', '二', '三', '四', '五', '六'];
 
   final HistoryMonthKey visibleMonth;
   final HistoryMonthData? monthData;
@@ -551,11 +552,7 @@ class _HistoryCalendarView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if ((!hasLoaded || isLoading) && monthData == null) {
-      return _boundedIfEmbedded(
-        const LoadingState(
-          message: '正在准备本月海报…',
-        ),
-      );
+      return _boundedIfEmbedded(const LoadingState(message: '正在准备本月海报…'));
     }
 
     if (error != null && monthData == null) {
@@ -648,9 +645,7 @@ class _HistoryCalendarView extends StatelessWidget {
             Center(
               child: TextButton(
                 onPressed: onJumpToToday,
-                child: const Text(
-                  '这个月还没有观影记录',
-                ),
+                child: const Text('这个月还没有观影记录'),
               ),
             ),
           ],
@@ -698,15 +693,18 @@ class _CalendarMonthHeader extends StatelessWidget {
       padding: const EdgeInsets.only(left: 6, right: 2),
       child: Row(
         children: [
-          Text(
-            '${visibleMonth.year} 年 ${visibleMonth.month} 月',
-            style: textTheme.titleLarge?.copyWith(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: colorScheme.onSurface,
+          Expanded(
+            child: Text(
+              '${visibleMonth.year} 年 ${visibleMonth.month} 月',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.titleLarge?.copyWith(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: colorScheme.onSurface,
+              ),
             ),
           ),
-          const Spacer(),
           TextButton(
             onPressed: onJumpToToday,
             style: TextButton.styleFrom(
@@ -779,7 +777,9 @@ class _HistoryCalendarCell extends StatelessWidget {
         borderRadius: BorderRadius.circular(cellRadius),
         onTap: onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 140),
           curve: Curves.easeOut,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(cellRadius),
@@ -791,7 +791,7 @@ class _HistoryCalendarCell extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               if (hasMovie)
-                ClipRRect(
+                ClipRSuperellipse(
                   borderRadius: BorderRadius.circular(cellRadius),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
@@ -834,8 +834,7 @@ class _HistoryCalendarCell extends StatelessWidget {
                 ),
               if (hasMovie)
                 DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(cellRadius),
+                  decoration: ShapeDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
@@ -843,6 +842,10 @@ class _HistoryCalendarCell extends StatelessWidget {
                         Colors.black.withValues(alpha: 0.0),
                         Colors.black.withValues(alpha: 0.42),
                       ],
+                    ),
+                    shape: RoundedSuperellipseBorder(
+                      borderRadius: BorderRadius.circular(cellRadius),
+                      side: BorderSide.none,
                     ),
                   ),
                 ),
@@ -856,9 +859,12 @@ class _HistoryCalendarCell extends StatelessWidget {
                       horizontal: 5,
                       vertical: 1,
                     ),
-                    decoration: BoxDecoration(
+                    decoration: ShapeDecoration(
                       color: Colors.black.withValues(alpha: 0.55),
-                      borderRadius: BorderRadius.circular(999),
+                      shape: RoundedSuperellipseBorder(
+                        borderRadius: BorderRadius.circular(999),
+                        side: BorderSide.none,
+                      ),
                     ),
                     child: Text(
                       '×$count',
@@ -885,9 +891,7 @@ class _HistoryDaySheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateLabel = DateFormat(
-      'yyyy年M月d日',
-    ).format(summary.date);
+    final dateLabel = DateFormat('yyyy年M月d日').format(summary.date);
 
     return SafeArea(
       child: SizedBox(
@@ -949,7 +953,7 @@ class _HistoryDayMovieTile extends StatelessWidget {
         },
         child: Row(
           children: [
-            ClipRRect(
+            ClipRSuperellipse(
               borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
               child: SizedBox(
                 width: 52,
@@ -1056,18 +1060,23 @@ class _SessionTimelineCardState extends State<_SessionTimelineCard> {
       onTap: widget.onTap,
       child: AnimatedScale(
         scale: _pressed ? 0.985 : 1.0,
-        duration: const Duration(milliseconds: 100),
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 100),
         curve: Curves.easeOut,
         child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-            boxShadow: [
+          decoration: ShapeDecoration(
+            shadows: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.06),
                 blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
             ],
+            shape: RoundedSuperellipseBorder(
+              borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+              side: BorderSide.none,
+            ),
           ),
           child: SoftContainer(
             padding: const EdgeInsets.all(12),
@@ -1075,7 +1084,7 @@ class _SessionTimelineCardState extends State<_SessionTimelineCard> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ClipRRect(
+                ClipRSuperellipse(
                   clipBehavior: Clip.hardEdge,
                   borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                   child: SizedBox(
@@ -1135,11 +1144,14 @@ class _SessionTimelineCardState extends State<_SessionTimelineCard> {
                                 horizontal: 6,
                                 vertical: 2,
                               ),
-                              decoration: BoxDecoration(
+                              decoration: ShapeDecoration(
                                 color: AppTheme.accent.withValues(
                                   alpha: isDark ? 0.2 : 0.15,
                                 ),
-                                borderRadius: BorderRadius.circular(4),
+                                shape: RoundedSuperellipseBorder(
+                                  borderRadius: BorderRadius.circular(4),
+                                  side: BorderSide.none,
+                                ),
                               ),
                               child: Text(
                                 '重看',

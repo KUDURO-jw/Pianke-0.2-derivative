@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -68,37 +69,46 @@ class _HomeShellState extends State<HomeShell> {
     final navigationShell = widget.navigationShell;
 
     return Scaffold(
-      body: navigationShell,
-      extendBody: true,
-      bottomNavigationBar: FloatingNavBar(
-        currentIndex: navigationShell.currentIndex,
-        onSelected: (index) {
-          navigationShell.goBranch(
-            index,
-            initialLocation: index == navigationShell.currentIndex,
-          );
-        },
-        items: const [
-          NavItemData(
-            icon: Icons.video_library_outlined,
-            selectedIcon: Icons.video_library_rounded,
-            label: '片库',
-          ),
-          NavItemData(
-            icon: Icons.casino_outlined,
-            selectedIcon: Icons.casino_rounded,
-            label: '抽片',
-          ),
-          NavItemData(
-            icon: Icons.insights_outlined,
-            selectedIcon: Icons.insights_rounded,
-            label: '观影',
-          ),
-          NavItemData(
-            icon: Icons.settings_outlined,
-            selectedIcon: Icons.settings_rounded,
-            label: '设置',
-          ),
+      body: Stack(
+        children: [
+          Positioned.fill(child: navigationShell),
+          if (MediaQuery.viewInsetsOf(context).bottom == 0)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: FloatingNavBar(
+                currentIndex: navigationShell.currentIndex,
+                onSelected: (index) {
+                  navigationShell.goBranch(
+                    index,
+                    initialLocation: index == navigationShell.currentIndex,
+                  );
+                },
+                items: const [
+                  NavItemData(
+                    icon: Icons.video_library_outlined,
+                    selectedIcon: Icons.video_library_rounded,
+                    label: '片库',
+                  ),
+                  NavItemData(
+                    icon: Icons.casino_outlined,
+                    selectedIcon: Icons.casino_rounded,
+                    label: '抽片',
+                  ),
+                  NavItemData(
+                    icon: Icons.insights_outlined,
+                    selectedIcon: Icons.insights_rounded,
+                    label: '观影',
+                  ),
+                  NavItemData(
+                    icon: Icons.settings_outlined,
+                    selectedIcon: Icons.settings_rounded,
+                    label: '设置',
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -109,7 +119,12 @@ final appRouter = GoRouter(
   navigatorKey: rootNavigatorKey,
   initialLocation: '/movies',
   routes: [
-    StatefulShellRoute.indexedStack(
+    StatefulShellRoute(
+      navigatorContainerBuilder: (context, navigationShell, children) =>
+          _BranchTransition(
+            index: navigationShell.currentIndex,
+            children: children,
+          ),
       builder: (context, state, navigationShell) {
         return HomeShell(navigationShell: navigationShell);
       },
@@ -145,6 +160,9 @@ final appRouter = GoRouter(
                               curve: Curves.easeOutCubic,
                               reverseCurve: Curves.easeInCubic,
                             );
+                            if (MediaQuery.disableAnimationsOf(context)) {
+                              return child;
+                            }
                             return FadeTransition(opacity: fade, child: child);
                           },
                     );
@@ -222,3 +240,66 @@ final appRouter = GoRouter(
     ),
   ],
 );
+
+class _BranchTransition extends StatefulWidget {
+  final int index;
+  final List<Widget> children;
+
+  const _BranchTransition({required this.index, required this.children});
+
+  @override
+  State<_BranchTransition> createState() => _BranchTransitionState();
+}
+
+class _BranchTransitionState extends State<_BranchTransition>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 220),
+    value: 1,
+  );
+  late final Animation<double> _fade = _controller.drive(
+    CurveTween(curve: Curves.easeOutCubic),
+  );
+
+  @override
+  void didUpdateWidget(covariant _BranchTransition oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.index != oldWidget.index) {
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _controller.value = 1;
+      } else {
+        _controller.forward(from: 0);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        for (var i = 0; i < widget.children.length; i++)
+          Offstage(
+            offstage: i != widget.index,
+            child: TickerMode(
+              enabled: i == widget.index,
+              child: ExcludeFocus(
+                excluding: i != widget.index,
+                child: FadeTransition(
+                  opacity: _fade,
+                  child: RepaintBoundary(child: widget.children[i]),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}

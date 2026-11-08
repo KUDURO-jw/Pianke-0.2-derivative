@@ -1,4 +1,4 @@
-import 'package:flutter/cupertino.dart';
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:random_movie/config/design_tokens.dart';
@@ -75,6 +75,12 @@ class AppTheme {
       onSurfaceVariant: AppColors.subTextLight,
       error: AppColors.danger,
       outlineVariant: AppColors.borderLight,
+      surfaceBright: AppColors.cardLight,
+      surfaceContainerLowest: AppColors.cardLight,
+      surfaceContainerLow: AppColors.pageLight,
+      surfaceContainer: AppColors.pageLight,
+      surfaceContainerHigh: AppColors.softLight,
+      surfaceContainerHighest: const Color(0xFFE3E5EA),
     );
   }
 
@@ -93,6 +99,12 @@ class AppTheme {
       onSurfaceVariant: AppColors.subTextDark,
       error: AppColors.danger,
       outlineVariant: AppColors.borderDark,
+      surfaceBright: AppColors.softDark,
+      surfaceContainerLowest: AppColors.pageDark,
+      surfaceContainerLow: AppColors.cardDark,
+      surfaceContainer: AppColors.cardDark,
+      surfaceContainerHigh: AppColors.softDark,
+      surfaceContainerHighest: const Color(0xFF42434A),
     );
   }
 
@@ -111,11 +123,22 @@ class AppTheme {
 
     return base.copyWith(
       textTheme: text,
+      tabBarTheme: TabBarThemeData(
+        dividerColor: Colors.transparent,
+        indicatorSize: TabBarIndicatorSize.tab,
+        indicator: ShapeDecoration(
+          color: scheme.blockSurface,
+          shape: const ContinuousRRect.all(Radii.lg),
+        ),
+        labelColor: scheme.accent,
+        unselectedLabelColor: scheme.secondaryText,
+        labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+      ),
       primaryTextTheme: text,
       scaffoldBackgroundColor: scheme.pageSurface,
       splashFactory: InkSparkle.splashFactory,
       appBarTheme: AppBarTheme(
-        backgroundColor: Colors.transparent,
+        backgroundColor: scheme.pageSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -138,7 +161,7 @@ class AppTheme {
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: AppColors.primary,
+        backgroundColor: scheme.accent,
         foregroundColor: Colors.white,
         elevation: 2,
         shape: const ContinuousRRect(radius: Radii.lg, smoothing: 0.6),
@@ -151,7 +174,7 @@ class AppTheme {
         shape: ContinuousRRect(
           radius: Radii.xl,
           smoothing: 0.6,
-          side: BorderSide(color: scheme.hairline),
+          side: BorderSide.none,
         ),
       ),
       dialogTheme: DialogThemeData(
@@ -171,9 +194,9 @@ class AppTheme {
         ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: scheme.cardSurface,
+        backgroundColor: scheme.pageSurface,
         surfaceTintColor: Colors.transparent,
-        modalBackgroundColor: scheme.cardSurface,
+        modalBackgroundColor: scheme.pageSurface,
         elevation: 0,
         shape: const ContinuousRRect.top(Radii.huge),
         showDragHandle: false,
@@ -201,7 +224,7 @@ class AppTheme {
           backgroundColor: scheme.accent,
           foregroundColor: Colors.white,
           elevation: 0,
-          shape: const ContinuousRRect(radius: Radii.md, smoothing: 0.6),
+          shape: const ContinuousRRect(radius: Radii.pill, smoothing: 0.6),
           padding: const EdgeInsets.symmetric(
             horizontal: Spacing.xxl,
             vertical: 14,
@@ -265,7 +288,10 @@ class AppTheme {
         selectedColor: scheme.accent,
         side: BorderSide.none,
         shape: const ContinuousRRect(radius: Radii.pill, smoothing: 0.6),
-        labelStyle: TextStyle(fontSize: TypeScale.label, color: scheme.primaryText),
+        labelStyle: TextStyle(
+          fontSize: TypeScale.label,
+          color: scheme.primaryText,
+        ),
         padding: const EdgeInsets.symmetric(
           horizontal: Spacing.md,
           vertical: Spacing.xs,
@@ -305,9 +331,9 @@ class AppTheme {
       ),
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: <TargetPlatform, PageTransitionsBuilder>{
-          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.android: AppPageTransitionsBuilder(),
+          TargetPlatform.iOS: AppPageTransitionsBuilder(),
+          TargetPlatform.macOS: AppPageTransitionsBuilder(),
         },
       ),
     );
@@ -363,10 +389,12 @@ class AppTheme {
   }
 
   // ── 兼容旧 API：主题构建期无法拿到 context，这里给出静态装饰 ──
-  static BoxDecoration cardDecoration(ColorScheme scheme) => BoxDecoration(
+  static ShapeDecoration cardDecoration(ColorScheme scheme) => ShapeDecoration(
     color: scheme.cardSurface,
-    borderRadius: BorderRadius.circular(Radii.xl),
-    border: Border.all(color: scheme.hairline),
+    shape: RoundedSuperellipseBorder(
+      borderRadius: BorderRadius.circular(Radii.xl),
+      side: BorderSide(color: scheme.hairline),
+    ),
   );
 }
 
@@ -376,20 +404,31 @@ class AppTheme {
 class SoftDecoration {
   const SoftDecoration._();
 
-  static BoxDecoration card(ColorScheme scheme) => BoxDecoration(
+  static ShapeDecoration card(ColorScheme scheme) => ShapeDecoration(
     color: scheme.cardSurface,
-    borderRadius: BorderRadius.circular(Radii.xl),
-    boxShadow: Shadows.card(scheme),
+    shadows: Shadows.card(scheme),
+    shape: RoundedSuperellipseBorder(
+      borderRadius: BorderRadius.circular(Radii.xl),
+      side: BorderSide.none,
+    ),
   );
 
-  static BoxDecoration sheet(ColorScheme scheme) => BoxDecoration(
+  static ShapeDecoration sheet(ColorScheme scheme) => ShapeDecoration(
     color: scheme.cardSurface,
-    borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.huge)),
+    shape: RoundedSuperellipseBorder(
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(Radii.huge),
+      ),
+      side: BorderSide.none,
+    ),
   );
 
-  static BoxDecoration chip(ColorScheme scheme) => BoxDecoration(
+  static ShapeDecoration chip(ColorScheme scheme) => ShapeDecoration(
     color: scheme.blockSurface,
-    borderRadius: BorderRadius.circular(Radii.pill),
+    shape: RoundedSuperellipseBorder(
+      borderRadius: BorderRadius.circular(Radii.pill),
+      side: BorderSide.none,
+    ),
   );
 }
 
@@ -417,7 +456,7 @@ class ContinuousSurface extends StatelessWidget {
     this.border,
     this.padding,
     this.onTap,
-    this.shadow = true,
+    this.shadow = false,
   });
 
   @override
@@ -427,7 +466,7 @@ class ContinuousSurface extends StatelessWidget {
       radius: radius,
       smoothing: smoothing,
       color: color ?? level.colorOf(scheme),
-      border: border ?? BorderSide(color: scheme.hairline),
+      border: border ?? BorderSide.none,
       padding: padding,
       shadow: shadow,
       onTap: onTap,
@@ -455,7 +494,7 @@ class MellowPanel extends StatelessWidget {
     this.smoothing = 0.6,
     this.border = BorderSide.none,
     this.padding,
-    this.shadow = true,
+    this.shadow = false,
     this.onTap,
   });
 
@@ -484,17 +523,15 @@ class MellowPanel extends StatelessWidget {
     }
 
     return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(radius),
-        boxShadow: shadow ? Shadows.card(scheme) : null,
+      decoration: ShapeDecoration(
+        shape: shape,
+        shadows: shadow ? Shadows.card(scheme) : null,
       ),
-      child: CustomPaint(
-        painter: MellowPanelPainter(shape: shape, color: color, shadow: false),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(radius * 0.92),
-          clipBehavior: Clip.antiAlias,
-          child: content,
-        ),
+      child: Material(
+        color: color,
+        shape: shape,
+        clipBehavior: Clip.antiAlias,
+        child: content,
       ),
     );
   }
@@ -534,4 +571,29 @@ class MellowPanelPainter extends CustomPainter {
       old.shape.radius != shape.radius ||
       old.shape.smoothing != shape.smoothing ||
       old.shape.side != shape.side;
+}
+
+class AppPageTransitionsBuilder extends PageTransitionsBuilder {
+  const AppPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    if (MediaQuery.disableAnimationsOf(context)) return child;
+    final curved = animation.drive(CurveTween(curve: Curves.easeOutCubic));
+    return FadeTransition(
+      opacity: curved,
+      child: SlideTransition(
+        position: curved.drive(
+          Tween(begin: const Offset(0.035, 0), end: Offset.zero),
+        ),
+        child: child,
+      ),
+    );
+  }
 }

@@ -1,19 +1,9 @@
-import 'dart:math' as math;
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
 
-/// 连续圆角（超椭圆 / squircle）形状。
-///
-/// ── 数学 ──
-/// 超椭圆 |x|^n + |y|^n = 1 的参数化：
-///   x = cos^(2/n)(θ),  y = sin^(2/n)(θ)，θ ∈ [0, π/2]
-///
-/// 对每个角，设圆心为 C，a、b 为指向两个切点的单位向量（互相垂直），则
-///   P(θ) = C + r · [ a·cos^(2/n)(θ) + b·sin^(2/n)(θ) ]
-/// θ=0 得到 C + r·a（第一个切点），θ=π/2 得到 C + r·b（第二个切点）。
-///
-/// 四角只是换 a、b 的方向，曲线形状一致，因此不会出现方向错乱或多画的凹口。
+/// 连续圆角，保留原组件接口，使用 Flutter 原生超椭圆路径。
 class ContinuousRRect extends OutlinedBorder {
   /// 圆角半径。
   final double radius;
@@ -26,8 +16,8 @@ class ContinuousRRect extends OutlinedBorder {
   final bool bottomRight;
   final bool bottomLeft;
 
-  // ignore: overridden_fields
   @override
+  // ignore: overridden_fields
   final BorderSide side;
 
   const ContinuousRRect({
@@ -124,110 +114,15 @@ class ContinuousRRect extends OutlinedBorder {
     return super.lerpTo(b, t);
   }
 
-  /// 路径缓存。
-  ///
-  /// 关键：必须能容纳**多种不同尺寸**的矩形同时存在。
-  /// 上一版只留 1 条（`..clear()..[key] = built`），而屏幕上一屏就有
-  /// 十几种不同大小的卡片/输入框，导致每次取都错过、每次都要重算，
-  /// 缓存等于完全失效，这是滚动掉帧的主因之一。
-  static final Map<int, Path> _cache = <int, Path>{};
-  static const int _cacheLimit = 64;
-
   Path _buildPath(Rect rect) {
-    if (rect.isEmpty) return Path();
-
-    final key = Object.hash(
-      rect.left,
-      rect.top,
-      rect.right,
-      rect.bottom,
-      radius,
-      smoothing,
-      topLeft,
-      topRight,
-      bottomRight,
-      bottomLeft,
-    );
-    final hit = _cache[key];
-    if (hit != null) return hit;
-
-    final built = _sample(rect);
-    // 超限时整体清空：比 LRU 便宜，且命中率损失很小。
-    if (_cache.length >= _cacheLimit) _cache.clear();
-    _cache[key] = built;
-    return built;
-  }
-
-  Path _sample(Rect rect) {
-    final path = Path();
-    final maxRadius = math.min(rect.width, rect.height) / 2;
-    final r = radius.clamp(0.0, maxRadius);
-
-    if (r <= 0.01) {
-      path.addRect(rect);
-      return path;
-    }
-
-    final n = 2.0 + 2.0 * smoothing.clamp(0.0, 1.0);
-    final l = rect.left;
-    final t = rect.top;
-    final right = rect.right;
-    final bottom = rect.bottom;
-
-    path.moveTo(topLeft ? l + r : l, t);
-
-    if (topRight) {
-      path.lineTo(right - r, t);
-      _corner(path, right - r, t + r, r, n, 0, -1, 1, 0);
-    } else {
-      path.lineTo(right, t);
-    }
-
-    if (bottomRight) {
-      path.lineTo(right, bottom - r);
-      _corner(path, right - r, bottom - r, r, n, 1, 0, 0, 1);
-    } else {
-      path.lineTo(right, bottom);
-    }
-
-    if (bottomLeft) {
-      path.lineTo(l + r, bottom);
-      _corner(path, l + r, bottom - r, r, n, 0, 1, -1, 0);
-    } else {
-      path.lineTo(l, bottom);
-    }
-
-    if (topLeft) {
-      path.lineTo(l, t + r);
-      _corner(path, l + r, t + r, r, n, -1, 0, 0, -1);
-    } else {
-      path.lineTo(l, t);
-    }
-
-    path.close();
-    return path;
-  }
-
-  /// 追加一个角。跳过 θ=0（调用方已 lineTo 到该切点）。
-  void _corner(
-    Path path,
-    double cx,
-    double cy,
-    double r,
-    double n,
-    double ax,
-    double ay,
-    double bx,
-    double by,
-  ) {
-    const steps = 12;
-    final power = 2.0 / n;
-    for (var i = 1; i <= steps; i++) {
-      final theta = (math.pi / 2) * (i / steps);
-      final c = math.pow(math.cos(theta), power).toDouble();
-      final s = math.pow(math.sin(theta), power).toDouble();
-      path.lineTo(cx + r * (ax * c + bx * s), cy + r * (ay * c + by * s));
-    }
+    return RoundedSuperellipseBorder(
+      borderRadius: BorderRadius.only(
+        topLeft: Radius.circular(topLeft ? radius : 0),
+        topRight: Radius.circular(topRight ? radius : 0),
+        bottomRight: Radius.circular(bottomRight ? radius : 0),
+        bottomLeft: Radius.circular(bottomLeft ? radius : 0),
+      ),
+    ).getOuterPath(rect);
   }
 }
 
@@ -293,11 +188,8 @@ class ContinuousInputBorder extends InputBorder {
     );
   }
 
-  ContinuousRRect get _shape => ContinuousRRect(
-    radius: radius,
-    smoothing: smoothing,
-    side: borderSide,
-  );
+  ContinuousRRect get _shape =>
+      ContinuousRRect(radius: radius, smoothing: smoothing, side: borderSide);
 
   @override
   bool operator ==(Object other) =>

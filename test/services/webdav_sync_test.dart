@@ -313,6 +313,8 @@ void main() {
 
     final outcome = await service.synchronize(
       direction: WebDavSyncDirection.download,
+      // Download still requires an explicit side when both copies changed.
+      conflictChoice: WebDavConflictChoice.remote,
     );
 
     expect(outcome.isSuccess, isTrue);
@@ -347,6 +349,8 @@ void main() {
 
     final outcome = await service.synchronize(
       direction: WebDavSyncDirection.download,
+      // Download still requires an explicit side when both copies changed.
+      conflictChoice: WebDavConflictChoice.remote,
     );
 
     expect(outcome.isSuccess, isTrue);

@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:flutter/material.dart';
 import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/services/backup_snapshot.dart';
@@ -208,9 +209,14 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
                 if (isRestore)
                   Container(
                     padding: const EdgeInsets.all(AppTheme.spacingMedium),
-                    decoration: BoxDecoration(
+                    decoration: ShapeDecoration(
                       color: colorScheme.errorContainer.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                      shape: RoundedSuperellipseBorder(
+                        borderRadius: BorderRadius.circular(
+                          AppTheme.radiusMedium,
+                        ),
+                        side: BorderSide.none,
+                      ),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,

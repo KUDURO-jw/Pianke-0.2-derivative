@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -93,17 +94,23 @@ class _SelectableMovieTile extends StatelessWidget {
       onTap: onTap,
       child: AnimatedOpacity(
         opacity: selected ? 1.0 : 0.52,
-        duration: const Duration(milliseconds: 120),
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 120),
         child: Stack(
           children: [
             Container(
               decoration: selected
-                  ? BoxDecoration(
-                      borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-                      border: Border.all(color: AppTheme.accent, width: 2),
+                  ? ShapeDecoration(
+                      shape: RoundedSuperellipseBorder(
+                        borderRadius: BorderRadius.circular(
+                          AppTheme.radiusLarge,
+                        ),
+                        side: BorderSide(color: AppTheme.accent, width: 2),
+                      ),
                     )
                   : null,
-              child: ClipRRect(
+              child: ClipRSuperellipse(
                 borderRadius: BorderRadius.circular(AppTheme.radiusLarge - 1),
                 child: AspectRatio(
                   aspectRatio: 0.65,
@@ -175,14 +182,17 @@ class _SelectableMovieTile extends StatelessWidget {
               bottom: 0,
               child: Container(
                 padding: const EdgeInsets.all(6),
-                decoration: const BoxDecoration(
+                decoration: const ShapeDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [Colors.transparent, Colors.black87],
                   ),
-                  borderRadius: BorderRadius.vertical(
-                    bottom: Radius.circular(AppTheme.radiusLarge - 1),
+                  shape: RoundedSuperellipseBorder(
+                    borderRadius: BorderRadius.vertical(
+                      bottom: Radius.circular(AppTheme.radiusLarge - 1),
+                    ),
+                    side: BorderSide.none,
                   ),
                 ),
                 child: Text(

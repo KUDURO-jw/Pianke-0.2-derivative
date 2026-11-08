@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
@@ -12,7 +13,6 @@ import 'package:random_movie/providers/movie_provider.dart';
 import 'package:random_movie/widgets/collection/collection_icon.dart';
 import 'package:random_movie/widgets/common/app_components.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
-import 'package:random_movie/widgets/common/continuous_rrect.dart';
 import 'package:random_movie/widgets/movie/movie_card.dart';
 
 /// 片库页面
@@ -67,10 +67,13 @@ class _MoviesPageState extends State<MoviesPage> {
 
     return Scaffold(
       backgroundColor: scheme.pageSurface,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _navigateToAddMovie(context),
-        icon: const Icon(Icons.add_rounded, size: 22),
-        label: const Text('添加'),
+      floatingActionButton: Padding(
+        padding: EdgeInsets.only(bottom: DockMetrics.insetOf(context)),
+        child: FloatingActionButton.extended(
+          onPressed: () => _navigateToAddMovie(context),
+          icon: const Icon(Icons.add_rounded, size: 22),
+          label: const Text('添加'),
+        ),
       ),
       body: CustomScrollView(
         key: const PageStorageKey('movies-grid'),
@@ -96,6 +99,8 @@ class _MoviesPageState extends State<MoviesPage> {
                           ? '还没有影片'
                           : '共 ${data.$1} 部 · 已看 ${data.$2} 部',
                       trailing: RoundIconButton(
+                        filled: true,
+                        tooltip: '添加影片',
                         icon: Icons.add_rounded,
                         onPressed: () => _navigateToAddMovie(context),
                       ),
@@ -117,9 +122,9 @@ class _MoviesPageState extends State<MoviesPage> {
                         } else {
                           _query = value;
                         }
-                        context
-                            .read<MovieProvider>()
-                            .setSearchQueryDebounced(value);
+                        context.read<MovieProvider>().setSearchQueryDebounced(
+                          value,
+                        );
                       },
                       onClear: () async {
                         _searchController.clear();
@@ -141,6 +146,7 @@ class _MoviesPageState extends State<MoviesPage> {
           SliverPersistentHeader(
             pinned: true,
             delegate: _LibraryFilterHeader(
+              height: 60 + (MediaQuery.textScalerOf(context).scale(13) - 13),
               colorScheme: scheme,
               textTheme: Theme.of(context).textTheme,
               onFilterChanged: (filter) =>
@@ -229,17 +235,20 @@ class _MoviesPageState extends State<MoviesPage> {
                   : movies.length;
 
               return SliverPadding(
-                padding: const EdgeInsets.only(
+                padding: EdgeInsets.only(
                   top: Spacing.md,
                   left: Spacing.page,
                   right: Spacing.page,
-                  bottom: 96,
+                  bottom: DockMetrics.insetOf(context) + 24,
                 ),
                 sliver: SliverGrid.builder(
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
                     // 高密度屏幕（如 3200×1440）上等比放大卡片宽度。
                     maxCrossAxisExtent: 190,
-                    childAspectRatio: 0.58,
+                    childAspectRatio:
+                        MediaQuery.textScalerOf(context).scale(14) > 19
+                        ? 0.48
+                        : 0.58,
                     crossAxisSpacing: Spacing.md,
                     mainAxisSpacing: Spacing.lg,
                   ),
@@ -280,7 +289,7 @@ class _MoviesPageState extends State<MoviesPage> {
       selector: (_, p) => [...p.manualCollections, ...p.smartCollections],
       builder: (context, collections, _) {
         return SizedBox(
-          height: 96,
+          height: 96 + (MediaQuery.textScalerOf(context).scale(12) - 12) * 2,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(
@@ -327,7 +336,7 @@ class _MoviesPageState extends State<MoviesPage> {
       builder: (dialogContext) => AlertDialog(
         elevation: 24,
         shadowColor: Colors.black.withValues(alpha: 0.4),
-        shape: RoundedRectangleBorder(
+        shape: RoundedSuperellipseBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
           side: BorderSide(color: colorScheme.outlineVariant, width: 1),
         ),
@@ -371,6 +380,7 @@ class _MoviesPageState extends State<MoviesPage> {
 /// 吸顶筛选头 —— 「全部 / 未看 / 已看」带全局数量的胶囊，滚动时常驻顶部。
 class _LibraryFilterHeader extends SliverPersistentHeaderDelegate {
   _LibraryFilterHeader({
+    required this.height,
     required this.colorScheme,
     required this.textTheme,
     required this.onFilterChanged,
@@ -380,13 +390,13 @@ class _LibraryFilterHeader extends SliverPersistentHeaderDelegate {
   final TextTheme textTheme;
   final ValueChanged<LibraryFilter> onFilterChanged;
 
-  static const double _height = 56;
+  final double height;
 
   @override
-  double get minExtent => _height;
+  double get minExtent => height;
 
   @override
-  double get maxExtent => _height;
+  double get maxExtent => height;
 
   @override
   Widget build(
@@ -415,13 +425,11 @@ class _LibraryFilterHeader extends SliverPersistentHeaderDelegate {
               LibraryFilter.unwatched => 1,
               LibraryFilter.watched => 2,
             },
-            onChanged: (i) => onFilterChanged(
-              switch (i) {
-                0 => LibraryFilter.all,
-                1 => LibraryFilter.unwatched,
-                _ => LibraryFilter.watched,
-              },
-            ),
+            onChanged: (i) => onFilterChanged(switch (i) {
+              0 => LibraryFilter.all,
+              1 => LibraryFilter.unwatched,
+              _ => LibraryFilter.watched,
+            }),
           );
         },
       ),
@@ -431,7 +439,8 @@ class _LibraryFilterHeader extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(covariant _LibraryFilterHeader oldDelegate) {
     return oldDelegate.colorScheme != colorScheme ||
-        oldDelegate.textTheme != textTheme;
+        oldDelegate.textTheme != textTheme ||
+        oldDelegate.height != height;
   }
 }
 
@@ -451,7 +460,7 @@ class _CollectionStripCard extends StatelessWidget {
       onTap: onTap,
       child: SizedBox(
         width: 132,
-        child: ClipRRect(
+        child: ClipRSuperellipse(
           borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
           child: Stack(
             fit: StackFit.expand,
@@ -547,6 +556,7 @@ class _MyCollectionsEntry extends StatelessWidget {
       level: SurfaceLevel.block,
       onTap: onTap,
       border: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.4)),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: SizedBox(
         width: 88,
         child: Column(
@@ -560,6 +570,8 @@ class _MyCollectionsEntry extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               '我的合集',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: TypeScale.caption,
                 fontWeight: FontWeight.w600,

@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -512,6 +513,10 @@ class _DrawPageState extends State<DrawPage> {
   }
 
   void _startShuffleAnimation() {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _onAnimationComplete();
+      return;
+    }
     const int fastCount = 20;
 
     _shuffleTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
@@ -644,7 +649,9 @@ class _DrawPageState extends State<DrawPage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           AnimatedSwitcher(
-            duration: const Duration(milliseconds: 80),
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 80),
             child: DrawShuffleCard(
               movie: currentMovie,
               shuffleCount: _shuffleCount,
@@ -776,11 +783,14 @@ class _DrawPageState extends State<DrawPage> {
           .map(
             (item) => Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
+              decoration: ShapeDecoration(
                 color: colorScheme.surfaceContainerHighest.withValues(
                   alpha: 0.55,
                 ),
-                borderRadius: BorderRadius.circular(999),
+                shape: RoundedSuperellipseBorder(
+                  borderRadius: BorderRadius.circular(999),
+                  side: BorderSide.none,
+                ),
               ),
               child: Text(item, style: const TextStyle(fontSize: 12)),
             ),
@@ -856,18 +866,22 @@ class _ModeChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 150),
         alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMedium),
-        decoration: BoxDecoration(
+        decoration: ShapeDecoration(
           color: selected
               ? AppTheme.accent
               : colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-          border: Border.all(
-            color: selected
-                ? AppTheme.accent
-                : colorScheme.outline.withValues(alpha: 0.2),
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+            side: BorderSide(
+              color: selected
+                  ? AppTheme.accent
+                  : colorScheme.outline.withValues(alpha: 0.2),
+            ),
           ),
         ),
         child: Text(
@@ -900,15 +914,17 @@ class _FilterButton extends StatelessWidget {
           horizontal: AppTheme.spacingMedium,
           vertical: 6,
         ),
-        decoration: BoxDecoration(
+        decoration: ShapeDecoration(
           color: active
               ? AppTheme.accent.withValues(alpha: 0.12)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-          border: Border.all(
-            color: active
-                ? AppTheme.accent
-                : colorScheme.outline.withValues(alpha: 0.3),
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+            side: BorderSide(
+              color: active
+                  ? AppTheme.accent
+                  : colorScheme.outline.withValues(alpha: 0.3),
+            ),
           ),
         ),
         child: Row(
@@ -981,15 +997,18 @@ class _PickCard extends StatelessWidget {
                       horizontal: 8,
                       vertical: 4,
                     ),
-                    decoration: BoxDecoration(
+                    decoration: ShapeDecoration(
                       color: AppTheme.accent,
-                      borderRadius: BorderRadius.circular(999),
-                      boxShadow: [
+                      shadows: [
                         BoxShadow(
                           color: AppTheme.accent.withValues(alpha: 0.28),
                           blurRadius: 8,
                         ),
                       ],
+                      shape: RoundedSuperellipseBorder(
+                        borderRadius: BorderRadius.circular(999),
+                        side: BorderSide.none,
+                      ),
                     ),
                     child: Text(
                       '$optionIndex/$totalCount',
@@ -1070,7 +1089,7 @@ class _PosterOnly extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      child: ClipRRect(
+      child: ClipRSuperellipse(
         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
         child: movie.poster.isNotEmpty
             ? CachedNetworkImage(

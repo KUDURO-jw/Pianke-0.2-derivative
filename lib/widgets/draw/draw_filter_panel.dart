@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:flutter/material.dart';
 import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/models/models.dart';
@@ -78,10 +79,13 @@ class _DrawFilterPanelState extends State<DrawFilterPanel> {
       padding: EdgeInsets.only(bottom: mediaQuery.viewInsets.bottom),
       child: Container(
         constraints: BoxConstraints(maxHeight: mediaQuery.size.height * 0.85),
-        decoration: BoxDecoration(
+        decoration: ShapeDecoration(
           color: colorScheme.surfaceContainerLow,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppTheme.radiusXLarge),
+          shape: RoundedSuperellipseBorder(
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppTheme.radiusXLarge),
+            ),
+            side: BorderSide.none,
           ),
         ),
         child: Column(
@@ -165,15 +169,16 @@ class _DrawFilterPanelState extends State<DrawFilterPanel> {
       ),
       child: Row(
         children: [
-          Text(
-            '筛选候选',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: colorScheme.onSurface,
+          Expanded(
+            child: Text(
+              '筛选候选',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: colorScheme.onSurface,
+              ),
             ),
           ),
-          const Spacer(),
           IconButton(
             icon: const Icon(Icons.close),
             onPressed: () => Navigator.of(context).pop(),
@@ -216,7 +221,9 @@ class _DrawFilterPanelState extends State<DrawFilterPanel> {
               });
             },
           ),
-          Row(
+          Wrap(
+            spacing: AppTheme.spacingSmall,
+            runSpacing: AppTheme.spacingSmall,
             children: [
               _QuickChip(
                 label: '2 小时内',
@@ -401,15 +408,19 @@ class _DrawFilterPanelState extends State<DrawFilterPanel> {
               });
             },
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 150),
               padding: const EdgeInsets.symmetric(
                 horizontal: AppTheme.spacingMedium,
                 vertical: AppTheme.spacingSmall,
               ),
-              decoration: BoxDecoration(
+              decoration: ShapeDecoration(
                 color: selected ? tag.color : tag.color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-                border: Border.all(color: tag.color),
+                shape: RoundedSuperellipseBorder(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+                  side: BorderSide(color: tag.color),
+                ),
               ),
               child: Text(
                 tag.name,
@@ -552,20 +563,24 @@ class _QuickChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(
           horizontal: AppTheme.spacingMedium,
           vertical: AppTheme.spacingSmall,
         ),
-        decoration: BoxDecoration(
+        decoration: ShapeDecoration(
           color: selected
               ? AppTheme.accent
               : colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-          border: Border.all(
-            color: selected
-                ? AppTheme.accent
-                : colorScheme.outline.withValues(alpha: 0.2),
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+            side: BorderSide(
+              color: selected
+                  ? AppTheme.accent
+                  : colorScheme.outline.withValues(alpha: 0.2),
+            ),
           ),
         ),
         child: Text(

@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:random_movie/config/app_theme.dart';
@@ -165,123 +166,149 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
 
     return Padding(
       padding: EdgeInsets.only(bottom: mediaQuery.viewInsets.bottom),
-      child: Container(
+      child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: mediaQuery.size.height * 0.88),
-        decoration: BoxDecoration(
+        child: Material(
           color: colorScheme.surfaceContainerLow,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppTheme.radiusXLarge),
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppTheme.spacingLarge,
-                AppTheme.spacingMedium,
-                AppTheme.spacingSmall,
-                0,
-              ),
-              child: Row(
-                children: [
-                  Text(
-                    widget.existing == null ? '记录一次观影' : '编辑观影记录',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.onSurface,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
+          shape: RoundedSuperellipseBorder(
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppTheme.radiusXLarge),
             ),
-            Flexible(
-              child: ListView(
+            side: BorderSide.none,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
                 padding: const EdgeInsets.fromLTRB(
                   AppTheme.spacingLarge,
+                  AppTheme.spacingMedium,
                   AppTheme.spacingSmall,
-                  AppTheme.spacingLarge,
-                  AppTheme.spacingLarge,
+                  0,
                 ),
-                children: [
-                  _label(context, '观影日期'),
-                  InkWell(
-                    onTap: _pickDate,
-                    borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppTheme.spacingMedium,
-                        vertical: 14,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(
-                          AppTheme.radiusMedium,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.existing == null ? '记录一次观影' : '编辑观影记录',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onSurface,
                         ),
-                        border: Border.all(
-                          color: colorScheme.outline.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.calendar_today,
-                            size: 18,
-                            color: colorScheme.onSurface.withValues(alpha: 0.6),
-                          ),
-                          const SizedBox(width: AppTheme.spacingMedium),
-                          Text(
-                            DateFormat('yyyy 年 M 月 d 日').format(_watchedAt),
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: colorScheme.onSurface,
-                            ),
-                          ),
-                        ],
                       ),
                     ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppTheme.spacingLarge,
+                    AppTheme.spacingSmall,
+                    AppTheme.spacingLarge,
+                    AppTheme.spacingLarge,
                   ),
-                  const SizedBox(height: AppTheme.spacingLarge),
+                  children: [
+                    _label(context, '观影日期'),
+                    InkWell(
+                      onTap: _pickDate,
+                      borderRadius: BorderRadius.circular(
+                        AppTheme.radiusMedium,
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppTheme.spacingMedium,
+                          vertical: 14,
+                        ),
+                        decoration: ShapeDecoration(
+                          shape: RoundedSuperellipseBorder(
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.radiusMedium,
+                            ),
+                            side: BorderSide(
+                              color: colorScheme.outline.withValues(alpha: 0.3),
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.calendar_today,
+                              size: 18,
+                              color: colorScheme.onSurface.withValues(
+                                alpha: 0.6,
+                              ),
+                            ),
+                            const SizedBox(width: AppTheme.spacingMedium),
+                            Text(
+                              DateFormat('yyyy 年 M 月 d 日').format(_watchedAt),
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: colorScheme.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppTheme.spacingLarge),
 
-                  _label(context, '心情'),
-                  Wrap(
-                    spacing: AppTheme.spacingSmall,
-                    runSpacing: AppTheme.spacingSmall,
-                    children: [
-                      for (final mood in WatchMood.values)
-                        if (mood != WatchMood.none) _moodChip(context, mood),
+                    _label(context, '心情'),
+                    Wrap(
+                      spacing: AppTheme.spacingSmall,
+                      runSpacing: AppTheme.spacingSmall,
+                      children: [
+                        for (final mood in WatchMood.values)
+                          if (mood != WatchMood.none) _moodChip(context, mood),
+                      ],
+                    ),
+                    const SizedBox(height: AppTheme.spacingLarge),
+
+                    _label(context, '我的评分'),
+                    _buildStars(colorScheme),
+                    const SizedBox(height: AppTheme.spacingLarge),
+
+                    _label(context, '和谁一起看'),
+                    Wrap(
+                      spacing: AppTheme.spacingSmall,
+                      runSpacing: AppTheme.spacingSmall,
+                      children: [
+                        for (final option in WatchCompanion.values)
+                          _companionChip(context, option),
+                        _customCompanionChip(context),
+                      ],
+                    ),
+                    if (_showCustomCompanion) ...[
+                      const SizedBox(height: AppTheme.spacingSmall),
+                      TextField(
+                        controller: _withController,
+                        autofocus: true,
+                        decoration: InputDecoration(
+                          hintText: '例如：和同事 / 团建 / 和猫',
+                          isDense: true,
+                          prefixIcon: const Icon(Icons.edit_outlined, size: 20),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.radiusMedium,
+                            ),
+                          ),
+                        ),
+                        style: TextStyle(color: colorScheme.onSurface),
+                      ),
                     ],
-                  ),
-                  const SizedBox(height: AppTheme.spacingLarge),
+                    const SizedBox(height: AppTheme.spacingLarge),
 
-                  _label(context, '我的评分'),
-                  _buildStars(colorScheme),
-                  const SizedBox(height: AppTheme.spacingLarge),
-
-                  _label(context, '和谁一起看'),
-                  Wrap(
-                    spacing: AppTheme.spacingSmall,
-                    runSpacing: AppTheme.spacingSmall,
-                    children: [
-                      for (final option in WatchCompanion.values)
-                        _companionChip(context, option),
-                      _customCompanionChip(context),
-                    ],
-                  ),
-                  if (_showCustomCompanion) ...[
-                    const SizedBox(height: AppTheme.spacingSmall),
+                    _label(context, '一句私语'),
                     TextField(
-                      controller: _withController,
-                      autofocus: true,
+                      controller: _noteController,
+                      maxLines: 3,
                       decoration: InputDecoration(
-                        hintText: '例如：和同事 / 团建 / 和猫',
-                        isDense: true,
-                        prefixIcon: const Icon(Icons.edit_outlined, size: 20),
+                        hintText: '这次观影的想法…',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(
                             AppTheme.radiusMedium,
@@ -290,64 +317,48 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
                       ),
                       style: TextStyle(color: colorScheme.onSurface),
                     ),
-                  ],
-                  const SizedBox(height: AppTheme.spacingLarge),
+                    const SizedBox(height: AppTheme.spacingMedium),
 
-                  _label(context, '一句私语'),
-                  TextField(
-                    controller: _noteController,
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      hintText: '这次观影的想法…',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(
-                          AppTheme.radiusMedium,
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        '这是一次重看',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: colorScheme.onSurface,
                         ),
                       ),
+                      value: _isRewatch,
+                      activeThumbColor: AppTheme.accent,
+                      onChanged: (v) => setState(() => _isRewatch = v),
                     ),
-                    style: TextStyle(color: colorScheme.onSurface),
-                  ),
-                  const SizedBox(height: AppTheme.spacingMedium),
-
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(
-                      '这是一次重看',
-                      style: TextStyle(
-                        fontSize: 15,
-                        color: colorScheme.onSurface,
-                      ),
+                  ],
+                ),
+              ),
+              SafeArea(
+                top: false,
+                minimum: const EdgeInsets.fromLTRB(
+                  AppTheme.spacingLarge,
+                  0,
+                  AppTheme.spacingLarge,
+                  AppTheme.spacingMedium,
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _submit,
+                    icon: const Icon(Icons.check),
+                    label: Text(widget.existing == null ? '保存记录' : '保存修改'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.accent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    value: _isRewatch,
-                    activeThumbColor: AppTheme.accent,
-                    onChanged: (v) => setState(() => _isRewatch = v),
-                  ),
-                ],
-              ),
-            ),
-            SafeArea(
-              top: false,
-              minimum: const EdgeInsets.fromLTRB(
-                AppTheme.spacingLarge,
-                0,
-                AppTheme.spacingLarge,
-                AppTheme.spacingMedium,
-              ),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _submit,
-                  icon: const Icon(Icons.check),
-                  label: Text(widget.existing == null ? '保存记录' : '保存修改'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.accent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -373,20 +384,24 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
     return GestureDetector(
       onTap: () => setState(() => _mood = selected ? WatchMood.none : mood),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(
           horizontal: AppTheme.spacingMedium,
           vertical: AppTheme.spacingSmall,
         ),
-        decoration: BoxDecoration(
+        decoration: ShapeDecoration(
           color: selected
               ? AppTheme.accent
               : colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-          border: Border.all(
-            color: selected
-                ? AppTheme.accent
-                : colorScheme.outline.withValues(alpha: 0.2),
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+            side: BorderSide(
+              color: selected
+                  ? AppTheme.accent
+                  : colorScheme.outline.withValues(alpha: 0.2),
+            ),
           ),
         ),
         child: Text(
@@ -417,18 +432,24 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
         }
       }),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(
           horizontal: AppTheme.spacingMedium,
           vertical: AppTheme.spacingSmall,
         ),
-        decoration: BoxDecoration(
-          color: selected ? AppTheme.accent : colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-          border: Border.all(
-            color: selected
-                ? AppTheme.accent
-                : colorScheme.outline.withValues(alpha: 0.2),
+        decoration: ShapeDecoration(
+          color: selected
+              ? AppTheme.accent
+              : colorScheme.surfaceContainerHighest,
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+            side: BorderSide(
+              color: selected
+                  ? AppTheme.accent
+                  : colorScheme.outline.withValues(alpha: 0.2),
+            ),
           ),
         ),
         child: Text(
@@ -460,18 +481,24 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
         }
       }),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(
           horizontal: AppTheme.spacingMedium,
           vertical: AppTheme.spacingSmall,
         ),
-        decoration: BoxDecoration(
-          color: selected ? AppTheme.accent : colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-          border: Border.all(
-            color: selected
-                ? AppTheme.accent
-                : colorScheme.outline.withValues(alpha: 0.2),
+        decoration: ShapeDecoration(
+          color: selected
+              ? AppTheme.accent
+              : colorScheme.surfaceContainerHighest,
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+            side: BorderSide(
+              color: selected
+                  ? AppTheme.accent
+                  : colorScheme.outline.withValues(alpha: 0.2),
+            ),
           ),
         ),
         child: Text(

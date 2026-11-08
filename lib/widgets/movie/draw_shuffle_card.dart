@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:random_movie/config/api_config.dart';
@@ -33,7 +34,7 @@ class DrawShuffleCard extends StatelessWidget {
         child: Column(
           children: [
             Expanded(
-              child: ClipRRect(
+              child: ClipRSuperellipse(
                 clipBehavior: Clip.hardEdge,
                 borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                 child: movie.poster.isNotEmpty

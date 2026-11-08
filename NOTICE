@@ -66,3 +66,15 @@ Copyright 2026 KUDURO-jw          （二次创作部分）
 
 This derivative is not affiliated with or endorsed by ShareWinter.
 The original name, copyright, and license notices are retained respectfully.
+
+
+Personal UI edition — 2026-11-08
+--------------------------------
+This edition preserves the functional code of KUDURO-jw/Pianke-0.2-derivative
+at 9220c0e07725bddc1c8256485b5f005d63600360. UI, navigation, visual themes,
+animation accessibility and independent Android packaging were modified.
+The visual reference is FlClash at be84736605527034689c95bf27828ff27d912c5e.
+No FlClash/prism_ui source code or assets are incorporated. New UI code is
+provided under Apache-2.0; all original attribution and license terms remain.
+This edition is not affiliated with or endorsed by either upstream project.
+See README_UI.md and docs/FUNCTION_PARITY.md for details.

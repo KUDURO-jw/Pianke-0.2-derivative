@@ -1,6 +1,8 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:random_movie/config/app_theme.dart';
+import 'package:random_movie/config/design_tokens.dart';
+import 'package:random_movie/widgets/common/app_components.dart';
 import 'package:random_movie/pages/draw/draw_history_page.dart';
 
 /// 抽片入口页 — 「今晚看什么？」主卡 + 抽片历史
@@ -14,41 +16,38 @@ class DrawHubPage extends StatelessWidget {
 
     return Scaffold(
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(
-            AppTheme.spacingLarge,
-            AppTheme.spacingLarge,
-            AppTheme.spacingLarge,
-            AppTheme.spacingXLarge,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 主入口 —— 今晚看什么？
-              _PrimaryDrawCard(onTap: () => context.push('/draw/start')),
-              const SizedBox(height: AppTheme.spacingLarge),
-              Row(
+        bottom: false,
+        child: CustomScrollView(
+          key: const PageStorageKey('draw-hub'),
+          slivers: [
+            const SliverToBoxAdapter(
+              child: PageHeader(title: '抽片', subtitle: '把犹豫，交给一点随机'),
+            ),
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                Spacing.page,
+                Spacing.sm,
+                Spacing.page,
+                DockMetrics.insetOf(context) + Spacing.xxl,
+              ),
+              sliver: SliverList.list(
                 children: [
-                  Expanded(
-                    child: Text(
-                      '抽片历史',
-                      style: textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
+                  _PrimaryDrawCard(onTap: () => context.push('/draw/start')),
+                  const SizedBox(height: Spacing.xxl),
+                  Text('抽片历史', style: textTheme.titleMedium),
+                  const SizedBox(height: Spacing.xs),
                   Text(
                     '最近的决定都在这里',
                     style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurface.withValues(alpha: 0.55),
+                      color: colorScheme.onSurfaceVariant,
                     ),
                   ),
+                  const SizedBox(height: Spacing.lg),
+                  const DrawHistoryList(embedded: true),
                 ],
               ),
-              const SizedBox(height: AppTheme.spacingMedium),
-              const DrawHistoryList(embedded: true),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -63,85 +62,42 @@ class _PrimaryDrawCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return GestureDetector(
+    final scheme = Theme.of(context).colorScheme;
+    return AppCard(
+      padding: const EdgeInsets.all(Spacing.xxl),
       onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [AppTheme.accent, AppTheme.accentLight],
-          ),
-          borderRadius: BorderRadius.circular(AppTheme.radiusXLarge),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.accent.withValues(alpha: isDark ? 0.35 : 0.25),
-              blurRadius: 24,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        padding: const EdgeInsets.all(AppTheme.spacingLarge),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '今晚看什么？',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '交给片刻，一键帮你决定',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.white.withValues(alpha: 0.85),
-                    ),
-                  ),
-                  const SizedBox(height: AppTheme.spacingMedium),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppTheme.spacingMedium,
-                      vertical: AppTheme.spacingSmall,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.casino, size: 18, color: Colors.white),
-                        SizedBox(width: 6),
-                        Text(
-                          '开始抽片',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: ShapeDecoration(
+              color: scheme.blockSurface,
+              shape: RoundedSuperellipseBorder(
+                borderRadius: BorderRadius.circular(20),
               ),
             ),
-            Icon(
-              Icons.movie_filter_outlined,
-              size: 64,
-              color: Colors.white.withValues(alpha: 0.85),
+            child: Icon(Icons.casino_outlined, size: 30, color: scheme.accent),
+          ),
+          const SizedBox(height: Spacing.xxl),
+          Text('今晚看什么？', style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: Spacing.sm),
+          Text(
+            '从你的片库里，为今晚选一个答案。',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: scheme.secondaryText),
+          ),
+          const SizedBox(height: Spacing.xxl),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onTap,
+              icon: const Icon(Icons.play_arrow_rounded),
+              label: const Text('开始抽片'),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
