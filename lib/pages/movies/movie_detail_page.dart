@@ -36,7 +36,7 @@ class MovieDetailPage extends StatefulWidget {
 
 class _MovieDetailPageState extends State<MovieDetailPage> {
   static const double _detailCacheExtent = 160;
-  static const double _expandedPosterHeight = 320;
+  static const double _expandedPosterHeight = 240;
 
   Future<Movie?>? _movieFuture;
   Movie? _seedMovie;
@@ -227,34 +227,48 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
           onPopInvokedWithResult: (didPop, _) {
             if (!didPop) _confirmLeave(movie);
           },
-          child: Scaffold(
-            bottomNavigationBar: _hasChanges
-                ? SafeArea(
-                    minimum: const EdgeInsets.all(AppTheme.spacingMedium),
-                    child: FilledButton.icon(
-                      onPressed: _saving || _isSyncingWatchState
-                          ? null
-                          : () => _save(provider, movie),
-                      icon: const Icon(Icons.check),
-                      label: Text(_saving ? '保存中…' : '保存修改'),
+          child: DefaultTabController(
+            length: 2,
+            child: Scaffold(
+              bottomNavigationBar: _hasChanges
+                  ? SafeArea(
+                      minimum: const EdgeInsets.all(AppTheme.spacingMedium),
+                      child: FilledButton.icon(
+                        onPressed: _saving || _isSyncingWatchState
+                            ? null
+                            : () => _save(provider, movie),
+                        icon: const Icon(Icons.check),
+                        label: Text(_saving ? '保存中…' : '保存修改'),
+                      ),
+                    )
+                  : null,
+              body: AbsorbPointer(
+                absorbing: _saving,
+                child: NestedScrollView(
+                  headerSliverBuilder: (context, innerBoxIsScrolled) => [
+                    SliverOverlapAbsorber(
+                      handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
+                        context,
+                      ),
+                      sliver: SliverLayoutBuilder(
+                        builder: (context, constraints) {
+                          return constraints.scrollOffset >=
+                                  expandedHeight -
+                                      kToolbarHeight -
+                                      kTextTabBarHeight
+                              ? collapsedHeader
+                              : expandedHeader;
+                        },
+                      ),
                     ),
-                  )
-                : null,
-            body: AbsorbPointer(
-              absorbing: _saving,
-              child: CustomScrollView(
-                scrollCacheExtent: ScrollCacheExtent.pixels(_detailCacheExtent),
-                slivers: [
-                  SliverLayoutBuilder(
-                    builder: (context, constraints) {
-                      return constraints.scrollOffset >=
-                              expandedHeight - kToolbarHeight
-                          ? collapsedHeader
-                          : expandedHeader;
-                    },
+                  ],
+                  body: TabBarView(
+                    children: [
+                      _buildDetailTab(movie, details: false),
+                      _buildDetailTab(movie, details: true),
+                    ],
                   ),
-                  ..._buildBodySlivers(context, movie, provider),
-                ],
+                ),
               ),
             ),
           ),
@@ -288,6 +302,17 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
       title: collapsed
           ? Text(movie.title, maxLines: 1, overflow: TextOverflow.ellipsis)
           : null,
+      bottom: TabBar(
+        labelColor: collapsed ? colorScheme.primary : Colors.white,
+        unselectedLabelColor: collapsed
+            ? colorScheme.onSurfaceVariant
+            : Colors.white70,
+        indicatorColor: collapsed ? colorScheme.primary : Colors.white,
+        tabs: const [
+          Tab(text: '记录'),
+          Tab(text: '资料'),
+        ],
+      ),
       systemOverlayStyle: collapsed
           ? (colorScheme.brightness == Brightness.dark
                 ? SystemUiOverlayStyle.light
@@ -338,7 +363,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
               Positioned(
                 left: AppTheme.spacingMedium,
                 right: AppTheme.spacingMedium,
-                bottom: AppTheme.spacingMedium,
+                bottom: AppTheme.spacingMedium + kTextTabBarHeight,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -480,14 +505,33 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
     );
   }
 
+  Widget _buildDetailTab(Movie movie, {required bool details}) {
+    return Builder(
+      builder: (context) => CustomScrollView(
+        key: PageStorageKey(
+          '${widget.movieId}-${details ? 'details' : 'records'}',
+        ),
+        scrollCacheExtent: ScrollCacheExtent.pixels(_detailCacheExtent),
+        slivers: [
+          SliverOverlapInjector(
+            handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
+          ),
+          ..._buildBodySlivers(context, movie, details: details),
+        ],
+      ),
+    );
+  }
+
   List<Widget> _buildBodySlivers(
     BuildContext context,
-    Movie movie,
-    MovieProvider provider,
-  ) {
+    Movie movie, {
+    required bool details,
+  }) {
     final sectionBuilders = <WidgetBuilder>[
-      (context) => _buildInfoSection(context, movie),
-      if (movie.subjectType == MovieSubjectType.tvSeries)
+      if (details) (context) => _buildInfoSection(context, movie),
+      if (!details && movie.summary.isNotEmpty)
+        (context) => _buildSummarySection(context, movie),
+      if (!details && movie.subjectType == MovieSubjectType.tvSeries)
         (context) => RepaintBoundary(
           child: SoftCard(
             showShadow: false,
@@ -499,10 +543,9 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
             ),
           ),
         ),
-      (context) => _buildWatchSection(context, movie),
-      if (_secondarySectionsReady && movie.summary.isNotEmpty)
-        (context) => _buildSummarySection(context, movie),
-      if (_secondarySectionsReady) (context) => _buildPersonalSection(context),
+      if (!details) (context) => _buildWatchSection(context, movie),
+      if (!details && _secondarySectionsReady)
+        (context) => _buildPersonalSection(context),
       (_) => const SizedBox(height: AppTheme.spacingXLarge),
     ];
 
@@ -678,7 +721,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
             const SizedBox(height: AppTheme.spacingSmall),
             Text(
               movie.summary,
-              maxLines: _summaryExpanded ? null : 4,
+              maxLines: _summaryExpanded ? null : 3,
               overflow: _summaryExpanded
                   ? TextOverflow.visible
                   : TextOverflow.ellipsis,

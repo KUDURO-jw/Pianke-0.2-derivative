@@ -61,6 +61,61 @@ class LibraryMovies extends MovieProvider {
 }
 
 void main() {
+  testWidgets(
+    'detail tabs support swipes, taps and independent scroll positions',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final movies = EpisodeMovies();
+      movies.movie = movies.movie.copyWith(
+        director: '资料导演',
+        year: '2026',
+        summary: '一段简短的剧情简介。',
+      );
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<MovieProvider>.value(value: movies),
+            ChangeNotifierProvider<CollectionProvider>(
+              create: (_) => EpisodeCollections(),
+            ),
+          ],
+          child: const MaterialApp(home: MovieDetailPage(movieId: 'series')),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('简介').hitTestable(), findsOneWidget);
+      expect(find.text('第1集').hitTestable(), findsOneWidget);
+      expect(find.text('影片信息'), findsNothing);
+      final records = find.byKey(const PageStorageKey('series-records'));
+      await tester.drag(records, const Offset(0, -280));
+      await tester.pumpAndSettle();
+      final recordsScroll = tester.state<ScrollableState>(
+        find.descendant(of: records, matching: find.byType(Scrollable)).first,
+      );
+      final offset = recordsScroll.position.pixels;
+      expect(offset, greaterThan(0));
+      await tester.drag(find.byType(TabBarView), const Offset(-350, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('资料导演').hitTestable(), findsOneWidget);
+      expect(find.text('简介').hitTestable(), findsNothing);
+      await tester.drag(find.byType(TabBarView), const Offset(350, 0));
+      await tester.pumpAndSettle();
+      final restored = tester.state<ScrollableState>(
+        find.descendant(of: records, matching: find.byType(Scrollable)).first,
+      );
+      expect(restored.position.pixels, closeTo(offset, 1));
+      await tester.tap(find.text('资料'));
+      await tester.pumpAndSettle();
+      expect(find.text('资料导演').hitTestable(), findsOneWidget);
+      await tester.tap(find.text('记录'));
+      await tester.pumpAndSettle();
+      expect(find.text('资料导演').hitTestable(), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('summary expansion remains offline across page visits', (
     tester,
   ) async {
@@ -91,12 +146,25 @@ void main() {
             await tester.scrollUntilVisible(
               find.text('展开'),
               200,
-              scrollable: find.byType(Scrollable).first,
+              scrollable: find
+                  .descendant(
+                    of: find.byKey(const PageStorageKey('series-records')),
+                    matching: find.byType(Scrollable),
+                  )
+                  .first,
+            );
+            await tester.pumpAndSettle();
+            await Scrollable.ensureVisible(
+              tester.element(find.text('展开')),
+              alignment: 0.5,
             );
             await tester.pumpAndSettle();
             await tester.tap(find.text('展开'));
             await tester.pumpAndSettle();
-            await tester.ensureVisible(find.text('收起'));
+            await Scrollable.ensureVisible(
+              tester.element(find.text('收起')),
+              alignment: 0.5,
+            );
             await tester.pumpAndSettle();
             await tester.tap(find.text('收起'));
             await tester.pumpAndSettle();
@@ -169,8 +237,18 @@ void main() {
       await tester.scrollUntilVisible(
         find.text('第1集'),
         200,
-        scrollable: find.byType(Scrollable).first,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const PageStorageKey('series-records')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
       );
+      await Scrollable.ensureVisible(
+        tester.element(find.text('第1集')),
+        alignment: 0.5,
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('第1集'));
       await tester.pump();
       final chips = tester
