@@ -1,7 +1,7 @@
 name: random_movie
 description: "片刻 - 记录每一次观影，决定今晚看什么"
 publish_to: 'none'
-version: 0.2.9+15
+version: 0.2.10+16
 
 environment:
   sdk: ^3.10.7
