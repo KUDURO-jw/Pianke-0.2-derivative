@@ -253,22 +253,30 @@ class _BranchTransition extends StatefulWidget {
 
 class _BranchTransitionState extends State<_BranchTransition>
     with SingleTickerProviderStateMixin {
+  int? _outgoing;
+  double _direction = 1;
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 220),
+    duration: const Duration(milliseconds: 300),
     value: 1,
-  );
-  late final Animation<double> _fade = _controller.drive(
-    CurveTween(curve: Curves.easeOutCubic),
-  );
+  )..addStatusListener(_onStatus);
+
+  void _onStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed && mounted && _outgoing != null) {
+      setState(() => _outgoing = null);
+    }
+  }
 
   @override
   void didUpdateWidget(covariant _BranchTransition oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.index != oldWidget.index) {
       if (MediaQuery.disableAnimationsOf(context)) {
+        _outgoing = null;
         _controller.value = 1;
       } else {
+        _outgoing = oldWidget.index;
+        _direction = widget.index > oldWidget.index ? 1 : -1;
         _controller.forward(from: 0);
       }
     }
@@ -282,24 +290,61 @@ class _BranchTransitionState extends State<_BranchTransition>
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        for (var i = 0; i < widget.children.length; i++)
-          Offstage(
-            offstage: i != widget.index,
-            child: TickerMode(
-              enabled: i == widget.index,
-              child: ExcludeFocus(
-                excluding: i != widget.index,
-                child: FadeTransition(
-                  opacity: _fade,
-                  child: RepaintBoundary(child: widget.children[i]),
+    return ClipRect(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final progress = MediaQuery.disableAnimationsOf(context)
+              ? 1.0
+              : Curves.easeInOutCubic.transform(_controller.value);
+          final direction = Directionality.of(context) == TextDirection.rtl
+              ? -_direction
+              : _direction;
+          Widget branch(int index) {
+            final active = index == widget.index;
+            final visible = active || (index == _outgoing && progress < 1);
+            return Offstage(
+              key: ValueKey('branch-$index'),
+              offstage: !visible,
+              child: TickerMode(
+                enabled: active,
+                child: IgnorePointer(
+                  ignoring: !active,
+                  child: ExcludeSemantics(
+                    excluding: !active,
+                    child: ExcludeFocus(
+                      excluding: !active,
+                      child: FractionalTranslation(
+                        translation: Offset(
+                          direction *
+                              (active
+                                  ? (1 - progress) * 0.08
+                                  : -progress * 0.04),
+                          0,
+                        ),
+                        child: Opacity(
+                          opacity: active ? progress : 1,
+                          child: RepaintBoundary(child: widget.children[index]),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-      ],
+            );
+          }
+
+          // Stable keys retain each Navigator; only the incoming page paints last.
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              for (var i = 0; i < widget.children.length; i++)
+                if (i != widget.index) branch(i),
+              branch(widget.index),
+            ],
+          );
+        },
+      ),
     );
   }
 }

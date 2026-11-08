@@ -321,6 +321,26 @@ void main() {
       'library-dock-light',
     );
     final libraryState = tester.state(find.byType(MoviesPage));
+    await tester.tap(
+      find.descendant(
+        of: find.byType(FloatingNavBar),
+        matching: find.text('抽片'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byType(MoviesPage), findsOneWidget);
+    expect(find.byType(DrawHubPage), findsOneWidget);
+    final incoming = find.ancestor(
+      of: find.byType(DrawHubPage),
+      matching: find.byType(Opacity),
+    );
+    expect(
+      tester.widget<Opacity>(incoming.first).opacity,
+      inExclusiveRange(0, 1),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(MoviesPage), findsNothing);
     for (final label in ['设置', '抽片', '观影', '片库']) {
       await tester.tap(
         find.descendant(

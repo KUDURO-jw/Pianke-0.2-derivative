@@ -55,6 +55,7 @@ class _FloatingNavBarState extends State<FloatingNavBar> {
   double? _dragPosition;
   VelocityTracker? _gestureTracker;
   double? _releaseVelocity;
+  int? _pressedIndex;
 
   void _select(int index) {
     if (index != widget.currentIndex) {
@@ -163,6 +164,11 @@ class _FloatingNavBarState extends State<FloatingNavBar> {
 
                               return Listener(
                                 onPointerDown: (event) {
+                                  setState(
+                                    () => _pressedIndex = position(
+                                      event.localPosition.dx,
+                                    ).round(),
+                                  );
                                   _releaseVelocity = null;
                                   _gestureTracker =
                                       VelocityTracker.withKind(event.kind)
@@ -171,19 +177,31 @@ class _FloatingNavBarState extends State<FloatingNavBar> {
                                           event.localPosition,
                                         );
                                 },
-                                onPointerMove: (event) =>
-                                    _gestureTracker?.addPosition(
-                                      event.timeStamp,
-                                      event.localPosition,
-                                    ),
+                                onPointerMove: (event) {
+                                  _gestureTracker?.addPosition(
+                                    event.timeStamp,
+                                    event.localPosition,
+                                  );
+                                  final index = position(
+                                    event.localPosition.dx,
+                                  ).round();
+                                  if (_pressedIndex != index) {
+                                    HapticFeedback.selectionClick();
+                                    setState(() => _pressedIndex = index);
+                                  }
+                                },
                                 onPointerUp: (_) {
                                   _releaseVelocity = _gestureTracker
                                       ?.getVelocity()
                                       .pixelsPerSecond
                                       .dx;
                                   _gestureTracker = null;
+                                  setState(() => _pressedIndex = null);
                                 },
-                                onPointerCancel: (_) => _gestureTracker = null,
+                                onPointerCancel: (_) {
+                                  _gestureTracker = null;
+                                  setState(() => _pressedIndex = null);
+                                },
                                 child: GestureDetector(
                                   behavior: HitTestBehavior.opaque,
                                   onHorizontalDragStart: (details) =>
@@ -216,25 +234,37 @@ class _FloatingNavBarState extends State<FloatingNavBar> {
                                         top: 0,
                                         bottom: 0,
                                         width: itemWidth,
-                                        child: DecoratedBox(
-                                          decoration: ShapeDecoration(
-                                            gradient: LinearGradient(
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                              colors: [
-                                                Colors.white.withValues(
-                                                  alpha: dark ? 0.22 : 0.9,
-                                                ),
-                                                scheme.blockSurface.withValues(
-                                                  alpha: 0.45,
-                                                ),
-                                              ],
-                                            ),
-                                            shape: ContinuousRRect.all(
-                                              Radii.pill,
-                                              side: BorderSide(
-                                                color: Colors.white.withValues(
-                                                  alpha: dark ? 0.22 : 0.85,
+                                        child: AnimatedScale(
+                                          key: const ValueKey(
+                                            'dock-lens-scale',
+                                          ),
+                                          scale: _pressedIndex != null
+                                              ? 1.06
+                                              : 1,
+                                          duration: duration,
+                                          curve: Curves.easeOutBack,
+                                          child: DecoratedBox(
+                                            decoration: ShapeDecoration(
+                                              gradient: LinearGradient(
+                                                begin: Alignment.topLeft,
+                                                end: Alignment.bottomRight,
+                                                colors: [
+                                                  Colors.white.withValues(
+                                                    alpha: dark ? 0.22 : 0.9,
+                                                  ),
+                                                  scheme.blockSurface
+                                                      .withValues(alpha: 0.45),
+                                                ],
+                                              ),
+                                              shape: ContinuousRRect.all(
+                                                Radii.pill,
+                                                side: BorderSide(
+                                                  color: Colors.white
+                                                      .withValues(
+                                                        alpha: dark
+                                                            ? 0.22
+                                                            : 0.85,
+                                                      ),
                                                 ),
                                               ),
                                             ),
@@ -256,6 +286,7 @@ class _FloatingNavBarState extends State<FloatingNavBar> {
                                                         widget.currentIndex) ==
                                                     i,
                                                 duration: duration,
+                                                pressed: _pressedIndex == i,
                                                 onTap: () {
                                                   _select(i);
                                                 },
@@ -287,12 +318,14 @@ class _DockItem extends StatefulWidget {
   final NavItemData data;
   final bool selected;
   final Duration duration;
+  final bool pressed;
   final VoidCallback onTap;
 
   const _DockItem({
     required this.data,
     required this.selected,
     required this.duration,
+    required this.pressed,
     required this.onTap,
   });
 
@@ -322,20 +355,28 @@ class _DockItemState extends State<_DockItem> {
             splashColor: Colors.transparent,
             highlightColor: scheme.onSurface.withValues(alpha: 0.04),
             child: AnimatedScale(
-              scale: _pressed ? 1.06 : 1,
+              key: ValueKey('dock-item-scale-${widget.data.label}'),
+              scale: _pressed || widget.pressed
+                  ? 1.16
+                  : widget.selected
+                  ? 1.09
+                  : 1,
               duration: widget.duration,
-              curve: Motion.standard,
+              curve: Curves.easeOutBack,
               child: SizedBox.expand(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    AnimatedSwitcher(
+                    AnimatedSlide(
+                      offset: widget.selected || widget.pressed
+                          ? const Offset(0, -0.06)
+                          : Offset.zero,
                       duration: widget.duration,
+                      curve: Curves.easeOutCubic,
                       child: Icon(
                         widget.selected
                             ? widget.data.selectedIcon
                             : widget.data.icon,
-                        key: ValueKey(widget.selected),
                         size: 26,
                         color: color,
                       ),

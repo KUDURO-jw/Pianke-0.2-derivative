@@ -1,12 +1,12 @@
 {
-  "versionName": "0.2.3",
-  "versionCode": 8,
-  "title": "片刻·焕新版 0.2.3",
+  "versionName": "0.2.4",
+  "versionCode": 9,
+  "title": "片刻·焕新版 0.2.4",
   "changelog": [
-    "对照项目 A 实际导航行为修正甩动：最多在松手位置外再前进一格，避免冲到边缘",
-    "从按下开始记录速度，改善短距离快速滑动的识别",
-    "慢拖仍跟手，可直接拖到任意选项；保留离线简介及更新解析修复"
+    "四个主页切换增加方向位移和淡入过渡，保留页面状态",
+    "底栏选中项放大上浮，按住时按钮和玻璃选框弹性放大，滑过选项提供触觉反馈",
+    "保留有界甩动、离线简介、更新解析及此前界面修复"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.3-ui.1/Pianke-UI-arm64-release.apk",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.4-ui.1/Pianke-UI-arm64-release.apk",
   "forceUpdate": false
 }

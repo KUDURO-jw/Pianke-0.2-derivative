@@ -27,6 +27,52 @@ const items = [
 ];
 
 void main() {
+  testWidgets(
+    'selected destination stays enlarged and pressing lifts its lens',
+    (tester) async {
+      var selected = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatefulBuilder(
+            builder: (context, setState) => Scaffold(
+              body: Align(
+                alignment: Alignment.bottomCenter,
+                child: FloatingNavBar(
+                  currentIndex: selected,
+                  items: items,
+                  onSelected: (index) => setState(() => selected = index),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      AnimatedScale item(String label) => tester.widget<AnimatedScale>(
+        find.byKey(ValueKey('dock-item-scale-$label')),
+      );
+      expect(item('片库').scale, greaterThan(1));
+      expect(item('抽片').scale, 1);
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('抽片')),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(item('抽片').scale, greaterThan(item('片库').scale));
+      expect(
+        tester
+            .widget<AnimatedScale>(
+              find.byKey(const ValueKey('dock-lens-scale')),
+            )
+            .scale,
+        greaterThan(1),
+      );
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(selected, 1);
+      expect(item('抽片').scale, greaterThan(1));
+      expect(item('片库').scale, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
   for (final direction in TextDirection.values) {
     testWidgets('short flick is bounded to one neighbour in $direction', (
       tester,
