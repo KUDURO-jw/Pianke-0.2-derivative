@@ -1,5 +1,6 @@
 // Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -33,7 +34,7 @@ class DockMetrics {
       : heightOf(context) + bottomOf(context) + 16;
 }
 
-class FloatingNavBar extends StatelessWidget {
+class FloatingNavBar extends StatefulWidget {
   final int currentIndex;
   final ValueChanged<int> onSelected;
   final List<NavItemData> items;
@@ -44,6 +45,20 @@ class FloatingNavBar extends StatelessWidget {
     required this.onSelected,
     required this.items,
   });
+
+  @override
+  State<FloatingNavBar> createState() => _FloatingNavBarState();
+}
+
+class _FloatingNavBarState extends State<FloatingNavBar> {
+  double? _dragPosition;
+
+  void _select(int index) {
+    if (index != widget.currentIndex) {
+      HapticFeedback.selectionClick();
+      widget.onSelected(index);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,56 +84,137 @@ class FloatingNavBar extends StatelessWidget {
             child: RepaintBoundary(
               child: DecoratedBox(
                 decoration: ShapeDecoration(
-                  color: dark ? scheme.blockSurface : scheme.cardSurface,
                   shape: shape,
                   shadows: Shadows.floating(scheme),
                 ),
-                child: SizedBox(
-                  height: DockMetrics.heightOf(context),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final itemWidth = constraints.maxWidth / items.length;
-                        return Stack(
-                          children: [
-                            AnimatedPositionedDirectional(
-                              duration: duration,
-                              curve: Motion.emphasized,
-                              start: currentIndex * itemWidth,
-                              top: 0,
-                              bottom: 0,
-                              width: itemWidth,
-                              child: DecoratedBox(
-                                decoration: ShapeDecoration(
-                                  color: dark
-                                      ? scheme.insetSurface
-                                      : scheme.blockSurface,
-                                  shape: shape,
-                                ),
-                              ),
+                child: ClipPath(
+                  clipper: ShapeBorderClipper(shape: shape),
+                  child: BackdropFilter(
+                    filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                    child: DecoratedBox(
+                      decoration: ShapeDecoration(
+                        color: (dark ? scheme.blockSurface : scheme.cardSurface)
+                            .withValues(alpha: dark ? 0.78 : 0.65),
+                        shape: ContinuousRRect.all(
+                          Radii.pill,
+                          side: BorderSide(
+                            color: Colors.white.withValues(
+                              alpha: dark ? 0.12 : 0.65,
                             ),
-                            Row(
-                              children: [
-                                for (var i = 0; i < items.length; i++)
-                                  Expanded(
-                                    child: _DockItem(
-                                      data: items[i],
-                                      selected: currentIndex == i,
-                                      duration: duration,
-                                      onTap: () {
-                                        if (currentIndex != i) {
-                                          HapticFeedback.selectionClick();
-                                        }
-                                        onSelected(i);
-                                      },
+                          ),
+                        ),
+                      ),
+                      child: SizedBox(
+                        height: DockMetrics.heightOf(context),
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final itemWidth =
+                                  constraints.maxWidth / widget.items.length;
+                              double position(double x) {
+                                final logicalX =
+                                    Directionality.of(context) ==
+                                        TextDirection.rtl
+                                    ? constraints.maxWidth - x
+                                    : x;
+                                return (logicalX / itemWidth - 0.5).clamp(
+                                  0.0,
+                                  (widget.items.length - 1).toDouble(),
+                                );
+                              }
+
+                              void finishDrag() {
+                                final index = _dragPosition?.round();
+                                setState(() => _dragPosition = null);
+                                if (index != null) _select(index);
+                              }
+
+                              return GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onHorizontalDragStart: (details) =>
+                                    setState(() {
+                                      _dragPosition = position(
+                                        details.localPosition.dx,
+                                      );
+                                    }),
+                                onHorizontalDragUpdate: (details) =>
+                                    setState(() {
+                                      _dragPosition = position(
+                                        details.localPosition.dx,
+                                      );
+                                    }),
+                                onHorizontalDragEnd: (_) => finishDrag(),
+                                onHorizontalDragCancel: () =>
+                                    setState(() => _dragPosition = null),
+                                child: Stack(
+                                  children: [
+                                    AnimatedPositionedDirectional(
+                                      duration: _dragPosition == null
+                                          ? duration
+                                          : Duration.zero,
+                                      curve: Motion.emphasized,
+                                      start:
+                                          (_dragPosition ??
+                                              widget.currentIndex.toDouble()) *
+                                          itemWidth,
+                                      top: 0,
+                                      bottom: 0,
+                                      width: itemWidth,
+                                      child: DecoratedBox(
+                                        decoration: ShapeDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                            colors: [
+                                              Colors.white.withValues(
+                                                alpha: dark ? 0.22 : 0.9,
+                                              ),
+                                              scheme.blockSurface.withValues(
+                                                alpha: 0.45,
+                                              ),
+                                            ],
+                                          ),
+                                          shape: ContinuousRRect.all(
+                                            Radii.pill,
+                                            side: BorderSide(
+                                              color: Colors.white.withValues(
+                                                alpha: dark ? 0.22 : 0.85,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        );
-                      },
+                                    Row(
+                                      children: [
+                                        for (
+                                          var i = 0;
+                                          i < widget.items.length;
+                                          i++
+                                        )
+                                          Expanded(
+                                            child: _DockItem(
+                                              data: widget.items[i],
+                                              selected:
+                                                  (_dragPosition?.round() ??
+                                                      widget.currentIndex) ==
+                                                  i,
+                                              duration: duration,
+                                              onTap: () {
+                                                _select(i);
+                                              },
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),

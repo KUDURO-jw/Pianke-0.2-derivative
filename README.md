@@ -4,13 +4,13 @@
 
 本仓库现已更新为“片刻·焕新版”：保留原片刻的片库、豆瓣导入、观影记录、合集标签、四种抽片、JSON 备份和坚果云同步功能，重新实现统一界面与悬浮底部导航。
 
-- **下载安装**：[焕新版 Release](https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/tag/v0.2.0-ui.1)，下载 `Pianke-UI-arm64-release.apk`（Android 7.0 及以上，arm64）。同页提供完整源码包和 SHA-256。
-- **独立安装**：应用名“片刻·焕新版”，包名 `app.pianke.personal`，版本 `0.2.0 (4)`。与旧版并存；先在旧版导出 JSON，再在新版导入，坚果云应用密码需重新填写。
-- **签名和验证**：Release 模式 APK，使用已有 Android Debug 证书签名，不是正式发布证书。静态分析零问题，56 项测试通过；未进行真机或模拟器测试。
+- **下载安装**：[焕新版 Release](https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/tag/v0.2.1-ui.1)，下载 `Pianke-UI-arm64-release.apk`（Android 7.0 及以上，arm64）。同页提供完整源码包和 SHA-256。
+- **独立安装**：应用名“片刻·焕新版”，包名 `app.pianke.personal`，版本 `0.2.1 (6)`。与旧版并存；先在旧版导出 JSON，再在新版导入，坚果云应用密码需重新填写。
+- **签名和验证**：Release 模式 APK，使用已有 Android Debug 证书签名，不是正式发布证书。静态分析零问题，自动化测试通过；未进行真机或模拟器测试。
 - **协议**：UI 独立实现，仅参考 FlClash 的视觉与交互，未复制其 GPL 代码或素材。保留 Apache-2.0、LICENSE、NOTICE 和上游署名。
 - **详细资料**：[版本说明](README_UI.md) · [功能对照](docs/FUNCTION_PARITY.md) · [构建说明](docs/BUILD_NOTES.md)。
 
-旧版 Release 仍保留。应用内更新检查继续使用原更新清单，避免将独立包名的焕新版推送为旧版的覆盖更新。下方保留原项目功能介绍及旧版界面图片；本版界面说明以 README_UI.md 为准。
+旧版 Release 仍保留。应用内手动检查更新使用独立的 update-ui.json；旧版 update.json 保持独立。下方保留原项目功能介绍及旧版界面图片；本版界面说明以 README_UI.md 为准。
 
 ---
 

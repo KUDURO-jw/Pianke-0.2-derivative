@@ -20,9 +20,7 @@ class DrawHubPage extends StatelessWidget {
         child: CustomScrollView(
           key: const PageStorageKey('draw-hub'),
           slivers: [
-            const SliverToBoxAdapter(
-              child: PageHeader(title: '抽片', subtitle: '把犹豫，交给一点随机'),
-            ),
+            const SliverToBoxAdapter(child: PageHeader(title: '抽片')),
             SliverPadding(
               padding: EdgeInsets.fromLTRB(
                 Spacing.page,

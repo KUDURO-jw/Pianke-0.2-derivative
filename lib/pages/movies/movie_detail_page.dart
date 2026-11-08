@@ -2,6 +2,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:random_movie/config/api_config.dart';
@@ -189,7 +190,20 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
           body: CustomScrollView(
             scrollCacheExtent: ScrollCacheExtent.pixels(_detailCacheExtent),
             slivers: [
-              _buildSliverAppBar(context, movie),
+              SliverLayoutBuilder(
+                builder: (context, constraints) {
+                  final expandedHeight =
+                      _expandedPosterHeight +
+                      (MediaQuery.textScalerOf(context).scale(22) - 22) * 4;
+                  return _buildSliverAppBar(
+                    context,
+                    movie,
+                    collapsed:
+                        constraints.scrollOffset >=
+                        expandedHeight - kToolbarHeight,
+                  );
+                },
+              ),
               ..._buildBodySlivers(context, movie, provider),
             ],
           ),
@@ -198,7 +212,11 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
     );
   }
 
-  Widget _buildSliverAppBar(BuildContext context, Movie movie) {
+  Widget _buildSliverAppBar(
+    BuildContext context,
+    Movie movie, {
+    required bool collapsed,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
     final surfaceColor = colorScheme.surfaceContainerHighest;
     final isSeries = movie.subjectType == MovieSubjectType.tvSeries;
@@ -210,9 +228,20 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
           _expandedPosterHeight +
           (MediaQuery.textScalerOf(context).scale(22) - 22) * 4,
       pinned: true,
-      backgroundColor: const Color(0xFF242529),
+      backgroundColor: collapsed
+          ? colorScheme.surface
+          : const Color(0xFF242529),
       surfaceTintColor: Colors.transparent,
-      foregroundColor: Colors.white,
+      scrolledUnderElevation: 0,
+      foregroundColor: collapsed ? colorScheme.onSurface : Colors.white,
+      title: collapsed
+          ? Text(movie.title, maxLines: 1, overflow: TextOverflow.ellipsis)
+          : null,
+      systemOverlayStyle: collapsed
+          ? (colorScheme.brightness == Brightness.dark
+                ? SystemUiOverlayStyle.light
+                : SystemUiOverlayStyle.dark)
+          : SystemUiOverlayStyle.light,
       flexibleSpace: FlexibleSpaceBar(
         collapseMode: CollapseMode.parallax,
         background: RepaintBoundary(
@@ -1162,13 +1191,11 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     color: selected ? Colors.white : colorScheme.onSurface,
                   ),
-                  onSelected: _isSyncingWatchState
-                      ? null
-                      : (_) => _toggleEpisode(
-                          context.read<MovieProvider>(),
-                          movie,
-                          index,
-                        ),
+                  onSelected: (_) => _toggleEpisode(
+                    context.read<MovieProvider>(),
+                    movie,
+                    index,
+                  ),
                 ),
               );
             }),
@@ -1316,7 +1343,11 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
   }
 
   Future<void> _save(MovieProvider provider, Movie movie) async {
-    final updated = movie.copyWith(
+    final updated = (provider.peekMovieById(movie.id) ?? movie).copyWith(
+      episodes: _episodes,
+      watched: _watched,
+      watchedAt: _watchedAt,
+      clearWatchedAt: !_watched,
       userRating: _userRating,
       clearUserRating: _userRating == null,
       userReview: _reviewController.text.trim().isNotEmpty

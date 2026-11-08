@@ -242,7 +242,6 @@ class _HistoryListView extends StatelessWidget {
             bottom: false,
             child: PageHeader(
               title: '观影记录',
-              subtitle: '每一次观看，都值得留下',
               trailing: RoundIconButton(
                 icon: Icons.calendar_month_outlined,
                 tooltip: '打开观影日历',

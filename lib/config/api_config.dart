@@ -1,14 +1,8 @@
 /// API 配置
 class ApiConfig {
-  // 更新清单地址。
-  //
-  // 注意：这里必须指向「本二创仓库」自己的 update.json。
-  // 如果沿用上游 ShareWinter/Pianke 的清单，本应用的用户会被引导去下载原版安装包，
-  // 而两者 applicationId 相同，原版会直接覆盖安装本应用。
-  //
-  // 改动此地址后，记得同步修改仓库根目录 update.json 里的 downloadUrl 字段。
+  // 焕新版独立更新渠道；旧版继续使用 update.json。
   static const String updateManifestUrl =
-      'https://raw.githubusercontent.com/KUDURO-jw/Pianke-0.2-derivative/main/update.json';
+      'https://raw.githubusercontent.com/KUDURO-jw/Pianke-0.2-derivative/main/update-ui.json';
 
   // 请求头
   static Map<String, String> get defaultHeaders => {

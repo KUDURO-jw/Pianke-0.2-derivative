@@ -1,0 +1,15 @@
+# 焕新版更新发布
+
+焕新版包名 app.pianke.personal，独立读取 main/update-ui.json。旧版读取 update.json，不修改该文件。
+
+用户在设置中手动检查；使用 versionCode 比较，清单缺少该字段时才比较 versionName。点击下载打开外部浏览器，由 Android 请求覆盖安装确认。不做后台检查、应用内下载或静默安装。
+
+后续版本发布步骤：
+1. 提高 pubspec.yaml 的版本和构建编号，保持包名及签名不变。
+2. 完成分析、测试、Release arm64 构建和签名验证。
+3. 发布 GitHub Release，提供 APK、该版本源码、SHA256SUMS.txt；确认公开下载地址有效。
+4. 最后更新并推送 main/update-ui.json 的版本号、更新说明及 APK 地址；forceUpdate 默认 false。
+
+0.2.1（6）是第一个使用独立渠道的版本。此前焕新版需要手动安装本次 APK，之后可从设置检查焕新版更新。简介全文仅在添加影片时抓取，详情展开只显示本地文本。
+
+同签名覆盖安装通常保留片库、观影记录及设置。签名私钥不应提交或包含在源码包中。现有发布沿用此前本机签名，构建配置详见 BUILD_NOTES.md。

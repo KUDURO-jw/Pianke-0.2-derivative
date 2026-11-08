@@ -27,6 +27,46 @@ const items = [
 ];
 
 void main() {
+  testWidgets('drag previews the selection and switches only on release', (
+    tester,
+  ) async {
+    var selected = 0;
+    var calls = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) => Scaffold(
+            body: Align(
+              alignment: Alignment.bottomCenter,
+              child: FloatingNavBar(
+                currentIndex: selected,
+                items: items,
+                onSelected: (index) => setState(() {
+                  selected = index;
+                  calls++;
+                }),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('片库')),
+    );
+    await gesture.moveTo(tester.getCenter(find.text('设置')));
+    await tester.pump();
+    expect(selected, 0);
+    expect(calls, 0);
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(selected, 3);
+    expect(calls, 1);
+    await tester.drag(find.text('设置'), const Offset(-600, 0));
+    await tester.pumpAndSettle();
+    expect(selected, 0);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'rapid navigation selects the last destination and keeps safe area',
     (tester) async {

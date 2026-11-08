@@ -63,7 +63,6 @@ class _MoviesPageState extends State<MoviesPage> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final topInset = MediaQuery.of(context).padding.top;
 
     return Scaffold(
       backgroundColor: scheme.pageSurface,
@@ -75,29 +74,26 @@ class _MoviesPageState extends State<MoviesPage> {
           label: const Text('添加'),
         ),
       ),
-      body: CustomScrollView(
-        key: const PageStorageKey('movies-grid'),
-        controller: _scrollController,
-        scrollCacheExtent: ScrollCacheExtent.pixels(
-          MediaQuery.of(context).size.height * 0.9,
-        ),
-        slivers: [
-          // ── 页面头部：大标题 + 搜索 + 分段控件 ──
-          // 用 SliverToBoxAdapter 而非 pinned header：
-          // 滚动时让标题自然收起，只保留吸顶的分段控件，减少重绘。
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.only(top: topInset),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Selector<MovieProvider, (int, int)>(
-                    selector: (_, p) => (p.totalCount, p.watchedCount),
-                    builder: (context, data, _) => PageHeader(
+      body: SafeArea(
+        bottom: false,
+        child: CustomScrollView(
+          key: const PageStorageKey('movies-grid'),
+          controller: _scrollController,
+          scrollCacheExtent: ScrollCacheExtent.pixels(
+            MediaQuery.of(context).size.height * 0.9,
+          ),
+          slivers: [
+            // ── 页面头部：大标题 + 搜索 + 分段控件 ──
+            // 用 SliverToBoxAdapter 而非 pinned header：
+            // 滚动时让标题自然收起，只保留吸顶的分段控件，减少重绘。
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.zero,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    PageHeader(
                       title: '片库',
-                      subtitle: data.$1 == 0
-                          ? '还没有影片'
-                          : '共 ${data.$1} 部 · 已看 ${data.$2} 部',
                       trailing: RoundIconButton(
                         filled: true,
                         tooltip: '添加影片',
@@ -105,180 +101,182 @@ class _MoviesPageState extends State<MoviesPage> {
                         onPressed: () => _navigateToAddMovie(context),
                       ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: Spacing.page,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: Spacing.page,
+                      ),
+                      child: AppSearchField(
+                        controller: _searchController,
+                        hint: '搜索片库',
+                        hasText: _query.isNotEmpty,
+                        onChanged: (value) {
+                          final wasEmpty = _query.isEmpty;
+                          final isEmpty = value.isEmpty;
+                          if (wasEmpty != isEmpty) {
+                            setState(() => _query = value);
+                          } else {
+                            _query = value;
+                          }
+                          context.read<MovieProvider>().setSearchQueryDebounced(
+                            value,
+                          );
+                        },
+                        onClear: () async {
+                          _searchController.clear();
+                          setState(() => _query = '');
+                          await context.read<MovieProvider>().setSearchQuery(
+                            '',
+                          );
+                        },
+                      ),
                     ),
-                    child: AppSearchField(
-                      controller: _searchController,
-                      hint: '搜索片库',
-                      hasText: _query.isNotEmpty,
-                      onChanged: (value) {
-                        final wasEmpty = _query.isEmpty;
-                        final isEmpty = value.isEmpty;
-                        if (wasEmpty != isEmpty) {
-                          setState(() => _query = value);
-                        } else {
-                          _query = value;
-                        }
-                        context.read<MovieProvider>().setSearchQueryDebounced(
-                          value,
-                        );
-                      },
-                      onClear: () async {
-                        _searchController.clear();
-                        setState(() => _query = '');
-                        await context.read<MovieProvider>().setSearchQuery('');
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: Spacing.lg),
+                    const SizedBox(height: Spacing.lg),
 
-                  // 合集横条（搜索时隐藏）
-                  if (_query.isEmpty) _buildCollectionStrip(context),
-                ],
+                    // 合集横条（搜索时隐藏）
+                    if (_query.isEmpty) _buildCollectionStrip(context),
+                  ],
+                ),
               ),
             ),
-          ),
 
-          // ── 吸顶分段筛选 ──
-          SliverPersistentHeader(
-            pinned: true,
-            delegate: _LibraryFilterHeader(
-              height: 60 + (MediaQuery.textScalerOf(context).scale(13) - 13),
-              colorScheme: scheme,
-              textTheme: Theme.of(context).textTheme,
-              onFilterChanged: (filter) =>
-                  context.read<MovieProvider>().setLibraryFilter(filter),
+            // ── 吸顶分段筛选 ──
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _LibraryFilterHeader(
+                height: 60 + (MediaQuery.textScalerOf(context).scale(13) - 13),
+                colorScheme: scheme,
+                textTheme: Theme.of(context).textTheme,
+                onFilterChanged: (filter) =>
+                    context.read<MovieProvider>().setLibraryFilter(filter),
+              ),
             ),
-          ),
 
-          // --- 海报网格 ---
-          Selector<
-            MovieProvider,
-            ({
-              List<Movie> movies,
-              bool hasLoadedLibrary,
-              bool isLibraryLoading,
-              bool isLibraryLoadingMore,
-              bool hasMoreLibrary,
-              String? error,
-              String searchQuery,
-              LibraryFilter filter,
-            })
-          >(
-            selector: (_, provider) => (
-              movies: provider.movies,
-              hasLoadedLibrary: provider.hasLoadedLibrary,
-              isLibraryLoading: provider.isLibraryLoading,
-              isLibraryLoadingMore: provider.isLibraryLoadingMore,
-              hasMoreLibrary: provider.hasMoreLibrary,
-              error: provider.error,
-              searchQuery: provider.searchQuery,
-              filter: provider.libraryFilter,
-            ),
-            builder: (context, state, _) {
-              final movies = state.movies;
+            // --- 海报网格 ---
+            Selector<
+              MovieProvider,
+              ({
+                List<Movie> movies,
+                bool hasLoadedLibrary,
+                bool isLibraryLoading,
+                bool isLibraryLoadingMore,
+                bool hasMoreLibrary,
+                String? error,
+                String searchQuery,
+                LibraryFilter filter,
+              })
+            >(
+              selector: (_, provider) => (
+                movies: provider.movies,
+                hasLoadedLibrary: provider.hasLoadedLibrary,
+                isLibraryLoading: provider.isLibraryLoading,
+                isLibraryLoadingMore: provider.isLibraryLoadingMore,
+                hasMoreLibrary: provider.hasMoreLibrary,
+                error: provider.error,
+                searchQuery: provider.searchQuery,
+                filter: provider.libraryFilter,
+              ),
+              builder: (context, state, _) {
+                final movies = state.movies;
 
-              if ((!state.hasLoadedLibrary || state.isLibraryLoading) &&
-                  movies.isEmpty) {
-                return const SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: LoadingState(message: '加载中…'),
-                );
-              }
+                if ((!state.hasLoadedLibrary || state.isLibraryLoading) &&
+                    movies.isEmpty) {
+                  return const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: LoadingState(message: '加载中…'),
+                  );
+                }
 
-              if (state.error != null && movies.isEmpty) {
-                return SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: ErrorState(
-                    message: state.error!,
-                    onRetry: context.read<MovieProvider>().refreshLibrary,
+                if (state.error != null && movies.isEmpty) {
+                  return SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: ErrorState(
+                      message: state.error!,
+                      onRetry: context.read<MovieProvider>().refreshLibrary,
+                    ),
+                  );
+                }
+
+                if (movies.isEmpty) {
+                  final emptyLabel = switch (state.filter) {
+                    LibraryFilter.watched => '还没有已看的影片',
+                    LibraryFilter.unwatched => '所有影片都看过啦',
+                    LibraryFilter.all =>
+                      state.searchQuery.isEmpty ? '片库还是空的' : '没有找到匹配的影片',
+                  };
+                  final emptySubtitle = switch (state.filter) {
+                    LibraryFilter.watched => '看完影片后标记一下吧',
+                    LibraryFilter.unwatched => '添加新影片继续探索',
+                    LibraryFilter.all =>
+                      state.searchQuery.isEmpty ? '添加你的第一部影片吧' : '试试其他搜索词',
+                  };
+
+                  return SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: EmptyState(
+                      title: emptyLabel,
+                      subtitle: emptySubtitle,
+                      icon: Icons.movie_outlined,
+                      onAction:
+                          state.filter == LibraryFilter.all &&
+                              state.searchQuery.isEmpty
+                          ? () => _navigateToAddMovie(context)
+                          : null,
+                      actionLabel: '添加影片',
+                    ),
+                  );
+                }
+
+                final itemCount =
+                    state.hasMoreLibrary || state.isLibraryLoadingMore
+                    ? movies.length + 1
+                    : movies.length;
+
+                return SliverPadding(
+                  padding: EdgeInsets.only(
+                    top: Spacing.md,
+                    left: Spacing.page,
+                    right: Spacing.page,
+                    bottom: DockMetrics.insetOf(context) + 24,
                   ),
-                );
-              }
+                  sliver: SliverGrid.builder(
+                    gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                      // 高密度屏幕（如 3200×1440）上等比放大卡片宽度。
+                      maxCrossAxisExtent: 190,
+                      childAspectRatio:
+                          MediaQuery.textScalerOf(context).scale(14) > 19
+                          ? 0.48
+                          : 0.58,
+                      crossAxisSpacing: Spacing.md,
+                      mainAxisSpacing: Spacing.lg,
+                    ),
+                    itemCount: itemCount,
+                    addAutomaticKeepAlives: false,
+                    addRepaintBoundaries: false,
+                    itemBuilder: (context, index) {
+                      if (index >= movies.length) {
+                        return const Center(
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        );
+                      }
 
-              if (movies.isEmpty) {
-                final emptyLabel = switch (state.filter) {
-                  LibraryFilter.watched => '还没有已看的影片',
-                  LibraryFilter.unwatched => '所有影片都看过啦',
-                  LibraryFilter.all =>
-                    state.searchQuery.isEmpty ? '片库还是空的' : '没有找到匹配的影片',
-                };
-                final emptySubtitle = switch (state.filter) {
-                  LibraryFilter.watched => '看完影片后标记一下吧',
-                  LibraryFilter.unwatched => '添加新影片继续探索',
-                  LibraryFilter.all =>
-                    state.searchQuery.isEmpty ? '添加你的第一部影片吧' : '试试其他搜索词',
-                };
-
-                return SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: EmptyState(
-                    title: emptyLabel,
-                    subtitle: emptySubtitle,
-                    icon: Icons.movie_outlined,
-                    onAction:
-                        state.filter == LibraryFilter.all &&
-                            state.searchQuery.isEmpty
-                        ? () => _navigateToAddMovie(context)
-                        : null,
-                    actionLabel: '添加影片',
-                  ),
-                );
-              }
-
-              final itemCount =
-                  state.hasMoreLibrary || state.isLibraryLoadingMore
-                  ? movies.length + 1
-                  : movies.length;
-
-              return SliverPadding(
-                padding: EdgeInsets.only(
-                  top: Spacing.md,
-                  left: Spacing.page,
-                  right: Spacing.page,
-                  bottom: DockMetrics.insetOf(context) + 24,
-                ),
-                sliver: SliverGrid.builder(
-                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                    // 高密度屏幕（如 3200×1440）上等比放大卡片宽度。
-                    maxCrossAxisExtent: 190,
-                    childAspectRatio:
-                        MediaQuery.textScalerOf(context).scale(14) > 19
-                        ? 0.48
-                        : 0.58,
-                    crossAxisSpacing: Spacing.md,
-                    mainAxisSpacing: Spacing.lg,
-                  ),
-                  itemCount: itemCount,
-                  addAutomaticKeepAlives: false,
-                  addRepaintBoundaries: false,
-                  itemBuilder: (context, index) {
-                    if (index >= movies.length) {
-                      return const Center(
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                      final movie = movies[index];
+                      return MovieCard(
+                        key: ValueKey(movie.id),
+                        movie: movie,
+                        onTap: () => context.push('/movies/detail/${movie.id}'),
+                        onDelete: () => _confirmDelete(
+                          context,
+                          context.read<MovieProvider>(),
+                          movie,
+                        ),
                       );
-                    }
-
-                    final movie = movies[index];
-                    return MovieCard(
-                      key: ValueKey(movie.id),
-                      movie: movie,
-                      onTap: () => context.push('/movies/detail/${movie.id}'),
-                      onDelete: () => _confirmDelete(
-                        context,
-                        context.read<MovieProvider>(),
-                        movie,
-                      ),
-                    );
-                  },
-                ),
-              );
-            },
-          ),
-        ],
+                    },
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -376,7 +374,6 @@ class _MoviesPageState extends State<MoviesPage> {
   }
 }
 
-/// 悬浮常驻搜索框的吸顶头 —— 占据状态栏安全区 + 圆角搜索框，滚动时始终悬浮顶部。
 /// 吸顶筛选头 —— 「全部 / 未看 / 已看」带全局数量的胶囊，滚动时常驻顶部。
 class _LibraryFilterHeader extends SliverPersistentHeaderDelegate {
   _LibraryFilterHeader({

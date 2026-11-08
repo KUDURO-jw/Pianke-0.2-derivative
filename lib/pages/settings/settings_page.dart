@@ -16,7 +16,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key});
+  final UpdateService? updateService;
+
+  const SettingsPage({super.key, this.updateService});
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -35,7 +37,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void initState() {
     super.initState();
     _backupService = BackupService(StorageService());
-    _updateService = UpdateService();
+    _updateService = widget.updateService ?? UpdateService();
     _syncServiceFuture = _createSyncService();
     _packageInfoFuture = PackageInfo.fromPlatform();
   }
@@ -61,7 +63,6 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           const PageHeader(
             title: '设置',
-            subtitle: '让片刻，更合你的习惯',
             padding: EdgeInsets.symmetric(vertical: Spacing.lg),
           ),
           _SectionHeader(label: '外观'),
@@ -99,18 +100,6 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
-          const SizedBox(height: Spacing.md),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Spacing.xs),
-            child: Text(
-              '备份文件为明文 JSON，可手动查看。恢复时只补充不存在的数据，不会覆盖已有记录。',
-              style: TextStyle(
-                fontSize: TypeScale.caption,
-                color: colorScheme.secondaryText,
-                height: 1.5,
-              ),
-            ),
-          ),
           const SizedBox(height: Spacing.xxl),
           _SectionHeader(label: '坚果云同步'),
           const SizedBox(height: Spacing.sm),
@@ -129,7 +118,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: Icons.system_update_rounded,
                   iconColor: const Color(0xFFFFB020),
                   title: '检查更新',
-                  subtitle: '查看功能上游的更新，不是焕新版更新',
+                  subtitle: '检查焕新版的新版本',
                   loading: _updateLoading,
                   onTap: _handleCheckUpdate,
                 ),
@@ -219,7 +208,7 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!result.hasUpdate) {
         AppToast.show(
           context,
-          '功能上游暂无更高版本（本机 ${result.current.version}）',
+          '当前已是最新版本（${result.current.version}）',
           type: ToastType.success,
         );
         return;
@@ -247,13 +236,13 @@ class _SettingsPageState extends State<SettingsPage> {
           borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
           side: BorderSide(color: colorScheme.outlineVariant),
         ),
-        title: const Text('功能上游有新版本'),
+        title: const Text('发现焕新版更新'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${update.displayTitle}\n版本 ${update.versionName}\n来源：KUDURO-jw/Pianke-0.2-derivative。下载的是上游应用，会与焕新版独立安装。',
+              '${update.displayTitle}\n版本 ${update.versionName}\n片刻·焕新版',
               style: TextStyle(
                 fontSize: 13,
                 color: colorScheme.onSurface.withValues(alpha: 0.55),
@@ -278,7 +267,7 @@ class _SettingsPageState extends State<SettingsPage> {
           TextButton(
             onPressed: () async {
               final url = Uri.tryParse(update.downloadUrl);
-              if (url == null || !url.hasScheme) {
+              if (url == null || url.scheme != 'https' || url.host.isEmpty) {
                 AppToast.show(context, '下载地址无效', type: ToastType.error);
                 return;
               }
@@ -296,7 +285,7 @@ class _SettingsPageState extends State<SettingsPage> {
             },
             style: TextButton.styleFrom(foregroundColor: AppTheme.accent),
             child: const Text(
-              '查看上游下载',
+              '下载新版',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
           ),

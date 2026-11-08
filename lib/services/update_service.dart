@@ -86,6 +86,12 @@ class UpdateService {
     if (info.versionName.isEmpty) {
       throw const UpdateCheckException('更新清单缺少版本号');
     }
+    final download = Uri.tryParse(info.downloadUrl);
+    if (download == null ||
+        download.scheme != 'https' ||
+        download.host.isEmpty) {
+      throw const UpdateCheckException('更新清单下载地址无效');
+    }
 
     return UpdateCheckResult(
       current: current,

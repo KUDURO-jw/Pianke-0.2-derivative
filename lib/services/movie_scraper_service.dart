@@ -54,13 +54,15 @@ class MovieScraperService {
   final Dio _dio;
   final _CookieJarLite _doubanCookieJar = _CookieJarLite();
 
-  MovieScraperService()
-    : _dio = Dio(
-        BaseOptions(
-          connectTimeout: const Duration(seconds: 15),
-          receiveTimeout: const Duration(seconds: 30),
-        ),
-      );
+  MovieScraperService({Dio? dio})
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
+              connectTimeout: const Duration(seconds: 15),
+              receiveTimeout: const Duration(seconds: 30),
+            ),
+          );
 
   /// 爬取单个影片（直接解析豆瓣页面）
   Future<Movie> scrapeMovie(String doubanUrl) async {
@@ -724,7 +726,7 @@ class MovieScraperService {
 
     final aggregateRating = ldJson['aggregateRating'];
     final posterUrl = (ldJson['image'] ?? '').toString().trim();
-    final summary = (ldJson['description'] ?? '').toString().trim();
+    final summary = _extractSummary(html, ldJson['description']);
     final publishedAt = (ldJson['datePublished'] ?? '').toString().trim();
     final durationText = (ldJson['duration'] ?? '').toString().trim();
 
@@ -752,6 +754,29 @@ class MovieScraperService {
           ? _extractEpisodes(html)
           : const [],
     );
+  }
+
+  String _extractSummary(String html, dynamic fallback) {
+    final document = parse(html);
+    // The hidden full introduction follows the short version on Douban.
+    final element =
+        document.querySelector('#link-report .all.hidden') ??
+        document.querySelector('#link-report [property="v:summary"]') ??
+        document.querySelector('[property="v:summary"]');
+    if (element == null) return (fallback ?? '').toString().trim();
+    final content = element.clone(true);
+    for (final link in content.querySelectorAll('a')) {
+      link.remove();
+    }
+    for (final br in content.querySelectorAll('br')) {
+      br.replaceWith(Element.tag('span')..text = '\n');
+    }
+    final text = content.text
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .join('\n');
+    return text.isEmpty ? (fallback ?? '').toString().trim() : text;
   }
 
   List<MovieEpisode> _extractEpisodes(String html) {
