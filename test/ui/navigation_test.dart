@@ -27,6 +27,86 @@ const items = [
 ];
 
 void main() {
+  for (final direction in TextDirection.values) {
+    testWidgets('short flick is bounded to one neighbour in $direction', (
+      tester,
+    ) async {
+      var selected = 2;
+      final sign = direction == TextDirection.ltr ? 1.0 : -1.0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Directionality(
+            textDirection: direction,
+            child: StatefulBuilder(
+              builder: (context, setState) => Scaffold(
+                body: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: FloatingNavBar(
+                    currentIndex: selected,
+                    items: items,
+                    onSelected: (index) => setState(() => selected = index),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.fling(
+        find.text('观影'),
+        Offset(-30 * sign, 0),
+        4000,
+        frameInterval: const Duration(milliseconds: 1),
+      );
+      await tester.pumpAndSettle();
+      expect(selected, 1);
+      await tester.fling(
+        find.text('抽片'),
+        Offset(30 * sign, 0),
+        4000,
+        frameInterval: const Duration(milliseconds: 1),
+      );
+      await tester.pumpAndSettle();
+      expect(selected, 2);
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets(
+    'slow short movement stays put while the same fast movement advances one',
+    (tester) async {
+      var selected = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatefulBuilder(
+            builder: (context, setState) => Scaffold(
+              body: Align(
+                alignment: Alignment.bottomCenter,
+                child: FloatingNavBar(
+                  currentIndex: selected,
+                  items: items,
+                  onSelected: (index) => setState(() => selected = index),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.timedDrag(
+        find.text('片库'),
+        const Offset(30, 0),
+        const Duration(seconds: 1),
+      );
+      await tester.pumpAndSettle();
+      expect(selected, 0);
+      await tester.timedDrag(
+        find.text('片库'),
+        const Offset(30, 0),
+        const Duration(milliseconds: 50),
+      );
+      await tester.pumpAndSettle();
+      expect(selected, 1);
+    },
+  );
   testWidgets(
     'short fast fling travels beyond release position and clamps at ends',
     (tester) async {
@@ -53,16 +133,16 @@ void main() {
       );
       await tester.fling(
         find.text('片库'),
-        const Offset(60, 0),
+        const Offset(30, 0),
         1200,
         frameInterval: const Duration(milliseconds: 5),
       );
       await tester.pumpAndSettle();
-      expect(selected, greaterThanOrEqualTo(2));
+      expect(selected, 1);
       expect(calls, 1);
       await tester.fling(
         find.text(items[selected].label),
-        const Offset(-60, 0),
+        const Offset(-30, 0),
         2400,
         frameInterval: const Duration(milliseconds: 5),
       );

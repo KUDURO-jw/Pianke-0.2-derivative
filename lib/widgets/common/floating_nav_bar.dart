@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:random_movie/config/design_tokens.dart';
 import 'package:random_movie/widgets/common/continuous_rrect.dart';
@@ -52,6 +53,8 @@ class FloatingNavBar extends StatefulWidget {
 
 class _FloatingNavBarState extends State<FloatingNavBar> {
   double? _dragPosition;
+  VelocityTracker? _gestureTracker;
+  double? _releaseVelocity;
 
   void _select(int index) {
     if (index != widget.currentIndex) {
@@ -133,25 +136,23 @@ class _FloatingNavBarState extends State<FloatingNavBar> {
                                     ? -1
                                     : 1;
                                 final velocity =
-                                    (details.primaryVelocity ?? 0) * direction;
-                                var target = position.round();
-                                if (velocity.abs() >= 450) {
-                                  // Project the release speed, then settle at a destination.
-                                  final projected =
-                                      position +
-                                      velocity.clamp(-2400.0, 2400.0) *
-                                          0.18 /
-                                          itemWidth;
-                                  target = velocity > 0
-                                      ? math.max(
-                                          projected.round(),
-                                          position.floor() + 1,
-                                        )
-                                      : math.min(
-                                          projected.round(),
-                                          position.ceil() - 1,
-                                        );
-                                }
+                                    (_releaseVelocity ??
+                                        _gestureTracker
+                                            ?.getVelocity()
+                                            .pixelsPerSecond
+                                            .dx ??
+                                        details.primaryVelocity ??
+                                        0) *
+                                    direction;
+                                final releaseIndex = position.round();
+                                // A flick may carry the selection one neighbour beyond
+                                // the finger, never skip across the whole dock.
+                                final projectedIndex =
+                                    (position + velocity * 0.1 / itemWidth)
+                                        .round();
+                                final carry = (projectedIndex - releaseIndex)
+                                    .clamp(-1, 1);
+                                var target = releaseIndex + carry;
                                 target = target.clamp(
                                   0,
                                   widget.items.length - 1,
@@ -160,85 +161,110 @@ class _FloatingNavBarState extends State<FloatingNavBar> {
                                 _select(target);
                               }
 
-                              return GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onHorizontalDragStart: (details) =>
-                                    setState(() {
-                                      _dragPosition = position(
-                                        details.localPosition.dx,
-                                      );
-                                    }),
-                                onHorizontalDragUpdate: (details) =>
-                                    setState(() {
-                                      _dragPosition = position(
-                                        details.localPosition.dx,
-                                      );
-                                    }),
-                                onHorizontalDragEnd: finishDrag,
-                                onHorizontalDragCancel: () =>
-                                    setState(() => _dragPosition = null),
-                                child: Stack(
-                                  children: [
-                                    AnimatedPositionedDirectional(
-                                      duration: _dragPosition == null
-                                          ? duration
-                                          : Duration.zero,
-                                      curve: Motion.emphasized,
-                                      start:
-                                          (_dragPosition ??
-                                              widget.currentIndex.toDouble()) *
-                                          itemWidth,
-                                      top: 0,
-                                      bottom: 0,
-                                      width: itemWidth,
-                                      child: DecoratedBox(
-                                        decoration: ShapeDecoration(
-                                          gradient: LinearGradient(
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                            colors: [
-                                              Colors.white.withValues(
-                                                alpha: dark ? 0.22 : 0.9,
-                                              ),
-                                              scheme.blockSurface.withValues(
-                                                alpha: 0.45,
-                                              ),
-                                            ],
-                                          ),
-                                          shape: ContinuousRRect.all(
-                                            Radii.pill,
-                                            side: BorderSide(
-                                              color: Colors.white.withValues(
-                                                alpha: dark ? 0.22 : 0.85,
+                              return Listener(
+                                onPointerDown: (event) {
+                                  _releaseVelocity = null;
+                                  _gestureTracker =
+                                      VelocityTracker.withKind(event.kind)
+                                        ..addPosition(
+                                          event.timeStamp,
+                                          event.localPosition,
+                                        );
+                                },
+                                onPointerMove: (event) =>
+                                    _gestureTracker?.addPosition(
+                                      event.timeStamp,
+                                      event.localPosition,
+                                    ),
+                                onPointerUp: (_) {
+                                  _releaseVelocity = _gestureTracker
+                                      ?.getVelocity()
+                                      .pixelsPerSecond
+                                      .dx;
+                                  _gestureTracker = null;
+                                },
+                                onPointerCancel: (_) => _gestureTracker = null,
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onHorizontalDragStart: (details) =>
+                                      setState(() {
+                                        _dragPosition = position(
+                                          details.localPosition.dx,
+                                        );
+                                      }),
+                                  onHorizontalDragUpdate: (details) =>
+                                      setState(() {
+                                        _dragPosition = position(
+                                          details.localPosition.dx,
+                                        );
+                                      }),
+                                  onHorizontalDragEnd: finishDrag,
+                                  onHorizontalDragCancel: () =>
+                                      setState(() => _dragPosition = null),
+                                  child: Stack(
+                                    children: [
+                                      AnimatedPositionedDirectional(
+                                        duration: _dragPosition == null
+                                            ? duration
+                                            : Duration.zero,
+                                        curve: Motion.emphasized,
+                                        start:
+                                            (_dragPosition ??
+                                                widget.currentIndex
+                                                    .toDouble()) *
+                                            itemWidth,
+                                        top: 0,
+                                        bottom: 0,
+                                        width: itemWidth,
+                                        child: DecoratedBox(
+                                          decoration: ShapeDecoration(
+                                            gradient: LinearGradient(
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                              colors: [
+                                                Colors.white.withValues(
+                                                  alpha: dark ? 0.22 : 0.9,
+                                                ),
+                                                scheme.blockSurface.withValues(
+                                                  alpha: 0.45,
+                                                ),
+                                              ],
+                                            ),
+                                            shape: ContinuousRRect.all(
+                                              Radii.pill,
+                                              side: BorderSide(
+                                                color: Colors.white.withValues(
+                                                  alpha: dark ? 0.22 : 0.85,
+                                                ),
                                               ),
                                             ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                    Row(
-                                      children: [
-                                        for (
-                                          var i = 0;
-                                          i < widget.items.length;
-                                          i++
-                                        )
-                                          Expanded(
-                                            child: _DockItem(
-                                              data: widget.items[i],
-                                              selected:
-                                                  (_dragPosition?.round() ??
-                                                      widget.currentIndex) ==
-                                                  i,
-                                              duration: duration,
-                                              onTap: () {
-                                                _select(i);
-                                              },
+                                      Row(
+                                        children: [
+                                          for (
+                                            var i = 0;
+                                            i < widget.items.length;
+                                            i++
+                                          )
+                                            Expanded(
+                                              child: _DockItem(
+                                                data: widget.items[i],
+                                                selected:
+                                                    (_dragPosition?.round() ??
+                                                        widget.currentIndex) ==
+                                                    i,
+                                                duration: duration,
+                                                onTap: () {
+                                                  _select(i);
+                                                },
+                                              ),
                                             ),
-                                          ),
-                                      ],
-                                    ),
-                                  ],
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               );
                             },
