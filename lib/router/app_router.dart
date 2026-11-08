@@ -17,6 +17,7 @@ import 'package:random_movie/pages/movies/movies_page.dart';
 import 'package:random_movie/widgets/common/app_components.dart';
 import 'package:random_movie/pages/settings/settings_page.dart';
 import 'package:random_movie/providers/movie_provider.dart';
+import 'package:random_movie/widgets/movie/library_scroll_request.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 final _moviesNavigatorKey = GlobalKey<NavigatorState>();
@@ -35,6 +36,13 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   final Set<int> _primedBranches = <int>{};
+  final _libraryScrollRequest = LibraryScrollRequest();
+
+  @override
+  void dispose() {
+    _libraryScrollRequest.dispose();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
@@ -71,48 +79,54 @@ class _HomeShellState extends State<HomeShell> {
     _primeCurrentBranch();
     final navigationShell = widget.navigationShell;
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(child: navigationShell),
-          if (MediaQuery.viewInsetsOf(context).bottom == 0)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: FloatingNavBar(
-                currentIndex: navigationShell.currentIndex,
-                onSelected: (index) {
-                  navigationShell.goBranch(
-                    index,
-                    initialLocation: index == navigationShell.currentIndex,
-                  );
-                },
-                items: const [
-                  NavItemData(
-                    icon: Icons.video_library_outlined,
-                    selectedIcon: Icons.video_library_rounded,
-                    label: '片库',
-                  ),
-                  NavItemData(
-                    icon: Icons.casino_outlined,
-                    selectedIcon: Icons.casino_rounded,
-                    label: '抽片',
-                  ),
-                  NavItemData(
-                    icon: Icons.insights_outlined,
-                    selectedIcon: Icons.insights_rounded,
-                    label: '观影',
-                  ),
-                  NavItemData(
-                    icon: Icons.settings_outlined,
-                    selectedIcon: Icons.settings_rounded,
-                    label: '设置',
-                  ),
-                ],
+    return ListenableProvider<LibraryScrollRequest>.value(
+      value: _libraryScrollRequest,
+      child: Scaffold(
+        body: Stack(
+          children: [
+            Positioned.fill(child: navigationShell),
+            if (MediaQuery.viewInsetsOf(context).bottom == 0)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: FloatingNavBar(
+                  currentIndex: navigationShell.currentIndex,
+                  onSelected: (index) {
+                    navigationShell.goBranch(
+                      index,
+                      initialLocation: index == navigationShell.currentIndex,
+                    );
+                  },
+                  onDoubleTap: (index) {
+                    if (index == 0) _libraryScrollRequest.scrollToTop();
+                  },
+                  items: const [
+                    NavItemData(
+                      icon: Icons.video_library_outlined,
+                      selectedIcon: Icons.video_library_rounded,
+                      label: '片库',
+                    ),
+                    NavItemData(
+                      icon: Icons.casino_outlined,
+                      selectedIcon: Icons.casino_rounded,
+                      label: '抽片',
+                    ),
+                    NavItemData(
+                      icon: Icons.insights_outlined,
+                      selectedIcon: Icons.insights_rounded,
+                      label: '观影',
+                    ),
+                    NavItemData(
+                      icon: Icons.settings_outlined,
+                      selectedIcon: Icons.settings_rounded,
+                      label: '设置',
+                    ),
+                  ],
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -121,8 +135,9 @@ class _HomeShellState extends State<HomeShell> {
 CustomTransitionPage<void> _secondaryPage(
   BuildContext context,
   GoRouterState state,
-  Widget child,
-) => CustomTransitionPage<void>(
+  Widget child, {
+  bool detail = false,
+}) => CustomTransitionPage<void>(
   key: state.pageKey,
   transitionDuration: MediaQuery.disableAnimationsOf(context)
       ? Duration.zero
@@ -130,7 +145,9 @@ CustomTransitionPage<void> _secondaryPage(
   reverseTransitionDuration: MediaQuery.disableAnimationsOf(context)
       ? Duration.zero
       : const Duration(milliseconds: 220),
-  transitionsBuilder: AppPageTransitionsBuilder.transition,
+  transitionsBuilder: detail
+      ? AppPageTransitionsBuilder.detailTransition
+      : AppPageTransitionsBuilder.transition,
   child: child,
 );
 
@@ -185,6 +202,7 @@ final appRouter = GoRouter(
                         initialMovie: args?.movie,
                         posterHeroTag: args?.posterTag,
                       ),
+                      detail: true,
                     );
                   },
                 ),

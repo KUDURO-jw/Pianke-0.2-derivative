@@ -15,6 +15,7 @@ import 'package:random_movie/widgets/common/app_components.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
 import 'package:random_movie/widgets/movie/movie_card.dart';
 import 'package:random_movie/router/movie_detail_arguments.dart';
+import 'package:random_movie/widgets/movie/library_scroll_request.dart';
 
 /// 片库页面
 class MoviesPage extends StatefulWidget {
@@ -29,6 +30,7 @@ class _MoviesPageState extends State<MoviesPage> {
   final ScrollController _scrollController = ScrollController();
   String _query = '';
   bool _requestedCollections = false;
+  LibraryScrollRequest? _scrollRequest;
 
   @override
   void initState() {
@@ -39,6 +41,12 @@ class _MoviesPageState extends State<MoviesPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final request = context.read<LibraryScrollRequest?>();
+    if (!identical(request, _scrollRequest)) {
+      _scrollRequest?.removeListener(_scrollToTop);
+      _scrollRequest = request;
+      _scrollRequest?.addListener(_scrollToTop);
+    }
     if (_requestedCollections) return;
     _requestedCollections = true;
     context.read<CollectionProvider>().ensureLoaded();
@@ -46,6 +54,7 @@ class _MoviesPageState extends State<MoviesPage> {
 
   @override
   void dispose() {
+    _scrollRequest?.removeListener(_scrollToTop);
     _searchController.dispose();
     _scrollController
       ..removeListener(_handleScroll)
@@ -58,6 +67,21 @@ class _MoviesPageState extends State<MoviesPage> {
     final position = _scrollController.position;
     if (position.pixels >= position.maxScrollExtent - 320) {
       context.read<MovieProvider>().loadMoreLibrary();
+    }
+  }
+
+  void _scrollToTop() {
+    if (!mounted || !_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    if (position.pixels == position.minScrollExtent) return;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _scrollController.jumpTo(position.minScrollExtent);
+    } else {
+      _scrollController.animateTo(
+        position.minScrollExtent,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+      );
     }
   }
 
@@ -81,7 +105,7 @@ class _MoviesPageState extends State<MoviesPage> {
           key: const PageStorageKey('movies-grid'),
           controller: _scrollController,
           scrollCacheExtent: ScrollCacheExtent.pixels(
-            MediaQuery.of(context).size.height * 0.9,
+            MediaQuery.sizeOf(context).height * 0.55,
           ),
           slivers: [
             // ── 页面头部：大标题 + 搜索 + 分段控件 ──

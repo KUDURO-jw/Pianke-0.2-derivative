@@ -1,5 +1,6 @@
 // Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoPageTransition;
 import 'package:flutter/services.dart';
 import 'package:random_movie/config/design_tokens.dart';
 import 'package:random_movie/widgets/common/continuous_rrect.dart';
@@ -575,6 +576,22 @@ class MellowPanelPainter extends CustomPainter {
 
 class AppPageTransitionsBuilder extends PageTransitionsBuilder {
   const AppPageTransitionsBuilder();
+
+  /// Keep the detail surface opaque: no full-screen fade layer on every frame.
+  static Widget detailTransition(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    if (MediaQuery.disableAnimationsOf(context)) return child;
+    return CupertinoPageTransition(
+      primaryRouteAnimation: animation,
+      secondaryRouteAnimation: secondaryAnimation,
+      linearTransition: false,
+      child: RepaintBoundary(child: child),
+    );
+  }
 
   @override
   Widget buildTransitions<T>(

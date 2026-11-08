@@ -28,6 +28,56 @@ const items = [
 ];
 
 void main() {
+  testWidgets('double tap returns to top without delaying branch selection', (
+    tester,
+  ) async {
+    var selected = 1;
+    var topRequests = 0;
+    Future<void> tapLibrary(int millis) async {
+      final gesture = await tester.createGesture();
+      await gesture.down(
+        tester.getCenter(find.text('片库')),
+        timeStamp: Duration(milliseconds: millis),
+      );
+      await gesture.up(timeStamp: Duration(milliseconds: millis + 20));
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) => Scaffold(
+            bottomNavigationBar: FloatingNavBar(
+              currentIndex: selected,
+              items: items,
+              onSelected: (i) => setState(() => selected = i),
+              onDoubleTap: (i) {
+                if (i == 0) topRequests++;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tapLibrary(0);
+    expect(selected, 0);
+    await tester.pump(const Duration(milliseconds: 80));
+    await tapLibrary(100);
+    await tester.pumpAndSettle();
+    expect(topRequests, 1);
+
+    await tapLibrary(1000);
+    await tester.pump(const Duration(milliseconds: 500));
+    await tapLibrary(1600);
+    await tester.pumpAndSettle();
+    expect(topRequests, 1);
+
+    await tester.drag(find.text('片库'), const Offset(30, 0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('片库'));
+    await tester.pumpAndSettle();
+    expect(topRequests, 1);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'selected destination stays enlarged and pressing lifts its lens',
     (tester) async {

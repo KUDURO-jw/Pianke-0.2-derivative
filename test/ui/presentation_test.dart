@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoPageTransition;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:random_movie/config/app_theme.dart';
@@ -18,6 +19,8 @@ class _Movies extends MovieProvider {
   final List<Movie> data;
   final Completer<Movie?>? loading;
   final int recordCount;
+  int detailReads = 0;
+  int sessionReads = 0;
   _Movies(this.data, {this.loading, this.recordCount = 0});
   @override
   List<Movie> get movies => data;
@@ -34,19 +37,24 @@ class _Movies extends MovieProvider {
   @override
   Movie? peekMovieById(String id) => null;
   @override
-  Future<Movie?> getMovieById(String id, {bool forceRefresh = false}) async =>
-      loading == null ? data.first : loading!.future;
+  Future<Movie?> getMovieById(String id, {bool forceRefresh = false}) async {
+    detailReads++;
+    return loading == null ? data.first : loading!.future;
+  }
+
   @override
-  Future<List<ViewingSession>> sessionsForMovie(String id) async =>
-      List.generate(
-        recordCount,
-        (i) => ViewingSession(
-          id: '$i',
-          movieId: id,
-          watchedAt: DateTime(2026, 1, i + 1),
-          note: '多次观影的记录 $i',
-        ),
-      );
+  Future<List<ViewingSession>> sessionsForMovie(String id) async {
+    sessionReads++;
+    return List.generate(
+      recordCount,
+      (i) => ViewingSession(
+        id: '$i',
+        movieId: id,
+        watchedAt: DateTime(2026, 1, i + 1),
+        note: '多次观影的记录 $i',
+      ),
+    );
+  }
 }
 
 class _Collections extends CollectionProvider {
@@ -76,6 +84,158 @@ Widget _wrap(_Movies movies, Widget child, {bool collections = false}) =>
     );
 
 void main() {
+  for (final reducedMotion in [false, true]) {
+    testWidgets(
+      'library dock double tap scrolls to top (reduced=$reducedMotion)',
+      (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        appRouter.go('/movies');
+        await tester.pumpWidget(
+          _wrap(
+            _Movies(List.generate(150, (i) => Movie(id: '$i', title: '影片 $i'))),
+            MaterialApp.router(
+              theme: AppTheme.lightTheme,
+              routerConfig: appRouter,
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(disableAnimations: reducedMotion),
+                child: child!,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final libraryState = tester.state(find.byType(MoviesPage));
+        final scrollable = tester.state<ScrollableState>(
+          find
+              .descendant(
+                of: find.byType(MoviesPage),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
+        scrollable.position.jumpTo(2000);
+        await tester.pumpAndSettle();
+        final previousOffset = scrollable.position.pixels;
+        final dockLibrary = find.descendant(
+          of: find.byType(FloatingNavBar),
+          matching: find.text('片库'),
+        );
+        await tester.tap(dockLibrary);
+        await tester.pump(const Duration(milliseconds: 80));
+        expect(scrollable.position.pixels, previousOffset);
+        await tester.tap(dockLibrary);
+        await tester.pumpAndSettle();
+        expect(scrollable.position.pixels, 0);
+        expect(tester.state(find.byType(MoviesPage)), same(libraryState));
+        expect(find.text('我的合集'), findsOneWidget);
+        // Repeat at the top, then drag rather than tap: no extra route or crash.
+        await tester.tap(dockLibrary);
+        await tester.pump(const Duration(milliseconds: 80));
+        await tester.tap(dockLibrary);
+        await tester.pumpAndSettle();
+        expect(scrollable.position.pixels, 0);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
+
+  testWidgets(
+    'card pressing reuses the poster subtree and cancelling restores scale',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 140,
+              height: 260,
+              child: MovieCard(
+                movie: Movie(id: 'press', title: '按压'),
+                onTap: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+      final poster = tester.widget<MoviePoster>(find.byType(MoviePoster));
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(MovieCard)),
+      );
+      await tester.pump(const Duration(milliseconds: 120));
+      await tester.pump(const Duration(milliseconds: 90));
+      expect(
+        tester.widget<MoviePoster>(find.byType(MoviePoster)),
+        same(poster),
+      );
+      expect(
+        tester
+            .widget<ScaleTransition>(
+              find
+                  .descendant(
+                    of: find.byType(MovieCard),
+                    matching: find.byType(ScaleTransition),
+                  )
+                  .first,
+            )
+            .scale
+            .value,
+        lessThan(1),
+      );
+      await gesture.cancel();
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<ScaleTransition>(
+              find
+                  .descendant(
+                    of: find.byType(MovieCard),
+                    matching: find.byType(ScaleTransition),
+                  )
+                  .first,
+            )
+            .scale
+            .value,
+        1,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('detail header reuses its static background while scrolling', (
+    tester,
+  ) async {
+    final movie = Movie(id: 'header', title: '滚动详情', summary: '简介' * 300);
+    await tester.pumpWidget(
+      _wrap(
+        _Movies([movie]),
+        MaterialApp(
+          home: MovieDetailPage(movieId: movie.id, initialMovie: movie),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final background = tester
+        .widget<FlexibleSpaceBar>(find.byType(FlexibleSpaceBar))
+        .background;
+    final scrollable = tester.state<ScrollableState>(
+      find.byType(Scrollable).first,
+    );
+    for (final offset in [20.0, 40.0, 80.0, 120.0]) {
+      scrollable.position.jumpTo(offset);
+      await tester.pump();
+      expect(
+        tester
+            .widget<FlexibleSpaceBar>(find.byType(FlexibleSpaceBar))
+            .background,
+        same(background),
+      );
+    }
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'large library only builds visible cards and preserves pagination layout',
     (tester) async {
@@ -248,10 +408,11 @@ void main() {
         title: '海报转场',
         poster: 'https://example.invalid/poster.jpg',
       );
+      final movies = _Movies([movie], recordCount: 20);
       appRouter.go('/movies');
       await tester.pumpWidget(
         _wrap(
-          _Movies([movie], recordCount: 20),
+          movies,
           MaterialApp.router(
             theme: AppTheme.lightTheme,
             routerConfig: appRouter,
@@ -268,6 +429,9 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 80));
       expect(find.byType(MovieDetailPage), findsOneWidget);
+      expect(movies.detailReads, 0);
+      expect(movies.sessionReads, 0);
+      expect(find.byType(CupertinoPageTransition), findsOneWidget);
       final heroes = tester.widgetList<Hero>(
         find.byType(Hero, skipOffstage: false),
       );
@@ -285,6 +449,8 @@ void main() {
       );
       expect(tester.takeException(), isNull);
       await tester.pumpAndSettle();
+      expect(movies.detailReads, 1);
+      expect(movies.sessionReads, 1);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       expect(find.byType(MovieDetailPage), findsNothing);
@@ -294,6 +460,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 40));
       appRouter.pop();
       await tester.pumpAndSettle();
+      // Fast return must not begin the deferred local reads after disposal.
+      expect(movies.detailReads, 1);
+      expect(movies.sessionReads, 1);
       expect(find.byType(MovieDetailPage), findsNothing);
       expect(tester.state(find.byType(MoviesPage)), same(sourceState));
       expect(tester.takeException(), isNull);

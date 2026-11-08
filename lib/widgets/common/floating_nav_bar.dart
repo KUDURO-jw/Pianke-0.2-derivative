@@ -39,12 +39,14 @@ class DockMetrics {
 class FloatingNavBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onSelected;
+  final ValueChanged<int>? onDoubleTap;
   final List<NavItemData> items;
 
   const FloatingNavBar({
     super.key,
     required this.currentIndex,
     required this.onSelected,
+    this.onDoubleTap,
     required this.items,
   }) : assert(items.length > 0);
 
@@ -96,6 +98,7 @@ class FloatingNavBar extends StatelessWidget {
                           child: _DockTrack(
                             currentIndex: currentIndex,
                             onSelected: onSelected,
+                            onDoubleTap: onDoubleTap,
                             items: items,
                           ),
                         ),
@@ -115,10 +118,12 @@ class FloatingNavBar extends StatelessWidget {
 class _DockTrack extends StatefulWidget {
   final int currentIndex;
   final ValueChanged<int> onSelected;
+  final ValueChanged<int>? onDoubleTap;
   final List<NavItemData> items;
   const _DockTrack({
     required this.currentIndex,
     required this.onSelected,
+    required this.onDoubleTap,
     required this.items,
   });
 
@@ -148,6 +153,9 @@ class _DockTrackState extends State<_DockTrack> with TickerProviderStateMixin {
   bool _dragging = false;
   bool _cancelled = false;
   int? _lastHapticIndex;
+  int? _lastTapIndex;
+  Duration? _lastTapTime;
+  Duration _pointerDownTime = Duration.zero;
   bool _reduceMotion = false;
 
   @override
@@ -216,6 +224,30 @@ class _DockTrackState extends State<_DockTrack> with TickerProviderStateMixin {
     }
   }
 
+  void _handleTap(int index) {
+    // Recognize the second tap without delaying the first tap's navigation.
+    // Pointer timestamps also keep this independent of wall-clock changes.
+    final elapsed = _lastTapTime == null
+        ? null
+        : _pointerDownTime - _lastTapTime!;
+    final doubleTap =
+        widget.onDoubleTap != null &&
+        index == widget.currentIndex &&
+        _lastTapIndex == index &&
+        elapsed != null &&
+        elapsed >= Duration.zero &&
+        elapsed <= kDoubleTapTimeout;
+    if (doubleTap) {
+      _lastTapIndex = null;
+      _lastTapTime = null;
+      widget.onDoubleTap!(index);
+    } else {
+      _lastTapIndex = index;
+      _lastTapTime = _pointerDownTime;
+      _select(index);
+    }
+  }
+
   @override
   void dispose() {
     _position.dispose();
@@ -249,6 +281,10 @@ class _DockTrackState extends State<_DockTrack> with TickerProviderStateMixin {
         }
 
         void cancel() {
+          if (_dragging) {
+            _lastTapIndex = null;
+            _lastTapTime = null;
+          }
           _cancelled = true;
           _dragging = false;
           _tracker = null;
@@ -259,6 +295,7 @@ class _DockTrackState extends State<_DockTrack> with TickerProviderStateMixin {
 
         return Listener(
           onPointerDown: (event) {
+            _pointerDownTime = event.timeStamp;
             _cancelled = false;
             _releaseVelocity = null;
             _lastHapticIndex = position(event.localPosition.dx).round();
@@ -282,6 +319,8 @@ class _DockTrackState extends State<_DockTrack> with TickerProviderStateMixin {
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onHorizontalDragStart: (details) {
+              _lastTapIndex = null;
+              _lastTapTime = null;
               _dragging = true;
               dragTo(details.localPosition.dx);
             },
@@ -368,7 +407,7 @@ class _DockTrackState extends State<_DockTrack> with TickerProviderStateMixin {
                               label: widget.items[i].label,
                               child: GestureDetector(
                                 behavior: HitTestBehavior.opaque,
-                                onTap: () => _select(i),
+                                onTap: () => _handleTap(i),
                                 child: Transform.scale(
                                   key: ValueKey(
                                     'dock-item-scale-${widget.items[i].label}',

@@ -57,7 +57,6 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
   bool _allowLeave = false;
   bool _exitDialogOpen = false;
   bool _isSyncingWatchState = false;
-  bool _posterReady = false;
   bool _secondarySectionsReady = false;
   bool _episodeControlsReady = false;
   bool _deferredSectionsScheduled = false;
@@ -68,8 +67,9 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
     _seedMovie = widget.initialMovie?.id == widget.movieId
         ? widget.initialMovie
         : context.read<MovieProvider>().peekMovieById(widget.movieId);
-    _movieFuture = _loadMovie();
-    _loadSessions();
+    // A cached film is enough for the first frame. Local refresh and records
+    // wait until the route settles instead of rebuilding during Hero flight.
+    if (_seedMovie == null) _movieFuture = _loadMovie();
   }
 
   Future<void> _loadSessions() async {
@@ -90,7 +90,8 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
   }
 
   void _bindRouteTransition() {
-    final nextAnimation = ModalRoute.of(context)?.animation;
+    final route = ModalRoute.of(context);
+    final nextAnimation = route?.animation;
     if (identical(nextAnimation, _routeAnimation)) return;
 
     _removeRouteTransitionListener();
@@ -99,13 +100,17 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
     if (_deferredSectionsScheduled) return;
     if (MediaQuery.disableAnimationsOf(context) ||
         nextAnimation == null ||
-        nextAnimation.status == AnimationStatus.completed) {
+        (nextAnimation.status == AnimationStatus.completed &&
+            route?.offstage != true)) {
       _beginDeferredReveal();
       return;
     }
 
     _routeAnimationStatusListener = (status) {
       if (status != AnimationStatus.completed) return;
+      // Hero measures the destination offstage with a completed animation
+      // proxy. That measurement is not the end of the actual page transition.
+      if (route?.offstage == true) return;
       _removeRouteTransitionListener();
       _beginDeferredReveal();
     };
@@ -121,21 +126,10 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
 
       setState(() {
         _secondarySectionsReady = true;
+        _episodeControlsReady = true;
+        if (_seedMovie != null) _movieFuture = _loadMovie(forceRefresh: true);
       });
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _posterReady) return;
-        setState(() {
-          _posterReady = true;
-        });
-
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted || _episodeControlsReady) return;
-          setState(() {
-            _episodeControlsReady = true;
-          });
-        });
-      });
+      _loadSessions();
     });
   }
 
@@ -212,6 +206,21 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
 
         _initFromMovie(movie);
         final provider = context.read<MovieProvider>();
+        final expandedHeight =
+            _expandedPosterHeight +
+            (MediaQuery.textScalerOf(context).scale(22) - 22) * 4;
+        // Keep these widget identities stable as the sliver scroll offset
+        // changes. Only swap the header when it actually crosses collapse.
+        final expandedHeader = _buildSliverAppBar(
+          context,
+          movie,
+          collapsed: false,
+        );
+        final collapsedHeader = _buildSliverAppBar(
+          context,
+          movie,
+          collapsed: true,
+        );
 
         return PopScope<void>(
           canPop: !_hasChanges || _allowLeave,
@@ -238,16 +247,10 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
                 slivers: [
                   SliverLayoutBuilder(
                     builder: (context, constraints) {
-                      final expandedHeight =
-                          _expandedPosterHeight +
-                          (MediaQuery.textScalerOf(context).scale(22) - 22) * 4;
-                      return _buildSliverAppBar(
-                        context,
-                        movie,
-                        collapsed:
-                            constraints.scrollOffset >=
-                            expandedHeight - kToolbarHeight,
-                      );
+                      return constraints.scrollOffset >=
+                              expandedHeight - kToolbarHeight
+                          ? collapsedHeader
+                          : expandedHeader;
                     },
                   ),
                   ..._buildBodySlivers(context, movie, provider),
@@ -269,7 +272,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
     final surfaceColor = colorScheme.surfaceContainerHighest;
     final isSeries = movie.subjectType == MovieSubjectType.tvSeries;
     final durationLabel = _formatDurationText(movie.durationText);
-    final hasPoster = movie.poster.isNotEmpty && _posterReady;
+    final hasPoster = movie.poster.isNotEmpty;
 
     return SliverAppBar(
       expandedHeight:
@@ -302,8 +305,9 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
                   imageUrl: movie.poster,
                   httpHeaders: ApiConfig.imageHeaders,
                   fit: BoxFit.cover,
-                  memCacheWidth: 480,
-                  maxWidthDiskCache: 480,
+                  // Share the decoded/cache entry with the grid and Hero.
+                  memCacheWidth: 300,
+                  maxWidthDiskCache: 300,
                   fadeInDuration: Duration.zero,
                   placeholder: (_, _) => ColoredBox(color: surfaceColor),
                   errorWidget: (_, _, _) => ColoredBox(color: surfaceColor),

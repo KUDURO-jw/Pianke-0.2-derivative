@@ -26,16 +26,37 @@ class MovieCard extends StatefulWidget {
   State<MovieCard> createState() => _MovieCardState();
 }
 
-class _MovieCardState extends State<MovieCard> {
-  bool _isPressed = false;
+class _MovieCardState extends State<MovieCard>
+    with SingleTickerProviderStateMixin {
+  bool _reduceMotion = false;
+  late final AnimationController _scale = AnimationController(
+    vsync: this,
+    lowerBound: 0.975,
+    upperBound: 1,
+    value: 1,
+    duration: const Duration(milliseconds: 90),
+  );
 
-  /// 性能说明：原实现在 initState 里无条件 addPostFrameCallback 再 setState，
-  /// 让**每张卡片首帧都额外重建一次**。列表近百部影片时成批触发，是掉帧来源之一。
-  /// 现在海报直接在首帧渲染，依靠 CachedNetworkImage 自身的占位与淡入，
-  /// 不再需要额外的 setState 驱动。
+  void _setPressed(bool pressed) {
+    if (!mounted) return;
+    final target = pressed ? 0.975 : 1.0;
+    if (_reduceMotion) {
+      _scale.value = target;
+    } else {
+      _scale.animateTo(target, curve: Curves.easeOut);
+    }
+  }
+
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = MediaQuery.disableAnimationsOf(context);
+  }
+
+  @override
+  void dispose() {
+    _scale.dispose();
+    super.dispose();
   }
 
   @override
@@ -64,28 +85,18 @@ class _MovieCardState extends State<MovieCard> {
 
     return RepaintBoundary(
       child: GestureDetector(
-        onTapDown: widget.onTap != null
-            ? (_) => setState(() => _isPressed = true)
-            : null,
-        onTapUp: widget.onTap != null
-            ? (_) => setState(() => _isPressed = false)
-            : null,
-        onTapCancel: widget.onTap != null
-            ? () => setState(() => _isPressed = false)
-            : null,
+        onTapDown: widget.onTap != null ? (_) => _setPressed(true) : null,
+        onTapUp: widget.onTap != null ? (_) => _setPressed(false) : null,
+        onTapCancel: widget.onTap != null ? () => _setPressed(false) : null,
         onTap: widget.onTap,
         onLongPress: widget.onDelete == null
             ? null
             : () {
-                setState(() => _isPressed = false);
+                _setPressed(false);
                 widget.onDelete!();
               },
-        child: AnimatedScale(
-          scale: _isPressed ? 0.975 : 1.0,
-          duration: MediaQuery.disableAnimationsOf(context)
-              ? Duration.zero
-              : const Duration(milliseconds: 90),
-          curve: Curves.easeOut,
+        child: ScaleTransition(
+          scale: _scale,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
