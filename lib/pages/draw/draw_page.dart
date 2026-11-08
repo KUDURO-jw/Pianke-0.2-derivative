@@ -12,6 +12,7 @@ import 'package:random_movie/providers/providers.dart';
 import 'package:random_movie/services/services.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
 import 'package:random_movie/widgets/draw/draw_filter_panel.dart';
+import 'package:random_movie/services/draw_candidate_report.dart';
 import 'package:random_movie/widgets/movie/draw_shuffle_card.dart';
 import 'package:random_movie/widgets/movie/movie_card.dart';
 import 'package:random_movie/router/movie_detail_arguments.dart';
@@ -27,8 +28,14 @@ class DrawPage extends StatefulWidget {
 
   /// 预置来源名称（合集名），用于 AppBar 提示。
   final String? presetTitle;
+  final StorageService? storage;
 
-  const DrawPage({super.key, this.presetMovieIds, this.presetTitle});
+  const DrawPage({
+    super.key,
+    this.presetMovieIds,
+    this.presetTitle,
+    this.storage,
+  });
 
   @override
   State<DrawPage> createState() => _DrawPageState();
@@ -37,7 +44,7 @@ class DrawPage extends StatefulWidget {
 class _DrawPageState extends State<DrawPage> {
   static const int _pageSize = 48;
 
-  final StorageService _storageService = StorageService();
+  late final StorageService _storageService;
   final ScrollController _scrollController = ScrollController();
 
   DrawPhase _phase = DrawPhase.selecting;
@@ -58,6 +65,7 @@ class _DrawPageState extends State<DrawPage> {
   String? _recordId;
 
   bool _isInitialLoading = true;
+  bool _initialLoadFailed = false;
   bool _isLoadingMore = false;
   bool _hasMore = true;
   int _page = 0;
@@ -65,6 +73,8 @@ class _DrawPageState extends State<DrawPage> {
   int _selectionRevision = 0;
   bool _selectionLoading = false;
   String? _selectionError;
+  String? _reportKey;
+  Future<DrawCandidateReport>? _reportFuture;
 
   Set<String> get _selectedIds => _selectionState.selectedIds(_mode);
 
@@ -75,6 +85,7 @@ class _DrawPageState extends State<DrawPage> {
   @override
   void initState() {
     super.initState();
+    _storageService = widget.storage ?? StorageService();
     _scrollController.addListener(_handleScroll);
     _loadInitialData();
   }
@@ -97,7 +108,10 @@ class _DrawPageState extends State<DrawPage> {
   }
 
   Future<void> _loadInitialData() async {
-    setState(() => _isInitialLoading = true);
+    setState(() {
+      _isInitialLoading = true;
+      _initialLoadFailed = false;
+    });
 
     try {
       final preset = widget.presetMovieIds;
@@ -130,7 +144,7 @@ class _DrawPageState extends State<DrawPage> {
       // 辅助数据 + 默认选中；状态查询失败时保持空选中，避免误判为未看。
       await _loadAuxData(defaultSelection: firstPage.map((m) => m.id));
     } catch (_) {
-      // 核心载入失败：交由 UI 的空/错态处理。
+      _initialLoadFailed = true;
     } finally {
       if (mounted) {
         setState(() => _isInitialLoading = false);
@@ -302,8 +316,27 @@ class _DrawPageState extends State<DrawPage> {
     if (_isInitialLoading) {
       return const LoadingState(message: '加载片库中…');
     }
+    if (_initialLoadFailed) {
+      return ErrorState(message: '无法读取本地片库，请重试', onRetry: _loadInitialData);
+    }
 
     if (_totalCount == 0) {
+      if (_unwatchedOnlyByMode[_mode] == true) {
+        return EmptyState(
+          title: '当前范围没有未看影片',
+          subtitle: '可切回全部影片重新选择',
+          icon: Icons.filter_alt_off,
+          onAction: _selectAllMovies,
+          actionLabel: '查看全部',
+        );
+      }
+      if (widget.presetMovieIds != null) {
+        return const EmptyState(
+          title: '这个合集暂时没有可抽影片',
+          subtitle: '返回合集添加影片后再试',
+          icon: Icons.movie_outlined,
+        );
+      }
       return EmptyState(
         title: '片库是空的',
         subtitle: '先去添加几部影片吧',
@@ -317,49 +350,73 @@ class _DrawPageState extends State<DrawPage> {
 
     return Column(
       children: [
-        _buildModeSelector(context),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppTheme.spacingMedium,
-            0,
-            AppTheme.spacingMedium,
-            AppTheme.spacingSmall,
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * .34,
           ),
-          child: Row(
-            children: [
-              Text(
-                '已选 ${_selectedIds.length} / 共 $_totalCount 部',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.onSurface.withValues(alpha: 0.7),
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                _buildModeSelector(context),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppTheme.spacingMedium,
+                    0,
+                    AppTheme.spacingMedium,
+                    AppTheme.spacingSmall,
+                  ),
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    spacing: 8,
+                    children: [
+                      Text(
+                        '已选 ${_selectedIds.length} / 共 $_totalCount 部',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.onSurface.withValues(alpha: 0.7),
+                        ),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextButton(
+                            onPressed: _selectionLoading
+                                ? null
+                                : _selectAllMovies,
+                            child: const Text('全选'),
+                          ),
+                          TextButton(
+                            onPressed: _selectionLoading
+                                ? null
+                                : _selectUnwatchedMovies,
+                            child: const Text('仅未看'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const Spacer(),
-              TextButton(
-                onPressed: _selectionLoading ? null : _selectAllMovies,
-                child: const Text('全选'),
-              ),
-              TextButton(
-                onPressed: _selectionLoading ? null : _selectUnwatchedMovies,
-                child: const Text('仅未看'),
-              ),
-            ],
+                if (_selectionError != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppTheme.spacingMedium,
+                    ),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        _selectionError!,
+                        style: TextStyle(
+                          color: colorScheme.error,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
-        if (_selectionError != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppTheme.spacingMedium,
-            ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                _selectionError!,
-                style: TextStyle(color: colorScheme.error, fontSize: 12),
-              ),
-            ),
-          ),
         Expanded(
           child: SelectableMovieGrid(
             storageKey: const PageStorageKey('draw-selection-grid'),
@@ -378,13 +435,7 @@ class _DrawPageState extends State<DrawPage> {
         ),
         SafeArea(
           minimum: const EdgeInsets.all(AppTheme.spacingMedium),
-          child: PrimaryButton(
-            label: _selectedIds.isNotEmpty
-                ? '${_mode.label} · 开始（${_selectedIds.length} 部）'
-                : '请先选择影片',
-            icon: Icons.casino,
-            onPressed: _selectedIds.isNotEmpty ? _startDraw : null,
-          ),
+          child: _buildCandidateActions(),
         ),
       ],
     );
@@ -404,7 +455,7 @@ class _DrawPageState extends State<DrawPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            height: 38,
+            height: MediaQuery.textScalerOf(context).scale(13) + 25,
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
@@ -444,6 +495,106 @@ class _DrawPageState extends State<DrawPage> {
   }
 
   // ==================== 抽取 ====================
+
+  Future<DrawCandidateReport> _candidateReport() async {
+    final ids = DrawSelection.restrictToScope(
+      Set<String>.of(_selectedIds),
+      scope: _presetScopeIds,
+    );
+    final filter = _filter;
+    final onlyUnwatched = _unwatchedOnlyByMode[_mode] == true;
+    var movies = await _storageService.getMoviesByIds(ids);
+    if (onlyUnwatched) movies = WatchStatus.unwatchedMovies(movies);
+    final tags = filter.tagIds.isEmpty
+        ? null
+        : (await _storageService.queryMovieIdsByTags(filter.tagIds)).toSet();
+    return DrawCandidateReport.analyze(movies, filter, allowedByTags: tags);
+  }
+
+  Widget _buildCandidateActions() {
+    final key =
+        '${_mode.value}:${Object.hashAllUnordered(_selectedIds)}:${identityHashCode(_filter)}:${_unwatchedOnlyByMode[_mode]}:$_selectionRevision';
+    if (_reportKey != key) {
+      _reportKey = key;
+      _reportFuture = _candidateReport();
+    }
+    return FutureBuilder<DrawCandidateReport>(
+      future: _reportFuture,
+      builder: (context, snapshot) {
+        final ready =
+            snapshot.connectionState == ConnectionState.done &&
+            !snapshot.hasError;
+        final count = ready ? snapshot.data?.count ?? 0 : 0;
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * .38,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_filter.isActive)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final option in activeDrawFilters(_filter))
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: InputChip(
+                              label: Text(option.label),
+                              onDeleted: () =>
+                                  setState(() => _filter = option.removed),
+                            ),
+                          ),
+                        TextButton(
+                          onPressed: () =>
+                              setState(() => _filter = DrawFilter.none),
+                          child: const Text('清空筛选'),
+                        ),
+                      ],
+                    ),
+                  ),
+                Text(
+                  snapshot.hasError
+                      ? '候选读取失败'
+                      : ready
+                      ? '符合条件 $count 部'
+                      : '正在统计候选…',
+                ),
+                if (snapshot.hasError)
+                  TextButton(
+                    onPressed: () => setState(() => _reportKey = null),
+                    child: const Text('重试'),
+                  ),
+                if (ready && count == 0 && _selectedIds.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Text(
+                      snapshot.data!.explanations.join('；'),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                const SizedBox(height: 6),
+                PrimaryButton(
+                  label: _selectedIds.isEmpty
+                      ? '请先选择影片'
+                      : ready && count == 0
+                      ? '没有符合条件的影片'
+                      : '${_mode.label} · 开始${ready ? '（$count 部）' : ''}',
+                  icon: Icons.casino,
+                  onPressed: ready && count > 0 && !_selectionLoading
+                      ? _startDraw
+                      : null,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   Future<void> _startDraw() async {
     // Re-read the selected set immediately before drawing to avoid stale state.

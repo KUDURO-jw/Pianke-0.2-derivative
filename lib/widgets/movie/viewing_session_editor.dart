@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/models/models.dart';
+import 'package:random_movie/services/local_data_guard.dart';
 
 /// 记录 / 编辑一次观影会话的底部弹窗。
 /// 确认返回填好的 [ViewingSession]，取消返回 null。
@@ -11,28 +12,38 @@ Future<ViewingSession?> showViewingSessionEditor(
   required String movieId,
   ViewingSession? existing,
   bool defaultIsRewatch = false,
-}) {
-  return showModalBottomSheet<ViewingSession>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (_) => _ViewingSessionEditor(
-      movieId: movieId,
-      existing: existing,
-      defaultIsRewatch: defaultIsRewatch,
-    ),
-  );
+  DateTime? initialDate,
+}) async {
+  final owner = Object();
+  LocalDataGuard.hold(owner);
+  try {
+    return await showModalBottomSheet<ViewingSession>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ViewingSessionEditor(
+        movieId: movieId,
+        existing: existing,
+        defaultIsRewatch: defaultIsRewatch,
+        initialDate: initialDate,
+      ),
+    );
+  } finally {
+    LocalDataGuard.release(owner);
+  }
 }
 
 class _ViewingSessionEditor extends StatefulWidget {
   final String movieId;
   final ViewingSession? existing;
   final bool defaultIsRewatch;
+  final DateTime? initialDate;
 
   const _ViewingSessionEditor({
     required this.movieId,
     this.existing,
     this.defaultIsRewatch = false,
+    this.initialDate,
   });
 
   @override
@@ -73,7 +84,7 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
   void initState() {
     super.initState();
     final e = widget.existing;
-    _watchedAt = e?.watchedAt ?? DateTime.now();
+    _watchedAt = e?.watchedAt ?? widget.initialDate ?? DateTime.now();
     _mood = e?.mood ?? WatchMood.none;
     _isRewatch = e?.isRewatch ?? widget.defaultIsRewatch;
     _rating = e?.rating;

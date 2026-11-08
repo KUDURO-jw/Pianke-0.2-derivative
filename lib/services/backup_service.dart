@@ -6,10 +6,84 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:random_movie/models/models.dart';
 import 'package:random_movie/services/backup_snapshot.dart';
+import 'package:random_movie/services/backup_inventory.dart';
 import 'package:random_movie/services/storage_service.dart';
 import 'package:share_plus/share_plus.dart';
 
 const int _kSchemaVersion = 3;
+
+class BackupImportPreview {
+  final Map<String, dynamic> payload;
+  final BackupInventory inventory;
+  final DateTime? exportedAt;
+  final int schemaVersion;
+  final int invalidRecords;
+
+  BackupImportPreview._(
+    this.payload,
+    this.inventory,
+    this.exportedAt,
+    this.schemaVersion,
+    this.invalidRecords,
+  );
+
+  factory BackupImportPreview.parse(Map<String, dynamic> input) {
+    final payload = jsonDecode(jsonEncode(input)) as Map<String, dynamic>;
+    final meta = payload['meta'];
+    if (meta is! Map ||
+        !['Pianke', 'RandoMov'].contains(meta['appId']?.toString())) {
+      throw const FormatException('不是片刻的备份文件');
+    }
+    final schema = meta['schemaVersion'] ?? 0;
+    if (schema is! int || schema < 0) throw const FormatException('备份版本格式不正确');
+    if (schema > _kSchemaVersion) {
+      throw const FormatException('备份文件版本太新，请升级应用后再恢复');
+    }
+    for (final key in [
+      'movies',
+      'drawRecords',
+      'viewingSessions',
+      'collections',
+      'collectionMembers',
+      'tags',
+      'movieTags',
+    ]) {
+      if (payload[key] != null && payload[key] is! List) {
+        throw FormatException('备份中的 $key 格式不正确');
+      }
+    }
+    if (payload['movies'] is! List) throw const FormatException('备份缺少影片列表');
+    var invalid = 0;
+    void check(String key, void Function(Map<String, dynamic>) parse) {
+      for (final item in payload[key] as List? ?? []) {
+        try {
+          if (item is! Map) throw const FormatException();
+          parse(Map<String, dynamic>.from(item));
+        } catch (_) {
+          invalid++;
+        }
+      }
+    }
+
+    check('movies', (json) {
+      if (Movie.fromJson(json).id.isEmpty) throw const FormatException();
+    });
+    check('viewingSessions', (json) {
+      final s = ViewingSession.fromJson(json);
+      if (s.id.isEmpty || s.movieId.isEmpty) throw const FormatException();
+    });
+    check('drawRecords', (json) {
+      if (DrawRecord.fromJson(json).id.isEmpty) throw const FormatException();
+    });
+    return BackupImportPreview._(
+      payload,
+      BackupInventory.fromPayload(payload),
+      DateTime.tryParse(meta['exportedAt']?.toString() ?? ''),
+      schema,
+      invalid,
+    );
+  }
+}
 
 class BackupResult {
   final bool success;
@@ -162,10 +236,18 @@ class BackupService implements SyncBackupStore {
   Future<RestoreStats> restoreSyncSnapshot(BackupSnapshot snapshot) async {
     final validated = BackupSnapshot.parse(snapshot.toJson());
     final payload = validated.toJson();
+    final preview = BackupImportPreview.parse(payload);
+    if (preview.invalidRecords > 0) {
+      throw const BackupSnapshotException('云端备份包含无效记录，已停止覆盖');
+    }
     final movies = _parseMovies(payload['movies']);
     final drawRecords = _parseDrawRecords(payload['drawRecords']);
     final sessions = _parseSessions(payload['viewingSessions']);
     final tableData = _parseTableData(payload);
+    final movieIds = movies.map((m) => m.id).toSet();
+    if (sessions.any((s) => !movieIds.contains(s.movieId))) {
+      throw const BackupSnapshotException('云端观影记录关联的影片缺失，已停止覆盖');
+    }
 
     await _storage.replaceBackupData(
       movies: movies,
@@ -287,6 +369,9 @@ class BackupService implements SyncBackupStore {
     ]) {
       final raw = payload[key];
       if (raw is! List) throw BackupSnapshotException('备份缺少 $key 数据');
+      if (raw.any((row) => row is! Map)) {
+        throw BackupSnapshotException('备份中的 $key 格式不正确');
+      }
       result[key] = raw
           .whereType<Map>()
           .map((row) => Map<String, Object?>.from(row))
@@ -296,7 +381,9 @@ class BackupService implements SyncBackupStore {
   }
 
   /// 从文件选择器读取备份文件，合并恢复数据
-  Future<RestoreResult> importBackup() async {
+  Future<RestoreResult> importBackup({
+    Future<bool> Function(BackupImportPreview preview)? confirm,
+  }) async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -324,27 +411,17 @@ class BackupService implements SyncBackupStore {
         );
       }
 
-      final meta = payload['meta'] as Map<String, dynamic>?;
-      if (meta == null) {
-        return const RestoreResult(success: false, message: '不是片刻的备份文件');
-      }
-      final appId = meta['appId']?.toString();
-      if (appId != 'Pianke' && appId != 'RandoMov') {
-        return const RestoreResult(success: false, message: '不是片刻的备份文件');
-      }
-
-      final schemaVersion = meta['schemaVersion'] as int? ?? 0;
-      if (schemaVersion > _kSchemaVersion) {
-        return const RestoreResult(
-          success: false,
-          message: '备份文件版本太新，请升级应用后再恢复',
-        );
+      final preview = BackupImportPreview.parse(payload);
+      if (confirm != null && !await confirm(preview)) {
+        return const RestoreResult(success: false, message: '已取消');
       }
 
       final stats = await _restorePayload(payload);
       return RestoreResult(success: true, message: '恢复完成', stats: stats);
-    } catch (e) {
-      return RestoreResult(success: false, message: '恢复失败：$e');
+    } on FormatException catch (error) {
+      return RestoreResult(success: false, message: error.message);
+    } catch (_) {
+      return const RestoreResult(success: false, message: '恢复失败，请检查文件后重试');
     }
   }
 
@@ -405,6 +482,11 @@ class BackupService implements SyncBackupStore {
           final session = ViewingSession.fromJson(
             Map<String, dynamic>.from(raw),
           );
+          if (session.id.trim().isEmpty ||
+              session.movieId.trim().isEmpty ||
+              await _storage.getMovieById(session.movieId) == null) {
+            continue;
+          }
           if (await _storage.addSessionIfNotExists(session)) {
             sessionsImported++;
           }

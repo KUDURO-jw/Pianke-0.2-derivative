@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:random_movie/services/backup_service.dart';
@@ -7,6 +8,7 @@ import 'package:random_movie/services/backup_snapshot.dart';
 import 'package:random_movie/services/webdav_client.dart';
 import 'package:random_movie/services/webdav_sync_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:random_movie/services/local_data_guard.dart';
 
 BackupSnapshot _snapshot(String marker) => BackupSnapshot.create({
   'meta': {'appId': 'Pianke', 'schemaVersion': 3},
@@ -95,6 +97,154 @@ class _FakeBackupStore implements SyncBackupStore {
 }
 
 void main() {
+  test(
+    'opening an editor during credential loading cancels automatic sync',
+    () async {
+      SharedPreferences.setMockInitialValues({'pianke_webdav_account': 'user'});
+      final credentials = _DelayedCredentials('secret');
+      final transport = _FakeTransport([]);
+      final service = WebDavSyncService(
+        backup: _FakeBackupStore(_snapshot('local')),
+        preferences: await SharedPreferences.getInstance(),
+        credentials: credentials,
+        client: WebDavClient(transport: transport),
+      );
+      final result = service.synchronizeAutomatically();
+      final owner = Object();
+      LocalDataGuard.hold(owner);
+      try {
+        credentials.ready.complete();
+        expect((await result).state, WebDavSyncState.idle);
+        expect(transport.methods, isEmpty);
+      } finally {
+        LocalDataGuard.release(owner);
+      }
+    },
+  );
+  test(
+    'editing skips automatic requests and releases after editor closes',
+    () async {
+      SharedPreferences.setMockInitialValues({'pianke_webdav_account': 'user'});
+      final transport = _FakeTransport([]);
+      final service = WebDavSyncService(
+        backup: _FakeBackupStore(_snapshot('local')),
+        preferences: await SharedPreferences.getInstance(),
+        credentials: _FakeCredentials('secret'),
+        client: WebDavClient(transport: transport),
+      );
+      final owner = Object();
+      LocalDataGuard.hold(owner);
+      try {
+        final outcome = await service.synchronizeAutomatically();
+        expect(outcome.state, WebDavSyncState.idle);
+        expect(transport.methods, isEmpty);
+      } finally {
+        LocalDataGuard.release(owner);
+      }
+    },
+  );
+
+  test(
+    'changed preview stops restore, records failure and preserves prior success',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'pianke_webdav_account': 'user',
+        'pianke_webdav_last_sync_at': '2026-01-01',
+      });
+      final remote = _snapshot('remote');
+      final store = _FakeBackupStore(_snapshot('local'));
+      final transport = _FakeTransport([
+        for (var i = 0; i < 2; i++)
+          WebDavResponse(
+            statusCode: 200,
+            body: utf8.encode(jsonEncode(remote.toJson())),
+          ),
+      ]);
+      final prefs = await SharedPreferences.getInstance();
+      final service = WebDavSyncService(
+        backup: store,
+        preferences: prefs,
+        credentials: _FakeCredentials('secret'),
+        client: WebDavClient(transport: transport),
+      );
+      final preview = await service.inspect();
+      store.local = _snapshot('changed');
+      final outcome = await service.synchronize(
+        direction: WebDavSyncDirection.download,
+        conflictChoice: WebDavConflictChoice.remote,
+        expectedInspection: preview,
+      );
+      expect(outcome.isSuccess, isFalse);
+      expect(outcome.message, contains('预览后数据已变化'));
+      expect(store.restored, isNull);
+      expect(service.lastAttemptFailed, isTrue);
+      expect(service.lastSuccessAt?.year, 2026);
+      expect(service.lastSuccessAt?.month, 1);
+      expect(service.statusMessage, outcome.message);
+    },
+  );
+
+  test(
+    'local change during backup creation prevents late destructive restore',
+    () async {
+      SharedPreferences.setMockInitialValues({'pianke_webdav_account': 'user'});
+      final store = _ChangingBackupStore(_snapshot('local'));
+      final remote = _snapshot('remote');
+      final service = WebDavSyncService(
+        backup: store,
+        preferences: await SharedPreferences.getInstance(),
+        credentials: _FakeCredentials('secret'),
+        client: WebDavClient(
+          transport: _FakeTransport([
+            WebDavResponse(
+              statusCode: 200,
+              body: utf8.encode(jsonEncode(remote.toJson())),
+            ),
+          ]),
+        ),
+      );
+      final result = await service.synchronize(
+        direction: WebDavSyncDirection.download,
+        conflictChoice: WebDavConflictChoice.remote,
+      );
+      expect(result.isSuccess, isFalse);
+      expect(store.restored, isNull);
+      expect(result.message, contains('本地正在编辑或已变化'));
+    },
+  );
+
+  test(
+    'shared running state prevents concurrent sync and notifies completion',
+    () async {
+      SharedPreferences.setMockInitialValues({'pianke_webdav_account': 'user'});
+      final store = _BlockingBackupStore(_snapshot('local'));
+      final service = WebDavSyncService(
+        backup: store,
+        preferences: await SharedPreferences.getInstance(),
+        credentials: _FakeCredentials('secret'),
+        client: WebDavClient(
+          transport: _FakeTransport([
+            WebDavResponse(
+              statusCode: 200,
+              body: utf8.encode(jsonEncode(store.local.toJson())),
+            ),
+          ]),
+        ),
+      );
+      var changes = 0;
+      service.addListener(() => changes++);
+      final first = service.synchronize();
+      expect(service.isRunning, isTrue);
+      final second = await service.synchronize();
+      expect(second.message, contains('已有同步任务'));
+      store.ready.complete();
+      expect((await first).isSuccess, isTrue);
+      expect(service.isRunning, isFalse);
+      expect(service.lastAttemptFailed, isFalse);
+      expect(service.lastSuccessAt, isNotNull);
+      expect(changes, 2);
+    },
+  );
   test('snapshot checksum is stable and contains no media cache fields', () {
     final original = _snapshot('movie_a');
     final parsed = BackupSnapshot.parse(original.toJson());
@@ -287,41 +437,44 @@ void main() {
     expect(localStore.restored?.checksum, remote.checksum);
   });
 
-  test('restoring from cloud writes a safety backup before overwriting', () async {
-    SharedPreferences.setMockInitialValues({
-      'pianke_webdav_account': 'user',
-      'pianke_webdav_directory': 'Pianke',
-    });
-    final preferences = await SharedPreferences.getInstance();
-    final localStore = _FakeBackupStore(_snapshot('local'));
-    final remote = _snapshot('remote');
-    final transport = _FakeTransport([
-      WebDavResponse(
-        statusCode: 200,
-        body: utf8.encode(jsonEncode(remote.toJson())),
-      ),
-    ]);
-    final service = WebDavSyncService(
-      backup: localStore,
-      preferences: preferences,
-      credentials: _FakeCredentials('secret'),
-      client: WebDavClient(
-        transport: transport,
-        endpointUri: Uri.parse('https://example.com/dav/'),
-      ),
-    );
+  test(
+    'restoring from cloud writes a safety backup before overwriting',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'pianke_webdav_account': 'user',
+        'pianke_webdav_directory': 'Pianke',
+      });
+      final preferences = await SharedPreferences.getInstance();
+      final localStore = _FakeBackupStore(_snapshot('local'));
+      final remote = _snapshot('remote');
+      final transport = _FakeTransport([
+        WebDavResponse(
+          statusCode: 200,
+          body: utf8.encode(jsonEncode(remote.toJson())),
+        ),
+      ]);
+      final service = WebDavSyncService(
+        backup: localStore,
+        preferences: preferences,
+        credentials: _FakeCredentials('secret'),
+        client: WebDavClient(
+          transport: transport,
+          endpointUri: Uri.parse('https://example.com/dav/'),
+        ),
+      );
 
-    final outcome = await service.synchronize(
-      direction: WebDavSyncDirection.download,
-      // Download still requires an explicit side when both copies changed.
-      conflictChoice: WebDavConflictChoice.remote,
-    );
+      final outcome = await service.synchronize(
+        direction: WebDavSyncDirection.download,
+        // Download still requires an explicit side when both copies changed.
+        conflictChoice: WebDavConflictChoice.remote,
+      );
 
-    expect(outcome.isSuccess, isTrue);
-    expect(localStore.restored?.checksum, remote.checksum);
-    // 覆盖前必须先落一份兜底备份，否则选错一侧就无法找回。
-    expect(localStore.safetyBackupCount, 1);
-  });
+      expect(outcome.isSuccess, isTrue);
+      expect(localStore.restored?.checksum, remote.checksum);
+      // 覆盖前必须先落一份兜底备份，否则选错一侧就无法找回。
+      expect(localStore.safetyBackupCount, 1);
+    },
+  );
 
   test('safety backup failure does not block the restore', () async {
     SharedPreferences.setMockInitialValues({
@@ -356,6 +509,35 @@ void main() {
     expect(outcome.isSuccess, isTrue);
     expect(localStore.restored?.checksum, remote.checksum);
   });
+}
+
+class _ChangingBackupStore extends _FakeBackupStore {
+  _ChangingBackupStore(super.local);
+  @override
+  Future<String?> createLocalSafetyBackup() async {
+    local = _snapshot('edited-during-network');
+    return '/tmp/backup';
+  }
+}
+
+class _BlockingBackupStore extends _FakeBackupStore {
+  _BlockingBackupStore(super.local);
+  final ready = Completer<void>();
+  @override
+  Future<BackupSnapshot> createSyncSnapshot() async {
+    await ready.future;
+    return local;
+  }
+}
+
+class _DelayedCredentials extends _FakeCredentials {
+  _DelayedCredentials(super.password);
+  final ready = Completer<void>();
+  @override
+  Future<String?> readPassword() async {
+    await ready.future;
+    return password;
+  }
 }
 
 /// 兜底备份抛异常时应被吞掉，不阻断恢复流程。

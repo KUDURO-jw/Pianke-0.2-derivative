@@ -1,0 +1,8 @@
+{
+  "packageName": "app.pianke.personal",
+  "signerSha256": "93423ec67ad9b54fd99b644d96700bb347c08ea6d8e8e2793715b8cfccce379f",
+  "abi": "arm64-v8a",
+  "channel": "ui",
+  "repository": "KUDURO-jw/Pianke-0.2-derivative",
+  "note": "Preserve the installed edition's certificate. Signing material must stay outside source and release archives."
+}

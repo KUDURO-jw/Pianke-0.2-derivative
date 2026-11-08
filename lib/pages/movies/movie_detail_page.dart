@@ -1,6 +1,7 @@
 // Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:random_movie/services/local_data_guard.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -52,6 +53,9 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
   bool _initialized = false;
   Movie? _lastLoadedMovie;
   bool _hasChanges = false;
+  bool _saving = false;
+  bool _allowLeave = false;
+  bool _exitDialogOpen = false;
   bool _isSyncingWatchState = false;
   bool _posterReady = false;
   bool _secondarySectionsReady = false;
@@ -176,6 +180,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
 
   @override
   void dispose() {
+    LocalDataGuard.release(this);
     _removeRouteTransitionListener();
     if (_initialized) {
       _reviewController.dispose();
@@ -208,26 +213,47 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
         _initFromMovie(movie);
         final provider = context.read<MovieProvider>();
 
-        return Scaffold(
-          body: CustomScrollView(
-            scrollCacheExtent: ScrollCacheExtent.pixels(_detailCacheExtent),
-            slivers: [
-              SliverLayoutBuilder(
-                builder: (context, constraints) {
-                  final expandedHeight =
-                      _expandedPosterHeight +
-                      (MediaQuery.textScalerOf(context).scale(22) - 22) * 4;
-                  return _buildSliverAppBar(
-                    context,
-                    movie,
-                    collapsed:
-                        constraints.scrollOffset >=
-                        expandedHeight - kToolbarHeight,
-                  );
-                },
+        return PopScope<void>(
+          canPop: !_hasChanges || _allowLeave,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop) _confirmLeave(movie);
+          },
+          child: Scaffold(
+            bottomNavigationBar: _hasChanges
+                ? SafeArea(
+                    minimum: const EdgeInsets.all(AppTheme.spacingMedium),
+                    child: FilledButton.icon(
+                      onPressed: _saving || _isSyncingWatchState
+                          ? null
+                          : () => _save(provider, movie),
+                      icon: const Icon(Icons.check),
+                      label: Text(_saving ? '保存中…' : '保存修改'),
+                    ),
+                  )
+                : null,
+            body: AbsorbPointer(
+              absorbing: _saving,
+              child: CustomScrollView(
+                scrollCacheExtent: ScrollCacheExtent.pixels(_detailCacheExtent),
+                slivers: [
+                  SliverLayoutBuilder(
+                    builder: (context, constraints) {
+                      final expandedHeight =
+                          _expandedPosterHeight +
+                          (MediaQuery.textScalerOf(context).scale(22) - 22) * 4;
+                      return _buildSliverAppBar(
+                        context,
+                        movie,
+                        collapsed:
+                            constraints.scrollOffset >=
+                            expandedHeight - kToolbarHeight,
+                      );
+                    },
+                  ),
+                  ..._buildBodySlivers(context, movie, provider),
+                ],
               ),
-              ..._buildBodySlivers(context, movie, provider),
-            ],
+            ),
           ),
         );
       },
@@ -473,12 +499,6 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
       if (_secondarySectionsReady && movie.summary.isNotEmpty)
         (context) => _buildSummarySection(context, movie),
       if (_secondarySectionsReady) (context) => _buildPersonalSection(context),
-      if (_secondarySectionsReady && _hasChanges)
-        (_) => PrimaryButton(
-          label: '保存',
-          icon: Icons.check,
-          onPressed: () => _save(provider, movie),
-        ),
       (_) => const SizedBox(height: AppTheme.spacingXLarge),
     ];
 
@@ -1315,6 +1335,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
             setState(() {
               _userRating = _userRating == starValue ? null : starValue;
               _hasChanges = true;
+              LocalDataGuard.hold(this);
             });
           },
           child: Padding(
@@ -1360,12 +1381,53 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
   }
 
   void _markChanged() {
+    LocalDataGuard.hold(this);
     if (!_hasChanges) {
       setState(() => _hasChanges = true);
     }
   }
 
-  Future<void> _save(MovieProvider provider, Movie movie) async {
+  Future<void> _confirmLeave(Movie movie) async {
+    if (_exitDialogOpen || _saving || !_hasChanges) return;
+    _exitDialogOpen = true;
+    final action = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('保存修改后离开？'),
+        content: const Text('评分、短评等修改尚未保存。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('继续编辑'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, 'discard'),
+            child: const Text('放弃修改'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, 'save'),
+            child: const Text('保存并离开'),
+          ),
+        ],
+      ),
+    );
+    _exitDialogOpen = false;
+    if (!mounted || action == null) return;
+    if (action == 'save') {
+      if (!await _save(context.read<MovieProvider>(), movie) || !mounted) {
+        return;
+      }
+    }
+    LocalDataGuard.release(this);
+    setState(() => _allowLeave = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.of(context).pop();
+    });
+  }
+
+  Future<bool> _save(MovieProvider provider, Movie movie) async {
+    if (_saving || _isSyncingWatchState) return false;
+    setState(() => _saving = true);
     final updated = (provider.peekMovieById(movie.id) ?? movie).copyWith(
       episodes: _episodes,
       watched: _watched,
@@ -1379,15 +1441,31 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
       clearUserReview: _reviewController.text.trim().isEmpty,
     );
 
-    await provider.updateMovie(updated);
-    if (!mounted) return;
+    try {
+      await provider.updateMovie(updated);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _saving = false);
+        AppToast.error(context, '保存失败，请重试，修改仍保留在当前页面');
+      }
+      return false;
+    }
+    if (!mounted) return false;
+    if (provider.error != null) {
+      setState(() => _saving = false);
+      AppToast.error(context, '保存失败，请重试，修改仍保留在当前页面');
+      return false;
+    }
 
+    LocalDataGuard.release(this);
     setState(() {
+      _saving = false;
       _hasChanges = false;
       _seedMovie = updated;
       _movieFuture = _loadMovie(forceRefresh: true);
     });
     AppToast.success(context, '已保存');
+    return true;
   }
 
   Future<void> _launchUrl(String url) async {

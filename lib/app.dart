@@ -5,11 +5,10 @@ import 'package:provider/provider.dart';
 import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/providers/providers.dart';
 import 'package:random_movie/router/app_router.dart';
-import 'package:random_movie/services/backup_service.dart';
+import 'package:random_movie/services/backup_inventory.dart';
 import 'package:random_movie/services/storage_service.dart';
 import 'package:random_movie/services/webdav_sync_service.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 /// 应用根组件
 class MyApp extends StatefulWidget {
@@ -135,11 +134,7 @@ class _AppLifecycleShellState extends State<_AppLifecycleShell>
   }
 
   Future<WebDavSyncService> _createSyncService() async {
-    final preferences = await SharedPreferences.getInstance();
-    return WebDavSyncService(
-      backup: BackupService(StorageService()),
-      preferences: preferences,
-    );
+    return WebDavSyncService.shared();
   }
 
   @override
@@ -195,10 +190,13 @@ class _AppLifecycleShellState extends State<_AppLifecycleShell>
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
         title: const Text('发现同步冲突'),
+        scrollable: true,
         content: Text(
           '本地：${inspection.local.updatedAt.toLocal()}\n'
           '云端：${inspection.remote?.snapshot.updatedAt.toLocal() ?? '暂无备份'}\n\n'
-          '两台设备都发生了变化，请选择要保留的一侧。',
+          '本地内容：${BackupInventory.fromPayload(inspection.local.payload).description}\n\n'
+          '云端内容：${inspection.remote == null ? "无" : BackupInventory.fromPayload(inspection.remote!.snapshot.payload).description}\n\n'
+          '双方内容不同，选择后将整份替换另一侧。',
         ),
         actions: [
           TextButton(
@@ -220,7 +218,10 @@ class _AppLifecycleShellState extends State<_AppLifecycleShell>
     );
     if (!mounted || choice == null) return;
 
-    final resolved = await service.synchronize(conflictChoice: choice);
+    final resolved = await service.synchronize(
+      conflictChoice: choice,
+      expectedInspection: inspection,
+    );
     if (!mounted || !resolved.isSuccess) return;
     if (resolved.action == WebDavSyncAction.download) {
       await _refreshAfterSync(

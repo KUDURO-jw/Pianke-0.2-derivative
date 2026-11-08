@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/services/backup_snapshot.dart';
+import 'package:random_movie/services/backup_inventory.dart';
+import 'package:random_movie/services/local_data_guard.dart';
 import 'package:random_movie/services/webdav_client.dart';
 import 'package:random_movie/services/webdav_sync_service.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
@@ -42,6 +44,8 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
 
   Future<void> _loadConfig() async {
     _service = await widget.serviceFuture;
+    if (!mounted) return;
+    _service!.addListener(_serviceChanged);
     final config = await _service!.readConfig();
     _accountController.text = config.account;
     _directoryController.text = config.remoteDirectory;
@@ -51,11 +55,19 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
 
   @override
   void dispose() {
+    _service?.removeListener(_serviceChanged);
+    LocalDataGuard.release(this);
     _accountController.dispose();
     _passwordController.dispose();
     _directoryController.dispose();
     super.dispose();
   }
+
+  void _serviceChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _operationBusy => _busy || (_service?.isRunning ?? false);
 
   Future<void> _saveConfig() async {
     await _service!.saveConfig(
@@ -76,7 +88,7 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
   }
 
   Future<void> _testConnection() async {
-    if (_busy) return;
+    if (_operationBusy) return;
     setState(() {
       _busy = true;
       _message = null;
@@ -87,26 +99,37 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
       _setMessage('连接成功，远程目录可用');
     } catch (error) {
       _setError(_errorMessage(error));
+      await _service?.recordFailure(_errorMessage(error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _runSync(WebDavSyncDirection direction) async {
-    if (_busy) return;
+    if (_operationBusy) return;
     setState(() {
       _busy = true;
       _message = null;
       _progress = null;
     });
 
+    LocalDataGuard.hold(this);
     try {
       await _saveConfig();
       final inspection = await _service!.inspect(onProgress: _updateProgress);
       if (!mounted) return;
 
-      if (inspection.decision.action == WebDavSyncAction.none) {
-        _setMessage('本地和云端数据已经是最新');
+      if (inspection.decision.action == WebDavSyncAction.none &&
+          direction == WebDavSyncDirection.automatic) {
+        LocalDataGuard.release(this);
+        final outcome = await _service!.synchronize(
+          expectedInspection: inspection,
+        );
+        if (outcome.isSuccess) {
+          _setMessage(outcome.message);
+        } else {
+          _setError(outcome.message);
+        }
         return;
       }
 
@@ -134,9 +157,11 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
       );
       if (!confirmed || !mounted) return;
 
+      LocalDataGuard.release(this);
       final outcome = await _service!.synchronize(
         direction: direction,
         conflictChoice: choice,
+        expectedInspection: inspection,
         onProgress: _updateProgress,
       );
       if (!mounted) return;
@@ -145,7 +170,7 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
           await widget.onRestored();
           if (!mounted) return;
           // 恢复是覆盖操作，明确告知兜底备份的位置，方便反悔时找回。
-          _setMessage('${outcome.message}（覆盖前的数据已备份到「片刻安全备份」）');
+          _setMessage(outcome.message);
         } else {
           _setMessage(outcome.message);
         }
@@ -156,7 +181,9 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
       }
     } catch (error) {
       if (mounted) _setError(_errorMessage(error));
+      await _service?.recordFailure(_errorMessage(error));
     } finally {
+      LocalDataGuard.release(this);
       if (mounted) {
         setState(() {
           _busy = false;
@@ -207,6 +234,7 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
           context: context,
           builder: (dialogContext) => AlertDialog(
             title: Text(isRestore ? '确认用云端覆盖本地？' : '同步前确认'),
+            scrollable: true,
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -241,7 +269,7 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
                         Expanded(
                           child: Text(
                             '本机的影片、观影记录、合集与标签将被云端备份'
-                            '整份替换，本地独有的内容会丢失，且无法撤回。',
+                            '整份替换，本地独有的内容将移出当前片库。覆盖前会尝试创建安全备份。',
                             style: TextStyle(
                               fontSize: 13,
                               height: 1.5,
@@ -316,7 +344,7 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
 
   String _snapshotSummary(BackupSnapshot snapshot) {
     final stamp = snapshot.updatedAt.toLocal().toString().split('.').first;
-    return '$stamp，${snapshot.movieCount} 部影片，校验值 ${snapshot.checksum.substring(0, 8)}';
+    return '$stamp\n${BackupInventory.fromPayload(snapshot.payload).description}';
   }
 
   @override
@@ -344,7 +372,7 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
                   const SizedBox(width: 10),
                   Expanded(child: Text(_configured ? '已配置坚果云' : '尚未配置坚果云')),
                   TextButton.icon(
-                    onPressed: _busy
+                    onPressed: _operationBusy
                         ? null
                         : () => setState(
                             () => _configExpanded = !_configExpanded,
@@ -356,6 +384,16 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
                   ),
                 ],
               ),
+              Text(
+                '${_service!.statusMessage}\n上次成功：${_service!.lastSuccessAt?.toLocal().toString().split(".").first ?? "暂无"}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: _service!.lastAttemptFailed
+                      ? colorScheme.error
+                      : colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: AppTheme.spacingSmall),
               if (_configExpanded)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
@@ -372,7 +410,7 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
                       const SizedBox(height: AppTheme.spacingMedium),
                       TextField(
                         controller: _accountController,
-                        enabled: !_busy,
+                        enabled: !_operationBusy,
                         keyboardType: TextInputType.emailAddress,
                         decoration: const InputDecoration(
                           labelText: '坚果云账号',
@@ -382,7 +420,7 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
                       const SizedBox(height: AppTheme.spacingSmall),
                       TextField(
                         controller: _passwordController,
-                        enabled: !_busy,
+                        enabled: !_operationBusy,
                         obscureText: true,
                         decoration: const InputDecoration(
                           labelText: '应用密码',
@@ -393,7 +431,7 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
                       const SizedBox(height: AppTheme.spacingSmall),
                       TextField(
                         controller: _directoryController,
-                        enabled: !_busy,
+                        enabled: !_operationBusy,
                         decoration: const InputDecoration(
                           labelText: '远程备份目录',
                           prefixIcon: Icon(Icons.folder_outlined),
@@ -401,7 +439,7 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
                       ),
                       const SizedBox(height: AppTheme.spacingMedium),
                       OutlinedButton.icon(
-                        onPressed: _busy ? null : _testConnection,
+                        onPressed: _operationBusy ? null : _testConnection,
                         icon: const Icon(Icons.link_rounded),
                         label: const Text('保存并测试连接'),
                       ),
@@ -429,21 +467,21 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
                 runSpacing: AppTheme.spacingSmall,
                 children: [
                   FilledButton.icon(
-                    onPressed: _busy
+                    onPressed: _operationBusy
                         ? null
                         : () => _runSync(WebDavSyncDirection.upload),
                     icon: const Icon(Icons.cloud_upload_outlined),
                     label: const Text('上传备份'),
                   ),
                   OutlinedButton.icon(
-                    onPressed: _busy
+                    onPressed: _operationBusy
                         ? null
                         : () => _runSync(WebDavSyncDirection.download),
                     icon: const Icon(Icons.cloud_download_outlined),
                     label: const Text('从云端恢复'),
                   ),
                   TextButton.icon(
-                    onPressed: _busy
+                    onPressed: _operationBusy
                         ? null
                         : () => _runSync(WebDavSyncDirection.automatic),
                     icon: const Icon(Icons.sync_rounded),

@@ -15,7 +15,7 @@ import 'package:random_movie/services/webdav_sync_service.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
 import 'package:random_movie/widgets/settings/webdav_sync_section.dart';
 import 'package:random_movie/widgets/settings/update_download_dialog.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:random_movie/services/local_data_guard.dart';
 
 class SettingsPage extends StatefulWidget {
   final UpdateService? updateService;
@@ -51,8 +51,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<WebDavSyncService> _createSyncService() async {
-    final preferences = await SharedPreferences.getInstance();
-    return WebDavSyncService(backup: _backupService, preferences: preferences);
+    return WebDavSyncService.shared();
   }
 
   @override
@@ -280,16 +279,16 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _handleImport() async {
     if (_importLoading) return;
 
-    final confirmed = await _showImportConfirmDialog();
-    if (!confirmed || !mounted) return;
-
     final movieProvider = context.read<MovieProvider>();
     final collectionProvider = context.read<CollectionProvider>();
     final drawHistoryProvider = context.read<DrawHistoryProvider>();
 
     setState(() => _importLoading = true);
+    LocalDataGuard.hold(this);
     try {
-      final result = await _backupService.importBackup();
+      final result = await _backupService.importBackup(
+        confirm: _showImportConfirmDialog,
+      );
       if (!mounted) return;
       if (result.success) {
         await _refreshAfterImport(
@@ -303,9 +302,9 @@ class _SettingsPageState extends State<SettingsPage> {
           AppToast.show(
             context,
             '已导入 ${stats.moviesImported} 部影片'
-            '${stats.moviesSkipped > 0 ? '（跳过 ${stats.moviesSkipped} 条重复）' : ''}'
+            '${stats.moviesSkipped > 0 ? '（跳过 ${stats.moviesSkipped} 条重复或无效记录）' : ''}'
             '、${stats.drawRecordsImported} 条抽片记录'
-            '${stats.drawRecordsSkipped > 0 ? '（跳过 ${stats.drawRecordsSkipped} 条重复）' : ''}'
+            '${stats.drawRecordsSkipped > 0 ? '（跳过 ${stats.drawRecordsSkipped} 条重复或无效记录）' : ''}'
             '${stats.sessionsImported > 0 ? '、${stats.sessionsImported} 条观影记录' : ''}',
             type: ToastType.success,
           );
@@ -314,6 +313,7 @@ class _SettingsPageState extends State<SettingsPage> {
         AppToast.show(context, result.message ?? '恢复失败', type: ToastType.error);
       }
     } finally {
+      LocalDataGuard.release(this);
       if (mounted) setState(() => _importLoading = false);
     }
   }
@@ -341,7 +341,8 @@ class _SettingsPageState extends State<SettingsPage> {
     if (mounted) context.read<ThemeProvider>().load();
   }
 
-  Future<bool> _showImportConfirmDialog() async {
+  Future<bool> _showImportConfirmDialog(BackupImportPreview preview) async {
+    if (!mounted) return false;
     final colorScheme = Theme.of(context).colorScheme;
     return await showDialog<bool>(
           context: context,
@@ -352,8 +353,15 @@ class _SettingsPageState extends State<SettingsPage> {
               side: BorderSide(color: colorScheme.outlineVariant),
             ),
             title: const Text('从备份恢复'),
-            content: const Text(
-              '将从备份文件合并数据，已有记录不会被覆盖或删除。\n\n请选择之前导出的 .json 备份文件。',
+            content: SingleChildScrollView(
+              child: Text(
+                '${preview.inventory.description}\n\n'
+                '备份版本：${preview.schemaVersion}\n'
+                '导出时间：${preview.exportedAt?.toLocal().toString().split(".").first ?? "旧版未记录"}\n'
+                '${preview.invalidRecords > 0 ? "有 ${preview.invalidRecords} 条无效记录，将跳过。\n" : ""}'
+                '${preview.schemaVersion < 2 ? "旧版已看状态会补为观影记录。\n" : ""}'
+                '\n合并到本机，已有的同 ID 记录保持原样。',
+              ),
             ),
             actions: [
               TextButton(
@@ -364,7 +372,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 onPressed: () => Navigator.of(ctx).pop(true),
                 style: TextButton.styleFrom(foregroundColor: AppTheme.accent),
                 child: const Text(
-                  '选择文件',
+                  '确认合并',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),

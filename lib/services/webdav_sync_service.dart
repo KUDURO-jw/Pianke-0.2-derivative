@@ -1,4 +1,7 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter/foundation.dart';
+import 'package:random_movie/services/storage_service.dart';
+import 'package:random_movie/services/local_data_guard.dart';
 import 'package:random_movie/services/backup_service.dart';
 import 'package:random_movie/services/backup_snapshot.dart';
 import 'package:random_movie/services/webdav_client.dart';
@@ -143,7 +146,30 @@ class WebDavSyncOutcome {
   bool get isConflict => state == WebDavSyncState.conflict;
 }
 
-class WebDavSyncService {
+class WebDavSyncService extends ChangeNotifier {
+  static Future<WebDavSyncService>? _shared;
+  static Future<WebDavSyncService> shared() => _shared ??= _createShared();
+  static Future<WebDavSyncService> _createShared() async => WebDavSyncService(
+    backup: BackupService(StorageService()),
+    preferences: await SharedPreferences.getInstance(),
+  );
+
+  bool get isRunning => _running;
+  DateTime? get lastSuccessAt =>
+      DateTime.tryParse(_prefs.getString(_lastSyncKey) ?? '');
+  String get statusMessage => _running
+      ? '正在同步…'
+      : _prefs.getString('pianke_webdav_last_message') ??
+            (hasPendingConflict ? '有待处理的同步冲突' : '尚未同步');
+  bool get lastAttemptFailed =>
+      _prefs.getBool('pianke_webdav_last_failed') ?? false;
+
+  Future<void> recordFailure(String message) async {
+    await _prefs.setString('pianke_webdav_last_message', message);
+    await _prefs.setBool('pianke_webdav_last_failed', true);
+    notifyListeners();
+  }
+
   static const _accountKey = 'pianke_webdav_account';
   static const _directoryKey = 'pianke_webdav_directory';
   static const _baseLocalKey = 'pianke_webdav_base_local_checksum';
@@ -234,6 +260,7 @@ class WebDavSyncService {
     WebDavSyncDirection direction = WebDavSyncDirection.automatic,
     WebDavConflictChoice? conflictChoice,
     WebDavProgress? onProgress,
+    SyncInspection? expectedInspection,
   }) async {
     if (_running) {
       return const WebDavSyncOutcome(
@@ -244,8 +271,40 @@ class WebDavSyncService {
     }
 
     _running = true;
+    notifyListeners();
+    try {
+      final outcome = await _performSync(
+        direction: direction,
+        conflictChoice: conflictChoice,
+        onProgress: onProgress,
+        expectedInspection: expectedInspection,
+      );
+      await _prefs.setString('pianke_webdav_last_message', outcome.message);
+      await _prefs.setBool(
+        'pianke_webdav_last_failed',
+        outcome.state == WebDavSyncState.failure,
+      );
+      return outcome;
+    } finally {
+      _running = false;
+      notifyListeners();
+    }
+  }
+
+  Future<WebDavSyncOutcome> _performSync({
+    required WebDavSyncDirection direction,
+    WebDavConflictChoice? conflictChoice,
+    WebDavProgress? onProgress,
+    SyncInspection? expectedInspection,
+  }) async {
     try {
       final inspection = await inspect(onProgress: onProgress);
+      if (expectedInspection != null &&
+          (expectedInspection.local.checksum != inspection.local.checksum ||
+              expectedInspection.remote?.snapshot.checksum !=
+                  inspection.remote?.snapshot.checksum)) {
+        throw const WebDavException('预览后数据已变化，请重新确认本地和云端版本');
+      }
       var action = inspection.decision.action;
       if (direction == WebDavSyncDirection.upload) {
         action = WebDavSyncAction.upload;
@@ -300,17 +359,25 @@ class WebDavSyncService {
       // 覆盖前先落一份本机兜底备份：恢复是不可撤回操作，
       // 一旦用户选错一侧，还能从文档目录里找回上一次数据。
       // 兜底失败（磁盘满、权限异常等）不应阻断恢复本身，因此单独吞掉。
+      String? safetyBackup;
       try {
-        await _backup.createLocalSafetyBackup();
+        safetyBackup = await _backup.createLocalSafetyBackup();
       } catch (_) {
         // 兜底备份失败，继续执行恢复。
+      }
+      final latestLocal = await _backup.createSyncSnapshot();
+      if (LocalDataGuard.isEditing ||
+          latestLocal.checksum != inspection.local.checksum) {
+        throw const WebDavException('本地正在编辑或已变化，已停止覆盖，请稍后重试');
       }
       await _backup.restoreSyncSnapshot(remote.snapshot);
       await _saveBase(remote.snapshot, remote.snapshot);
       return WebDavSyncOutcome(
         state: WebDavSyncState.success,
         action: action,
-        message: '已从云端恢复最新备份',
+        message: safetyBackup == null
+            ? '已从云端恢复，但覆盖前安全备份未能保存'
+            : '已从云端恢复最新备份，原数据已保存到本机安全备份',
         inspection: inspection,
       );
     } on BackupSnapshotException catch (error) {
@@ -331,15 +398,38 @@ class WebDavSyncService {
         action: WebDavSyncAction.none,
         message: '同步失败，请稍后重试',
       );
-    } finally {
-      _running = false;
     }
   }
 
   Future<WebDavSyncOutcome> synchronizeAutomatically({
     WebDavProgress? onProgress,
   }) async {
-    final config = await readConfig();
+    if (LocalDataGuard.isEditing || _running) {
+      return const WebDavSyncOutcome(
+        state: WebDavSyncState.idle,
+        action: WebDavSyncAction.none,
+        message: '编辑完成后再同步',
+      );
+    }
+    WebDavSyncConfig config;
+    try {
+      config = await readConfig();
+    } catch (_) {
+      const message = '无法读取同步配置，请在设置中检查后重试';
+      await recordFailure(message);
+      return const WebDavSyncOutcome(
+        state: WebDavSyncState.failure,
+        action: WebDavSyncAction.none,
+        message: message,
+      );
+    }
+    if (LocalDataGuard.isEditing || _running) {
+      return const WebDavSyncOutcome(
+        state: WebDavSyncState.idle,
+        action: WebDavSyncAction.none,
+        message: '编辑完成后再同步',
+      );
+    }
     if (!config.hasPassword || config.account.trim().isEmpty) {
       return const WebDavSyncOutcome(
         state: WebDavSyncState.idle,

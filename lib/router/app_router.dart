@@ -8,6 +8,7 @@ import 'package:random_movie/router/movie_detail_arguments.dart';
 import 'package:random_movie/pages/collections/collections_page.dart';
 import 'package:random_movie/pages/collections/collection_detail_page.dart';
 import 'package:random_movie/pages/history/history_page.dart';
+import 'package:random_movie/pages/history/annual_review_page.dart';
 import 'package:random_movie/pages/draw/draw_hub_page.dart';
 import 'package:random_movie/pages/draw/draw_page.dart';
 import 'package:random_movie/pages/movies/add_movie_page.dart';
@@ -137,6 +138,11 @@ final appRouter = GoRouter(
   navigatorKey: rootNavigatorKey,
   initialLocation: '/movies',
   routes: [
+    GoRoute(
+      path: '/history/year',
+      pageBuilder: (context, state) =>
+          _secondaryPage(context, state, const AnnualReviewPage()),
+    ),
     StatefulShellRoute(
       navigatorContainerBuilder: (context, navigationShell, children) =>
           _BranchTransition(

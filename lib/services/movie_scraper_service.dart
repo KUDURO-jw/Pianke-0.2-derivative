@@ -81,13 +81,9 @@ class MovieScraperService {
     } on ScraperException {
       rethrow;
     } on DioException catch (error) {
-      if (error.type == DioExceptionType.connectionTimeout ||
-          error.type == DioExceptionType.receiveTimeout) {
-        throw ScraperException('请求超时，请稍后重试');
-      }
-      throw ScraperException('获取影片信息失败: ${error.message}');
-    } catch (error) {
-      throw ScraperException('爬取失败: $error');
+      throw ScraperException(_networkErrorMessage(error));
+    } catch (_) {
+      throw ScraperException('影片页面解析失败，可稍后重试或手动添加');
     }
   }
 
@@ -113,15 +109,11 @@ class MovieScraperService {
       if (html.isEmpty) return const [];
       return _parseSearchData(html);
     } on DioException catch (error) {
-      if (error.type == DioExceptionType.connectionTimeout ||
-          error.type == DioExceptionType.receiveTimeout) {
-        throw ScraperException('请求超时，请稍后重试');
-      }
-      throw ScraperException('搜索失败: ${error.message}');
+      throw ScraperException(_networkErrorMessage(error));
     } on ScraperException {
       rethrow;
-    } catch (error) {
-      throw ScraperException('搜索失败: $error');
+    } catch (_) {
+      throw ScraperException('搜索结果解析失败，请重试或使用豆瓣链接添加');
     }
   }
 
@@ -304,14 +296,22 @@ class MovieScraperService {
     } on ScraperException {
       rethrow;
     } on DioException catch (error) {
-      if (error.type == DioExceptionType.connectionTimeout ||
-          error.type == DioExceptionType.receiveTimeout) {
-        throw ScraperException('请求超时，请稍后重试');
-      }
-      throw ScraperException('获取片单失败: ${error.message}');
-    } catch (error) {
-      throw ScraperException(error.toString());
+      throw ScraperException(_networkErrorMessage(error));
+    } catch (_) {
+      throw ScraperException('片单解析失败，请稍后重试');
     }
+  }
+
+  String _networkErrorMessage(DioException error) {
+    if (error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.receiveTimeout ||
+        error.type == DioExceptionType.sendTimeout) {
+      return '连接豆瓣超时，请检查网络后重试；已保存的片库仍可离线使用';
+    }
+    final code = error.response?.statusCode;
+    if (code == 403 || code == 429) return '豆瓣暂时限制了访问，请稍后再试，勿连续请求';
+    if (code == 404) return '豆瓣条目不存在或已移除，可以手动添加';
+    return '无法连接豆瓣，请检查网络后重试；本地片库不受影响';
   }
 
   /// 分页收集片单候选影片。豆瓣片单默认每页 25 条，需逐页翻直到没有下一页。

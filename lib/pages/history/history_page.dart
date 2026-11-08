@@ -11,6 +11,7 @@ import 'package:random_movie/widgets/common/app_components.dart';
 import 'package:random_movie/models/models.dart';
 import 'package:random_movie/providers/movie_provider.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
+import 'package:random_movie/widgets/movie/quick_viewing_entry.dart';
 
 /// 观影记录页面
 class HistoryPage extends StatefulWidget {
@@ -134,6 +135,13 @@ class _HistoryCalendarPageState extends State<HistoryCalendarPage> {
           icon: const Icon(Icons.chevron_left_rounded, size: 30),
         ),
         title: const Text('日历'),
+        actions: [
+          IconButton(
+            tooltip: '补记观影',
+            icon: const Icon(Icons.add),
+            onPressed: () => showQuickViewingEntry(context),
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Divider(
@@ -242,10 +250,26 @@ class _HistoryListView extends StatelessWidget {
             bottom: false,
             child: PageHeader(
               title: '观影记录',
-              trailing: RoundIconButton(
-                icon: Icons.calendar_month_outlined,
-                tooltip: '打开观影日历',
-                onPressed: () => context.push('/history/calendar'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: '补记观影',
+                    icon: const Icon(Icons.add),
+                    onPressed: () => showQuickViewingEntry(context),
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: '观影工具',
+                    icon: const Icon(Icons.more_horiz),
+                    onSelected: (value) => context.push(
+                      value == 'year' ? '/history/year' : '/history/calendar',
+                    ),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'calendar', child: Text('打开观影日历')),
+                      PopupMenuItem(value: 'year', child: Text('年度回顾')),
+                    ],
+                  ),
+                ],
               ),
             ),
           ),
@@ -634,7 +658,15 @@ class _HistoryCalendarView extends StatelessWidget {
                   summary: summary,
                   isCurrentMonth: isCurrentMonth,
                   isToday: isToday,
-                  onTap: summary == null ? null : () => onTapDay(summary),
+                  onTap:
+                      !isCurrentMonth ||
+                          date.isAfter(
+                            DateTime(today.year, today.month, today.day),
+                          )
+                      ? null
+                      : summary == null
+                      ? () => showQuickViewingEntry(context, date: date)
+                      : () => onTapDay(summary),
                 ),
               );
             },
@@ -906,6 +938,15 @@ class _HistoryDaySheet extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(dateLabel, style: Theme.of(context).textTheme.titleMedium),
+              TextButton.icon(
+                icon: const Icon(Icons.add),
+                label: const Text('补记这一天'),
+                onPressed: () {
+                  final hostContext = Navigator.of(context).context;
+                  Navigator.pop(context);
+                  showQuickViewingEntry(hostContext, date: summary.date);
+                },
+              ),
               const SizedBox(height: AppTheme.spacingXSmall),
               Text(
                 '共 ${summary.count} 部',

@@ -65,6 +65,85 @@ class _JsonPicker extends FilePicker {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('cancelled preview never writes any imported record', () async {
+    final store = _MemoryStore();
+    FilePicker.platform = _JsonPicker({
+      'meta': {
+        'appId': 'Pianke',
+        'schemaVersion': 3,
+        'exportedAt': '2026-11-01',
+      },
+      'movies': [Movie(id: 'preview', title: '预览').toJson()],
+      'collections': [
+        {'id': 'collection', 'name': '清单'},
+      ],
+    });
+    final result = await BackupService(store).importBackup(
+      confirm: (preview) async {
+        expect(preview.inventory.movies, 1);
+        expect(preview.inventory.collections, 1);
+        expect(preview.exportedAt?.month, 11);
+        expect(store.movies, isEmpty);
+        return false;
+      },
+    );
+    expect(result.message, '已取消');
+    expect(store.movies, isEmpty);
+    expect(store.tables, isNull);
+  });
+
+  test(
+    'malformed top-level collections and future formats are rejected before writes',
+    () async {
+      for (final payload in [
+        {
+          'meta': {'appId': 'Pianke', 'schemaVersion': 99},
+          'movies': [],
+        },
+        {
+          'meta': {'appId': 'Pianke', 'schemaVersion': 3},
+          'movies': [],
+          'collections': 'broken',
+        },
+        {
+          'meta': {'appId': 'Pianke', 'schemaVersion': '3'},
+          'movies': [],
+        },
+      ]) {
+        final store = _MemoryStore();
+        FilePicker.platform = _JsonPicker(payload);
+        final result = await BackupService(store).importBackup();
+        expect(result.success, isFalse);
+        expect(store.movies, isEmpty);
+        expect(store.tables, isNull);
+      }
+    },
+  );
+
+  test(
+    'preview counts invalid records without overwriting an existing review',
+    () async {
+      final existing = Movie(id: 'existing', title: '本地', userReview: '保留我的短评');
+      final store = _MemoryStore()..movies['existing'] = existing;
+      FilePicker.platform = _JsonPicker({
+        'meta': {'appId': 'Pianke', 'schemaVersion': 3},
+        'movies': [
+          existing.copyWith(userReview: '备份旧短评').toJson(),
+          {'id': '', 'title': '无效'},
+          {'id': 'bad', 'createdAt': 'invalid'},
+        ],
+      });
+      final result = await BackupService(store).importBackup(
+        confirm: (preview) async {
+          expect(preview.invalidRecords, 2);
+          return true;
+        },
+      );
+      expect(result.success, isTrue);
+      expect(store.movies['existing']?.userReview, '保留我的短评');
+      expect(result.stats?.moviesSkipped, 3);
+    },
+  );
   test(
     'legacy JSON merge preserves existing movies and synthesizes one session',
     () async {
