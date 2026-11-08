@@ -1,13 +1,14 @@
 {
-  "versionName": "0.2.6",
-  "versionCode": 11,
-  "title": "片刻·焕新版 0.2.6",
+  "versionName": "0.2.7",
+  "versionCode": 12,
+  "title": "片刻·焕新版 0.2.7",
   "changelog": [
-    "新增应用内下载进度、取消及失败重试，不再依赖浏览器下载",
-    "安装包校验后点击安装新版，由 Android 确认；首次可能需允许此来源",
-    "保留 0.2.5 的排版、海报转场与底栏动效优化"
+    "详情未保存返回确认与固定保存按钮，失败保留修改",
+    "抽片实际候选数、空结果解释和逐项取消筛选",
+    "观影页与月历快速补记，年度回顾与图片分享",
+    "备份恢复预览、同步状态与防覆盖检查，保持简介离线展开"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.6-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "9e3d6d4b1fc8cef40799c23fcde1a7fe9519e74d82cbf503a77c7fa20de39a8b",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.7-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "ac1e317ec6fefe79d33424bf0d94ae16871f02160429a062ec530698f5f72b6a",
   "forceUpdate": false
 }
