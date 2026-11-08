@@ -240,15 +240,11 @@ class _AddMoviePageState extends State<AddMoviePage>
                 return _buildMoviePlaceholderCard();
               }
               final movie = _searchResults[index];
-              return Stack(
-                children: [
-                  MovieCard(movie: movie, showWatchedBadge: false, onTap: null),
-                  Positioned(
-                    right: 4,
-                    top: 4,
-                    child: _buildSearchAddButton(movie),
-                  ),
-                ],
+              return MovieCard(
+                movie: movie,
+                showWatchedBadge: false,
+                posterAction: _buildSearchAddButton(movie),
+                onTap: null,
               );
             },
           ),

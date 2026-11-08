@@ -12,6 +12,7 @@ class MovieCard extends StatefulWidget {
   final VoidCallback? onDelete;
   final bool showWatchedBadge;
   final String? posterHeroTag;
+  final Widget? posterAction;
 
   const MovieCard({
     super.key,
@@ -20,6 +21,7 @@ class MovieCard extends StatefulWidget {
     this.onDelete,
     this.showWatchedBadge = true,
     this.posterHeroTag,
+    this.posterAction,
   });
 
   @override
@@ -191,6 +193,12 @@ class _MovieCardState extends State<MovieCard>
                               ),
                             ),
                           ),
+                        ),
+                      if (widget.posterAction != null)
+                        Positioned(
+                          bottom: 4,
+                          right: 4,
+                          child: widget.posterAction!,
                         ),
                     ],
                   ),
