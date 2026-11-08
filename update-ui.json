@@ -1,13 +1,15 @@
 {
-  "versionName": "0.2.8",
-  "versionCode": 13,
-  "title": "片刻·焕新版 0.2.8",
+  "versionName": "0.2.9",
+  "versionCode": 14,
+  "title": "片刻·焕新版 0.2.9",
   "changelog": [
-    "双击底栏片库平滑回到顶部，保留搜索筛选与页面状态",
-    "优化影片进入和返回转场，修正海报测量导致的提前加载",
-    "减少海报卡片按压及详情头部滚动重建，复用海报缓存"
+    "完善搜索提交、添加按钮与分页失败重试，避免旧搜索结果回写",
+    "合集成员改为事务批量保存与分页选择，返回详情及时刷新",
+    "片单导入区分成功、重复与失败，保留失败项供重试",
+    "修复片库、观影与抽片历史分页竞态，关联数据事务删除",
+    "限制日历和详情缓存，减少空闲动画与重复刷新"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.8-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "916ade9323f67ec5b1d92b012fa8b2a47ed5954e5d105933897a6c244111fb05",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.9-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "40d925a5da43420ea451c0c8e3130813215a8af4faef07e050e5803abe8c5c4b",
   "forceUpdate": false
 }
