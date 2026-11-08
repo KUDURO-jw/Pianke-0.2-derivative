@@ -1,7 +1,11 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:random_movie/config/app_theme.dart';
 import 'package:provider/provider.dart';
 import 'package:random_movie/models/models.dart';
 import 'package:random_movie/providers/providers.dart';
@@ -61,6 +65,95 @@ class LibraryMovies extends MovieProvider {
 }
 
 void main() {
+  setUpAll(() async {
+    final font = File('C:/Windows/Fonts/msyh.ttc');
+    if (await font.exists()) {
+      for (final family in ['Roboto', 'Ahem']) {
+        await (FontLoader(family)..addFont(
+              font.readAsBytes().then((bytes) => ByteData.sublistView(bytes)),
+            ))
+            .load();
+      }
+    }
+    final icons = File(
+      'C:/Project/pk/toolchain/flutter-3.44.0/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
+    );
+    if (await icons.exists()) {
+      await (FontLoader('MaterialIcons')..addFont(
+            icons.readAsBytes().then((bytes) => ByteData.sublistView(bytes)),
+          ))
+          .load();
+    }
+  });
+  for (final dark in [false, true]) {
+    testWidgets(
+      'detail tab surface stays below artwork (${dark ? 'dark' : 'light'})',
+      (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final movies = EpisodeMovies();
+        movies.movie = movies.movie.copyWith(
+          summary: '故事从一场超市纵火案展开，一段关于人与社会的故事。',
+        );
+        final captureKey = GlobalKey();
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider<MovieProvider>.value(value: movies),
+              ChangeNotifierProvider<CollectionProvider>(
+                create: (_) => EpisodeCollections(),
+              ),
+            ],
+            child: MaterialApp(
+              theme: dark ? AppTheme.darkTheme : AppTheme.lightTheme,
+              home: RepaintBoundary(
+                key: captureKey,
+                child: const MovieDetailPage(movieId: 'series'),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final tabs = tester.widget<TabBar>(find.byType(TabBar));
+        expect(tabs.indicator, isA<UnderlineTabIndicator>());
+        expect(tabs.labelColor, isNot(tabs.unselectedLabelColor));
+        final surface = find.byKey(const ValueKey('detail-tab-surface'));
+        expect(
+          tester.getRect(surface).top,
+          greaterThanOrEqualTo(
+            tester.getRect(find.byType(FlexibleSpaceBar)).bottom,
+          ),
+        );
+        expect(find.text('记录').hitTestable(), findsOneWidget);
+        expect(find.text('资料').hitTestable(), findsOneWidget);
+        final captureDirectory = Platform.environment['PIANKE_CAPTURE_DIR'];
+        if (captureDirectory != null) {
+          final boundary =
+              captureKey.currentContext!.findRenderObject()!
+                  as RenderRepaintBoundary;
+          await tester.runAsync(() async {
+            final image = await boundary.toImage();
+            final data = await image.toByteData(format: ui.ImageByteFormat.png);
+            await Directory(captureDirectory).create(recursive: true);
+            await File(
+              '$captureDirectory/detail-${dark ? 'dark' : 'light'}.png',
+            ).writeAsBytes(data!.buffer.asUint8List());
+            image.dispose();
+          });
+        }
+        await tester.drag(
+          find.byKey(const PageStorageKey('series-records')),
+          const Offset(0, -500),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.getTopLeft(surface).dy, closeTo(kToolbarHeight, 1));
+        expect(find.text('资料').hitTestable(), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets(
     'detail tabs support swipes, taps and independent scroll positions',
     (tester) async {

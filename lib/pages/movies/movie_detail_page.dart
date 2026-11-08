@@ -302,149 +302,167 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
       title: collapsed
           ? Text(movie.title, maxLines: 1, overflow: TextOverflow.ellipsis)
           : null,
-      bottom: TabBar(
-        labelColor: collapsed ? colorScheme.primary : Colors.white,
-        unselectedLabelColor: collapsed
-            ? colorScheme.onSurfaceVariant
-            : Colors.white70,
-        indicatorColor: collapsed ? colorScheme.primary : Colors.white,
-        tabs: const [
-          Tab(text: '记录'),
-          Tab(text: '资料'),
-        ],
+      // Keep the navigation on an opaque surface below the poster. The global
+      // tab theme uses a filled pill, which is unsuitable over poster artwork.
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(kTextTabBarHeight),
+        child: ColoredBox(
+          key: const ValueKey('detail-tab-surface'),
+          color: colorScheme.surface,
+          child: TabBar(
+            labelColor: colorScheme.primary,
+            unselectedLabelColor: colorScheme.onSurfaceVariant,
+            indicator: UnderlineTabIndicator(
+              borderSide: BorderSide(color: colorScheme.primary, width: 3),
+              borderRadius: BorderRadius.circular(3),
+            ),
+            indicatorSize: TabBarIndicatorSize.label,
+            dividerColor: Colors.transparent,
+            tabs: const [
+              Tab(text: '记录'),
+              Tab(text: '资料'),
+            ],
+          ),
+        ),
       ),
       systemOverlayStyle: collapsed
           ? (colorScheme.brightness == Brightness.dark
                 ? SystemUiOverlayStyle.light
                 : SystemUiOverlayStyle.dark)
           : SystemUiOverlayStyle.light,
-      flexibleSpace: FlexibleSpaceBar(
-        collapseMode: CollapseMode.parallax,
-        background: RepaintBoundary(
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // 暗化封面背景（同海报，cover 铺满）
-              if (hasPoster)
-                CachedNetworkImage(
-                  imageUrl: movie.poster,
-                  httpHeaders: ApiConfig.imageHeaders,
-                  fit: BoxFit.cover,
-                  // Share the decoded/cache entry with the grid and Hero.
-                  memCacheWidth: 300,
-                  maxWidthDiskCache: 300,
-                  fadeInDuration: Duration.zero,
-                  placeholder: (_, _) => ColoredBox(color: surfaceColor),
-                  errorWidget: (_, _, _) => ColoredBox(color: surfaceColor),
-                )
-              else
-                ColoredBox(
-                  color: surfaceColor,
-                  child: const Center(
-                    child: Icon(Icons.movie, size: 72, color: Colors.white24),
-                  ),
-                ),
-              // 顶部 + 底部渐变 scrim（返回按钮与标题可读）
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.35),
-                      Colors.transparent,
-                      Colors.black.withValues(alpha: 0.88),
-                    ],
-                    stops: const [0.0, 0.35, 1.0],
-                  ),
-                ),
-              ),
-              // 底部：海报缩略卡 + 标题/元信息/评分并排
-              Positioned(
-                left: AppTheme.spacingMedium,
-                right: AppTheme.spacingMedium,
-                bottom: AppTheme.spacingMedium + kTextTabBarHeight,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    HeroMode(
-                      enabled: !collapsed,
-                      child: _buildPosterThumb(
-                        movie,
-                        colorScheme,
-                        movie.poster.isNotEmpty,
-                      ),
+      flexibleSpace: Padding(
+        padding: const EdgeInsets.only(bottom: kTextTabBarHeight),
+        child: FlexibleSpaceBar(
+          collapseMode: CollapseMode.parallax,
+          background: RepaintBoundary(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // 暗化封面背景（同海报，cover 铺满）
+                if (hasPoster)
+                  CachedNetworkImage(
+                    imageUrl: movie.poster,
+                    httpHeaders: ApiConfig.imageHeaders,
+                    fit: BoxFit.cover,
+                    // Share the decoded/cache entry with the grid and Hero.
+                    memCacheWidth: 300,
+                    maxWidthDiskCache: 300,
+                    fadeInDuration: Duration.zero,
+                    placeholder: (_, _) => ColoredBox(color: surfaceColor),
+                    errorWidget: (_, _, _) => ColoredBox(color: surfaceColor),
+                  )
+                else
+                  ColoredBox(
+                    color: surfaceColor,
+                    child: const Center(
+                      child: Icon(Icons.movie, size: 72, color: Colors.white24),
                     ),
-                    const SizedBox(width: AppTheme.spacingMedium),
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            movie.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              height: 1.2,
-                              shadows: [
-                                Shadow(color: Colors.black54, blurRadius: 4),
-                              ],
+                  ),
+                // 顶部 + 底部渐变 scrim（返回按钮与标题可读）
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.35),
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.88),
+                      ],
+                      stops: const [0.0, 0.35, 1.0],
+                    ),
+                  ),
+                ),
+                // 底部：海报缩略卡 + 标题/元信息/评分并排
+                Positioned(
+                  left: AppTheme.spacingMedium,
+                  right: AppTheme.spacingMedium,
+                  bottom: AppTheme.spacingMedium,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      HeroMode(
+                        enabled: !collapsed,
+                        child: _buildPosterThumb(
+                          movie,
+                          colorScheme,
+                          movie.poster.isNotEmpty,
+                        ),
+                      ),
+                      const SizedBox(width: AppTheme.spacingMedium),
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              movie.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                height: 1.2,
+                                shadows: [
+                                  Shadow(color: Colors.black54, blurRadius: 4),
+                                ],
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: AppTheme.spacingSmall),
-                          Wrap(
-                            spacing: AppTheme.spacingSmall,
-                            runSpacing: 6,
-                            children: [
-                              _chipLabel(isSeries ? '剧集' : '影片'),
-                              if (movie.year.isNotEmpty) _chipLabel(movie.year),
-                              if (movie.region.isNotEmpty)
-                                _chipLabel(movie.region),
-                              if (durationLabel.isNotEmpty)
-                                _chipLabel(durationLabel),
-                            ],
-                          ),
-                          if (movie.rating > 0) ...[
                             const SizedBox(height: AppTheme.spacingSmall),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
+                            Wrap(
+                              spacing: AppTheme.spacingSmall,
+                              runSpacing: 6,
                               children: [
-                                const Icon(
-                                  Icons.star,
-                                  size: 18,
-                                  color: Colors.amber,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  movie.rating.toStringAsFixed(1),
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '豆瓣',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.white.withValues(alpha: 0.7),
-                                  ),
-                                ),
+                                _chipLabel(isSeries ? '剧集' : '影片'),
+                                if (movie.year.isNotEmpty)
+                                  _chipLabel(movie.year),
+                                if (movie.region.isNotEmpty)
+                                  _chipLabel(movie.region),
+                                if (durationLabel.isNotEmpty)
+                                  _chipLabel(durationLabel),
                               ],
                             ),
+                            if (movie.rating > 0) ...[
+                              const SizedBox(height: AppTheme.spacingSmall),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.star,
+                                    size: 18,
+                                    color: Colors.amber,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    movie.rating.toStringAsFixed(1),
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '豆瓣',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.white.withValues(
+                                        alpha: 0.7,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
