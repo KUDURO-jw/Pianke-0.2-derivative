@@ -1,6 +1,6 @@
 {
   "versionName": "0.2.9",
-  "versionCode": 14,
+  "versionCode": 15,
   "title": "片刻·焕新版 0.2.9",
   "changelog": [
     "完善搜索提交、添加按钮与分页失败重试，避免旧搜索结果回写",
@@ -9,7 +9,7 @@
     "修复片库、观影与抽片历史分页竞态，关联数据事务删除",
     "限制日历和详情缓存，减少空闲动画与重复刷新"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.9-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "40d925a5da43420ea451c0c8e3130813215a8af4faef07e050e5803abe8c5c4b",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.9-ui.2/Pianke-UI-arm64-release.apk",
+  "sha256": "79ad5dcc922c1888aacece25b45d098160b1143f44e7fcbb13c04180b147649c",
   "forceUpdate": false
 }
