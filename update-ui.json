@@ -1,14 +1,14 @@
 {
-  "versionName": "0.2.14",
-  "versionCode": 20,
-  "title": "片刻·焕新版 0.2.14",
+  "versionName": "0.2.15",
+  "versionCode": 21,
+  "title": "片刻·焕新版 0.2.15",
   "changelog": [
-    "「记录 / 资料」页签彻底跟手，滑动零延迟",
-    "片库海报滚动更流畅，减少上下滑掉帧",
-    "海报进场预加载，减少滚动时卡顿",
+    "修复「记录 / 资料」页签不跟手的问题，点击和左右滑动即时响应",
+    "片库海报滚动更流畅，减少掉帧",
+    "海报进场预加载，减少滚动卡顿",
     "详情页进出转场更轻快"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.14-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "ce4881d9bb34393f198cf347142cbceebbb1d223ef4fff4116eb7f098d74d23a",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.15-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "41d21248b6dfd92f2a139b0b70b095913cf0bd891bbdf17cdbb74b4a7cb68324",
   "forceUpdate": false
 }
