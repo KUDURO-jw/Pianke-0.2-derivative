@@ -1,8 +1,11 @@
 // Modified for the personal UI edition, 2026-11-08. Apache-2.0.
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/config/design_tokens.dart';
 import 'package:random_movie/widgets/common/continuous_rrect.dart';
+import 'package:random_movie/widgets/common/floating_nav_bar.dart';
 
 // ==================== Toast ====================
 
@@ -18,6 +21,10 @@ enum ToastType { success, error, info }
 class AppToast {
   AppToast._();
 
+  /// 给刚关闭的弹窗留出淡出时间（Material 弹窗淡出约 150ms），
+  /// 避免提示条被淡出中的遮罩盖住。过长会让用户觉得「点了没反应」。
+  static const Duration _dialogSettleDelay = Duration(milliseconds: 160);
+
   static void show(
     BuildContext context,
     String message, {
@@ -30,11 +37,17 @@ class AppToast {
     final (icon, iconColor) = _iconFor(type, colorScheme);
     final textColor = colorScheme.onInverseSurface;
     final bgColor = colorScheme.inverseSurface;
-    // Keep the toast above the bottom NavigationBar and safe area.
-    final bottomInset = MediaQuery.of(context).padding.bottom + 88;
+    // 提示条要浮在悬浮底栏上方。底栏高度会随系统字体放大而变高，
+    // 所以跟随 DockMetrics，而不是写死一个数字；键盘弹出时底栏隐藏，
+    // 此时只需要避开系统安全区。
+    final media = MediaQuery.of(context);
+    final bottomInset = math.max(
+      DockMetrics.insetOf(context),
+      media.padding.bottom + 16,
+    );
 
     // Delay so any dialog pop() animation completes first.
-    Future.delayed(const Duration(milliseconds: 500), () {
+    Future.delayed(_dialogSettleDelay, () {
       if (!messenger.mounted) return;
       messenger.clearSnackBars();
       messenger.showSnackBar(
