@@ -150,6 +150,18 @@ class DrawHistoryProvider extends AppNotifier {
     }
   }
 
+  /// 删除单条抽片记录。
+  Future<void> deleteRecord(String recordId) async {
+    try {
+      await _storageService.deleteDrawRecord(recordId);
+      _records = _records.where((r) => r.id != recordId).toList();
+      notifyListeners();
+    } catch (error) {
+      _error = '删除失败: $error';
+      notifyListeners();
+    }
+  }
+
   /// 清空历史
   Future<void> clearAll() async {
     try {
