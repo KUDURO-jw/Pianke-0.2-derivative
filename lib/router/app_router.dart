@@ -141,10 +141,10 @@ CustomTransitionPage<void> _secondaryPage(
   key: state.pageKey,
   transitionDuration: MediaQuery.disableAnimationsOf(context)
       ? Duration.zero
-      : const Duration(milliseconds: 280),
+      : const Duration(milliseconds: 200),
   reverseTransitionDuration: MediaQuery.disableAnimationsOf(context)
       ? Duration.zero
-      : const Duration(milliseconds: 220),
+      : const Duration(milliseconds: 180),
   transitionsBuilder: detail
       ? AppPageTransitionsBuilder.detailTransition
       : AppPageTransitionsBuilder.transition,
