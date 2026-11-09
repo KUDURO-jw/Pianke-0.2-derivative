@@ -1451,7 +1451,13 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
         final isHalf =
             currentRating >= starValue - 0.5 && currentRating < starValue;
 
-        return GestureDetector(
+        return _StarIcon(
+          icon: isFilled
+              ? Icons.star
+              : (isHalf ? Icons.star_half : Icons.star_border),
+          color: (isFilled || isHalf)
+              ? Colors.amber
+              : colorScheme.onSurface.withValues(alpha: 0.3),
           onTap: () {
             setState(() {
               _userRating = _userRating == starValue ? null : starValue;
@@ -1459,18 +1465,6 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
               LocalDataGuard.hold(this);
             });
           },
-          child: Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Icon(
-              isFilled
-                  ? Icons.star
-                  : (isHalf ? Icons.star_half : Icons.star_border),
-              size: 36,
-              color: (isFilled || isHalf)
-                  ? Colors.amber
-                  : colorScheme.onSurface.withValues(alpha: 0.3),
-            ),
-          ),
         );
       }),
     );
@@ -1803,4 +1797,62 @@ class _SegmentedTabBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(covariant _SegmentedTabBarDelegate oldDelegate) =>
       oldDelegate.height != height || oldDelegate.builder != builder;
+}
+
+/// 评分星星：点按时轻微回弹 + 一次轻震，像 iOS 快捷菜单的「啪嗒」手感。
+class _StarIcon extends StatefulWidget {
+  const _StarIcon({
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  State<_StarIcon> createState() => _StarIconState();
+}
+
+class _StarIconState extends State<_StarIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _scale = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 150),
+    lowerBound: 0.0,
+    upperBound: 1.25,
+    value: 1.0,
+  );
+
+  @override
+  void dispose() {
+    _scale.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleTap() async {
+    HapticFeedback.selectionClick();
+    widget.onTap();
+    if (MediaQuery.disableAnimationsOf(context)) return;
+    await _scale.animateTo(1.25, curve: Curves.easeOut);
+    if (!mounted) return;
+    await _scale.animateTo(1.0, curve: Curves.easeOutBack);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _handleTap,
+      child: Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: AnimatedBuilder(
+          animation: _scale,
+          builder: (context, child) =>
+              Transform.scale(scale: _scale.value, child: child),
+          child: Icon(widget.icon, size: 36, color: widget.color),
+        ),
+      ),
+    );
+  }
 }
