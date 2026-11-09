@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:random_movie/config/api_config.dart';
@@ -831,15 +832,9 @@ class _DrawPageState extends State<DrawPage> {
             duration: MediaQuery.disableAnimationsOf(context)
                 ? Duration.zero
                 : const Duration(milliseconds: 80),
-            child: TweenAnimationBuilder<double>(
+            child: _RevealPop(
               key: ValueKey('reveal-$_revealStarted'),
-              tween: Tween(begin: _revealStarted ? 1.06 : 1.0, end: 1.0),
-              duration: MediaQuery.disableAnimationsOf(context)
-                  ? Duration.zero
-                  : const Duration(milliseconds: 360),
-              curve: Curves.easeOutBack,
-              builder: (context, scale, child) =>
-                  Transform.scale(scale: scale, child: child),
+              trigger: _revealStarted,
               child: DrawShuffleCard(
                 movie: currentMovie,
                 shuffleCount: _shuffleCount,
@@ -1319,6 +1314,84 @@ class _PosterOnly extends StatelessWidget {
                 ),
               ),
       ),
+    );
+  }
+}
+
+/// 开奖定格时的「整体弹性放大一下」。
+///
+/// 对齐 FlClash 底部导航的按压反馈：整个元素用弹簧物理放大，
+/// 固定像素增量（而非固定百分比），带轻微过冲回弹。
+class _RevealPop extends StatefulWidget {
+  const _RevealPop({
+    super.key,
+    required this.trigger,
+    required this.child,
+  });
+
+  /// 由 false 变 true 时触发一次放大回弹。
+  final bool trigger;
+  final Widget child;
+
+  @override
+  State<_RevealPop> createState() => _RevealPopState();
+}
+
+class _RevealPopState extends State<_RevealPop>
+    with SingleTickerProviderStateMixin {
+  // FlClash ElasticPress 的按压弹簧参数（damping ratio 0.593，轻微过冲）。
+  static final SpringDescription _spring =
+      SpringDescription.withDampingRatio(
+        mass: 1,
+        stiffness: 311,
+        ratio: 0.593,
+      );
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 380),
+  );
+
+  // 目标放大比例：DrawShuffleCard 最长边 320dp，固定增量 16dp → 1.05。
+  double get _growth => 1.05;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.value = 1.0;
+  }
+
+  @override
+  void didUpdateWidget(covariant _RevealPop oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.trigger && !oldWidget.trigger) {
+      _pop();
+    }
+  }
+
+  Future<void> _pop() async {
+    if (MediaQuery.disableAnimationsOf(context)) return;
+    // 放大阶段：快速弹到目标（easeOut），松开回位走弹簧物理，带轻微过冲。
+    await _controller.animateTo(_growth, curve: Curves.easeOut);
+    if (!mounted) return;
+    await _controller.animateWith(
+      SpringSimulation(_spring, _growth, 1.0, 0),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) =>
+          Transform.scale(scale: _controller.value, child: child),
+      child: widget.child,
     );
   }
 }
