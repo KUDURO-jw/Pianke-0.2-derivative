@@ -1,14 +1,13 @@
 {
-  "versionName": "0.2.0",
-  "versionCode": 3,
-  "title": "片刻 0.2 二创版",
+  "versionName": "0.2.12",
+  "versionCode": 18,
+  "title": "焕新版 0.2.12 已发布，需要手动迁移",
   "changelog": [
-    "修复抽片模式、候选数量与筛选条件的状态残留",
-    "统一片库与抽片页的「已看」判定逻辑",
-    "修复已看状态刷新与影片查询排序问题",
-    "新增坚果云 WebDAV 备份与双设备同步",
-    "应用密码存入系统安全存储，支持同步冲突确认"
+    "新版更换了应用标识与发布签名，与当前版本无法直接覆盖升级",
+    "请先卸载当前版本，再安装新版；两者会以两个图标并存",
+    "当前版本的影片数据不会自动带过去，如需保留请先在「设置」里导出备份",
+    "新版界面已整体重做，支持应用内下载更新"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.0/app-arm64-v8a-release.apk",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.12-ui.1/Pianke-UI-arm64-release.apk",
   "forceUpdate": false
 }

@@ -1,8 +1,13 @@
 {
   "packageName": "app.pianke.personal",
-  "signerSha256": "93423ec67ad9b54fd99b644d96700bb347c08ea6d8e8e2793715b8cfccce379f",
+  "signerSha256": "59a811b776c49d648bc0440a3857a4bdd1ee570ac7e0b11e3b0e14900cff3ce3",
   "abi": "arm64-v8a",
   "channel": "ui",
   "repository": "KUDURO-jw/Pianke-0.2-derivative",
-  "note": "Preserve the installed edition's certificate. Signing material must stay outside source and release archives."
+  "note": "Preserve the installed edition's certificate. Signing material must stay outside source and release archives.",
+  "signerMigration": {
+    "from": "93423ec67ad9b54fd99b644d96700bb347c08ea6d8e8e2793715b8cfccce379f",
+    "at": "0.2.12",
+    "reason": "Old certificate was an auto-generated debug key from the build machine and could not be reused across machines. From 0.2.12 on, a dedicated release key stored outside the repo is used, so the signature is permanent. Users on older builds must uninstall once and reinstall."
+  }
 }

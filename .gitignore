@@ -39,17 +39,7 @@ migrate_working_dir/
 # Locally generated Android packages
 *.apk
 
-# Symbolication related
-app.*.symbols
-
-# Obfuscation related
-app.*.map.json
-
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
-
-# AI Agent
-.agents/
-AGENTS.md
+# 发布签名（绝不入库）
+key.properties
+*.jks
+*.keystore

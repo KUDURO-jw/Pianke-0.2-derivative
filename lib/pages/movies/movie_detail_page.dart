@@ -13,6 +13,8 @@ import 'package:random_movie/providers/providers.dart';
 import 'package:random_movie/services/watch_status.dart';
 import 'package:random_movie/widgets/movie/movie_poster.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
+import 'package:random_movie/widgets/common/app_components.dart';
+import 'package:random_movie/config/design_tokens.dart';
 import 'package:random_movie/widgets/movie/movie_tag_editor.dart';
 import 'package:random_movie/widgets/movie/viewing_session_editor.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -36,7 +38,13 @@ class MovieDetailPage extends StatefulWidget {
 
 class _MovieDetailPageState extends State<MovieDetailPage> {
   static const double _detailCacheExtent = 160;
-  static const double _expandedPosterHeight = 240;
+
+  /// 头图（海报）可见高度。
+  ///
+  /// 历史上从 320 降到了 240（0.2.10 为容纳页签），同时又把 [SliverAppBar] 的
+  /// `bottom` 交给页签，两者叠加使海报实际只剩 192，竖版海报被裁掉约四成。
+  /// 现把页签移出头图，头图恢复 320 满高，与 v0.2.9-ui.2 保持一致。
+  static const double _expandedPosterHeight = 320;
 
   Future<Movie?>? _movieFuture;
   Movie? _seedMovie;
@@ -252,25 +260,71 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
                       ),
                       sliver: SliverLayoutBuilder(
                         builder: (context, constraints) {
+                          // AppBar 已无页签，折叠判定只需减去工具栏高度，
+                          // 再减去不再存在的 kTextTabBarHeight 会提前折叠。
                           return constraints.scrollOffset >=
-                                  expandedHeight -
-                                      kToolbarHeight -
-                                      kTextTabBarHeight
+                                  expandedHeight - kToolbarHeight
                               ? collapsedHeader
                               : expandedHeader;
                         },
                       ),
                     ),
                   ],
-                  body: TabBarView(
+                  body: Column(
                     children: [
-                      _buildDetailTab(movie, details: false),
-                      _buildDetailTab(movie, details: true),
+                      _buildSegmentedTabBar(context),
+                      Expanded(
+                        child: TabBarView(
+                          children: [
+                            _buildDetailTab(movie, details: false),
+                            _buildDetailTab(movie, details: true),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
             ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// 「记录 / 资料」切换器。
+  ///
+  /// 不再使用自带的下划线 [TabBar]：那套样式在全应用里只有这里一处，
+  /// 与片库页的胶囊分段器不一致。改为复用 [SegmentedSwitch]，
+  /// 并用 [TabController.index] 驱动，滚动与点击都能双向同步。
+  Widget _buildSegmentedTabBar(BuildContext context) {
+    final controller = DefaultTabController.of(context);
+    final scheme = Theme.of(context).colorScheme;
+
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        final index = controller.index;
+        return Container(
+          decoration: BoxDecoration(
+            color: scheme.pageSurface,
+            border: Border(
+              bottom: BorderSide(color: scheme.hairline, width: 0.5),
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(
+            Spacing.page,
+            Spacing.sm,
+            Spacing.page,
+            Spacing.sm,
+          ),
+          child: SegmentedSwitch(
+            labels: const ['记录', '资料'],
+            selectedIndex: index,
+            onChanged: (i) {
+              if (i == index) return;
+              controller.animateTo(i);
+            },
           ),
         );
       },
@@ -302,37 +356,16 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
       title: collapsed
           ? Text(movie.title, maxLines: 1, overflow: TextOverflow.ellipsis)
           : null,
-      // Keep the navigation on an opaque surface below the poster. The global
-      // tab theme uses a filled pill, which is unsuitable over poster artwork.
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(kTextTabBarHeight),
-        child: ColoredBox(
-          key: const ValueKey('detail-tab-surface'),
-          color: colorScheme.surface,
-          child: TabBar(
-            labelColor: colorScheme.primary,
-            unselectedLabelColor: colorScheme.onSurfaceVariant,
-            indicator: UnderlineTabIndicator(
-              borderSide: BorderSide(color: colorScheme.primary, width: 3),
-              borderRadius: BorderRadius.circular(3),
-            ),
-            indicatorSize: TabBarIndicatorSize.label,
-            dividerColor: Colors.transparent,
-            tabs: const [
-              Tab(text: '记录'),
-              Tab(text: '资料'),
-            ],
-          ),
-        ),
-      ),
+      // 页签原先挂在这里，会吞掉海报高度并压住海报下缘。
+      // 现已移到 TabBarView 上方（见 _buildSegmentedTabBar），头图不再被抢占。
       systemOverlayStyle: collapsed
           ? (colorScheme.brightness == Brightness.dark
                 ? SystemUiOverlayStyle.light
                 : SystemUiOverlayStyle.dark)
           : SystemUiOverlayStyle.light,
-      flexibleSpace: Padding(
-        padding: const EdgeInsets.only(bottom: kTextTabBarHeight),
-        child: FlexibleSpaceBar(
+      // 这里原先让出 kTextTabBarHeight 给页签，页签搬走后必须一并去掉，
+      // 否则海报下方会留出一条 48dp 的空白，标题与缩略卡也会被上顶。
+      flexibleSpace: FlexibleSpaceBar(
           collapseMode: CollapseMode.parallax,
           background: RepaintBoundary(
             child: Stack(
@@ -465,7 +498,6 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
             ),
           ),
         ),
-      ),
     );
   }
 

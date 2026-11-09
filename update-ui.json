@@ -1,15 +1,16 @@
 {
-  "versionName": "0.2.11",
-  "versionCode": 17,
-  "title": "片刻·焕新版 0.2.11：详情页海报与页签布局修复",
+  "versionName": "0.2.12",
+  "versionCode": 18,
+  "title": "片刻·焕新版 0.2.12：详情页海报恢复满高",
   "changelog": [
-    "记录与资料页签移到海报下方，不再遮挡海报内容",
-    "选中页签改为细蓝色下划线，避免白色胶囊突兀覆盖",
-    "保留左右滑动和点击切换",
-    "保留两个页面的独立滚动位置",
-    "保留分集进度、观影记录、评分感想与海报转场"
+    "影片详情海报恢复 320dp 满高，不再被页签挤占而裁切",
+    "「记录 / 资料」改为全应用统一的胶囊分段器，与片库页一致",
+    "页签移到海报下方独立成条，左右滑动与点击均可切换",
+    "两个页面仍各自保留滚动位置",
+    "保留分集进度、观影记录、评分感想与海报转场",
+    "换成独立发布签名：本版起可长期覆盖升级，但需卸载旧版重装一次"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.11-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "c85018fd5c0100bec0dfb69cb341f8aecefe21a10253f11b0522737ad7bb9c13",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.12-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "37b9b9375fbfea709de7b2560f007ab9e07acdc5af3c1273b7f10fb6998bc54f",
   "forceUpdate": false
 }
