@@ -880,18 +880,28 @@ class _DrawPageState extends State<DrawPage> {
             ),
           ),
           const SizedBox(height: AppTheme.spacingLarge),
-          SizedBox(
-            width: 200,
-            height: 330,
-            child: MovieCard(
-              movie: movie,
-              posterHeroTag: 'draw-result:${movie.id}',
-              showWatchedBadge: false,
-              onTap: () => context.push(
-                '/movies/detail/${movie.id}',
-                extra: MovieDetailArguments(
-                  movie,
-                  posterTag: 'draw-result:${movie.id}',
+          // 抽中结果弹性登场：0.85 → 1.0，带一点回弹。
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.85, end: 1.0),
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 420),
+            curve: Curves.easeOutBack,
+            builder: (context, scale, child) =>
+                Transform.scale(scale: scale, child: child),
+            child: SizedBox(
+              width: 200,
+              height: 330,
+              child: MovieCard(
+                movie: movie,
+                posterHeroTag: 'draw-result:${movie.id}',
+                showWatchedBadge: false,
+                onTap: () => context.push(
+                  '/movies/detail/${movie.id}',
+                  extra: MovieDetailArguments(
+                    movie,
+                    posterTag: 'draw-result:${movie.id}',
+                  ),
                 ),
               ),
             ),
