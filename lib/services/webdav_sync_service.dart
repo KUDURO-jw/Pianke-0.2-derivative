@@ -176,11 +176,17 @@ class WebDavSyncService extends ChangeNotifier {
   static const _baseRemoteKey = 'pianke_webdav_base_remote_checksum';
   static const _lastSyncKey = 'pianke_webdav_last_sync_at';
   static const _pendingConflictKey = 'pianke_webdav_pending_conflict';
+  static const _remoteFingerprintKey = 'pianke_webdav_remote_fingerprint';
+  static const _lastRemoteCheckKey = 'pianke_webdav_last_remote_check_at';
+
+  /// 自动同步发现「本地没改过」时，两次向云端确认之间至少间隔多久。
+  static const autoCheckInterval = Duration(minutes: 5);
 
   final SyncBackupStore _backup;
   final WebDavClient _client;
   final SharedPreferences _prefs;
   final SyncCredentialStore _credentials;
+  final DateTime Function() _now;
   bool _running = false;
 
   WebDavSyncService({
@@ -188,10 +194,12 @@ class WebDavSyncService extends ChangeNotifier {
     required SharedPreferences preferences,
     WebDavClient? client,
     SyncCredentialStore? credentials,
+    DateTime Function()? now,
   }) : _backup = backup,
        _prefs = preferences,
        _client = client ?? WebDavClient(),
-       _credentials = credentials ?? SecureSyncCredentialStore();
+       _credentials = credentials ?? SecureSyncCredentialStore(),
+       _now = now ?? DateTime.now;
 
   Future<WebDavSyncConfig> readConfig() async {
     final account = _prefs.getString(_accountKey) ?? '';
@@ -437,7 +445,90 @@ class WebDavSyncService extends ChangeNotifier {
         message: '未配置坚果云同步',
       );
     }
-    return synchronize(onProgress: onProgress);
+    // 先走省流量的快捷通道：本地没改、云端也没变，就不用下载整份备份。
+    final upToDate = await _tryUpToDateShortcut();
+    if (upToDate != null) return upToDate;
+
+    // 真的需要同步：先记下云端同步前的指纹，同步成功后再存起来。
+    // 用「同步前」的指纹更保守——万一这期间云端又被改了，下次只会多做一次完整同步，
+    // 不会漏掉新数据。上传会改变云端文件，所以上传后要重新取一次。
+    final before = await _fetchFingerprintOrNull();
+    final outcome = await synchronize(onProgress: onProgress);
+    if (outcome.isSuccess) {
+      final fingerprint = outcome.action == WebDavSyncAction.upload
+          ? await _fetchFingerprintOrNull()
+          : before;
+      await _rememberFingerprint(fingerprint);
+    }
+    return outcome;
+  }
+
+  static const _upToDateOutcome = WebDavSyncOutcome(
+    state: WebDavSyncState.success,
+    action: WebDavSyncAction.none,
+    message: '本地和云端数据已经是最新',
+  );
+
+  /// 本地自上次同步后没有变化，并且云端文件指纹也没变时，直接认为已是最新。
+  ///
+  /// 返回 null 表示「不能确定」，调用方必须走完整同步。任何异常、指纹缺失、
+  /// 存在待处理冲突的情况都返回 null，所以这条捷径只会少做事，不会漏同步。
+  Future<WebDavSyncOutcome?> _tryUpToDateShortcut() async {
+    try {
+      if (hasPendingConflict) return null;
+      final baseLocal = _prefs.getString(_baseLocalKey);
+      final knownFingerprint = _prefs.getString(_remoteFingerprintKey);
+      if (baseLocal == null ||
+          knownFingerprint == null ||
+          knownFingerprint.isEmpty) {
+        return null;
+      }
+
+      final local = await _backup.createSyncSnapshot();
+      if (local.checksum != baseLocal) return null; // 本地改过，走完整同步（上传）。
+      if (LocalDataGuard.isEditing || _running) return null;
+
+      final now = _now();
+      final lastCheck = DateTime.tryParse(
+        _prefs.getString(_lastRemoteCheckKey) ?? '',
+      );
+      if (lastCheck != null) {
+        final elapsed = now.difference(lastCheck);
+        if (elapsed >= Duration.zero && elapsed < autoCheckInterval) {
+          return _upToDateOutcome; // 刚确认过，不重复打扰网络。
+        }
+      }
+
+      final config = await _loadWebDavConfig();
+      final current = await _client.fetchRemoteFingerprint(config);
+      if (current == null || current.isEmpty || current != knownFingerprint) {
+        return null; // 云端变了或查不到，走完整同步（可能需要下载）。
+      }
+      await _prefs.setString(_lastRemoteCheckKey, now.toIso8601String());
+      return _upToDateOutcome;
+    } catch (_) {
+      // 快捷检查本身出错（断网、服务器异常等）不是问题：
+      // 回退到完整同步，由它给出原来的错误提示。
+      return null;
+    }
+  }
+
+  Future<String?> _fetchFingerprintOrNull() async {
+    try {
+      return await _client.fetchRemoteFingerprint(await _loadWebDavConfig());
+    } catch (_) {
+      return null; // 取不到指纹只是少了一个优化，下次自动同步会走完整流程。
+    }
+  }
+
+  Future<void> _rememberFingerprint(String? fingerprint) async {
+    if (fingerprint == null || fingerprint.isEmpty) {
+      await _prefs.remove(_remoteFingerprintKey);
+      await _prefs.remove(_lastRemoteCheckKey);
+      return;
+    }
+    await _prefs.setString(_remoteFingerprintKey, fingerprint);
+    await _prefs.setString(_lastRemoteCheckKey, _now().toIso8601String());
   }
 
   Future<void> clearPendingConflict() =>
