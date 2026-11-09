@@ -245,7 +245,7 @@ class _MoviesPageState extends State<MoviesPage> {
                           LibraryFilter.watched => '还没有已看的影片',
                           LibraryFilter.unwatched => '所有影片都看过啦',
                           LibraryFilter.all =>
-                            state.searchQuery.isEmpty ? '片库还是空的' : '没有找到匹配的影片',
+                            state.searchQuery.isEmpty ? '片库还空着 🎬' : '没有找到匹配的影片',
                         };
                   final emptySubtitle = searching
                       ? '可以清空搜索词，或切换到全部影片再试'
@@ -254,7 +254,7 @@ class _MoviesPageState extends State<MoviesPage> {
                           LibraryFilter.unwatched => '添加新影片继续探索',
                           LibraryFilter.all =>
                             state.searchQuery.isEmpty
-                                ? '添加你的第一部影片吧'
+                                ? '去挑一部今晚的片吧'
                                 : '试试其他搜索词',
                         };
 
@@ -263,7 +263,9 @@ class _MoviesPageState extends State<MoviesPage> {
                     child: EmptyState(
                       title: emptyLabel,
                       subtitle: emptySubtitle,
-                      icon: Icons.movie_outlined,
+                      icon: searching
+                          ? Icons.search_off_rounded
+                          : Icons.nights_stay_rounded,
                       onAction: searching || state.filter != LibraryFilter.all
                           ? () {
                               _searchController.clear();
