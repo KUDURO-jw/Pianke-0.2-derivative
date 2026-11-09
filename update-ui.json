@@ -11,6 +11,6 @@
     "换成独立发布签名：本版起可长期覆盖升级，但需卸载旧版重装一次"
   ],
   "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.12-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "37b9b9375fbfea709de7b2560f007ab9e07acdc5af3c1273b7f10fb6998bc54f",
+  "sha256": "05266b33e370b8e47200e079e9544e9495652bb129dc8540e507d0963d938184",
   "forceUpdate": false
 }
