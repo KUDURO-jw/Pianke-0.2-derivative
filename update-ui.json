@@ -1,14 +1,16 @@
 {
-  "versionName": "0.2.15",
-  "versionCode": 21,
-  "title": "片刻·焕新版 0.2.15",
+  "versionName": "0.2.16",
+  "versionCode": 22,
+  "title": "片刻·焕新版 0.2.16",
   "changelog": [
-    "修复「记录 / 资料」页签不跟手的问题，点击和左右滑动即时响应",
-    "片库海报滚动更流畅，减少掉帧",
-    "海报进场预加载，减少滚动卡顿",
-    "详情页进出转场更轻快"
+    "抽片开奖加入触觉反馈与海报回弹，更有仪式感",
+    "日历「今天」增加呼吸圆点，一眼定位",
+    "观影记录支持左滑删除",
+    "抽片入口按钮增加呼吸高亮",
+    "评分星星点按回弹 + 轻震",
+    "片库空状态文案更友好"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.15-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "41d21248b6dfd92f2a139b0b70b095913cf0bd891bbdf17cdbb74b4a7cb68324",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.16-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "db6d06fa182cf5260a0923074329cf788a4777d0a6437f5ba1a50cf1b64b8677",
   "forceUpdate": false
 }
