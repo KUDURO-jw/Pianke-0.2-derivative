@@ -269,18 +269,19 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
                         },
                       ),
                     ),
-                  ],
-                  body: Column(
-                    children: [
-                      _buildSegmentedTabBar(context),
-                      Expanded(
-                        child: TabBarView(
-                          children: [
-                            _buildDetailTab(movie, details: false),
-                            _buildDetailTab(movie, details: true),
-                          ],
-                        ),
+                    // 页签独立成条并钉在头图下方，不占用海报高度。
+                    SliverPersistentHeader(
+                      pinned: true,
+                      delegate: _SegmentedTabBarDelegate(
+                        height: _segmentedTabBarExtent(context),
+                        builder: (ctx) => _buildSegmentedTabBar(ctx),
                       ),
+                    ),
+                  ],
+                  body: TabBarView(
+                    children: [
+                      _buildDetailTab(movie, details: false),
+                      _buildDetailTab(movie, details: true),
                     ],
                   ),
                 ),
@@ -290,6 +291,12 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
         );
       },
     );
+  }
+
+  /// 页签条总高度（与 [SegmentedSwitch] 的实际高度对齐）。
+  double _segmentedTabBarExtent(BuildContext context) {
+    final scaled = MediaQuery.textScalerOf(context).scale(13);
+    return 44 + (scaled - 13) + Spacing.sm * 2;
   }
 
   /// 「记录 / 资料」切换器。
@@ -1746,4 +1753,37 @@ class _SessionTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 钉在头图下方的页签条。
+///
+/// 页签本身用项目统一的 [SegmentedSwitch] 渲染，通过 [SliverPersistentHeader]
+/// 钉在滚动区域顶部，随内容一起固定，但不占用海报高度。
+class _SegmentedTabBarDelegate extends SliverPersistentHeaderDelegate {
+  _SegmentedTabBarDelegate({
+    required this.height,
+    required this.builder,
+  });
+
+  final double height;
+  final WidgetBuilder builder;
+
+  @override
+  double get minExtent => height;
+
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return builder(context);
+  }
+
+  @override
+  bool shouldRebuild(covariant _SegmentedTabBarDelegate oldDelegate) =>
+      oldDelegate.height != height || oldDelegate.builder != builder;
 }
