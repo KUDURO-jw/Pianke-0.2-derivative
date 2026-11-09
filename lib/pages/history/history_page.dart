@@ -881,6 +881,12 @@ class _HistoryCalendarCell extends StatelessWidget {
                   ),
                 ),
               Center(child: Text('${date.day}', style: dayTextStyle)),
+              if (isToday)
+                const Positioned(
+                  top: 5,
+                  right: 5,
+                  child: _TodayDot(),
+                ),
               if (count > 1)
                 Positioned(
                   top: 3,
@@ -1087,17 +1093,48 @@ class _SessionTimelineCardState extends State<_SessionTimelineCard> {
       if (session.rating != null) '⭐ ${session.rating!.toStringAsFixed(1)}',
     ];
 
-    return GestureDetector(
-      onTapDown: widget.onTap != null
-          ? (_) => setState(() => _pressed = true)
-          : null,
-      onTapUp: widget.onTap != null
-          ? (_) => setState(() => _pressed = false)
-          : null,
-      onTapCancel: widget.onTap != null
-          ? () => setState(() => _pressed = false)
-          : null,
-      onTap: widget.onTap,
+    return Dismissible(
+      key: ValueKey('session-${session.id}'),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (_) => _confirmDelete(context),
+      onDismissed: (_) => _deleteSession(context),
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        decoration: ShapeDecoration(
+          color: const Color(0xFFE94560),
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+            side: BorderSide.none,
+          ),
+        ),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.delete_outline_rounded, color: Colors.white, size: 26),
+            SizedBox(height: 2),
+            Text(
+              '删除',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+      child: GestureDetector(
+        onTapDown: widget.onTap != null
+            ? (_) => setState(() => _pressed = true)
+            : null,
+        onTapUp: widget.onTap != null
+            ? (_) => setState(() => _pressed = false)
+            : null,
+        onTapCancel: widget.onTap != null
+            ? () => setState(() => _pressed = false)
+            : null,
+        onTap: widget.onTap,
       child: AnimatedScale(
         scale: _pressed ? 0.985 : 1.0,
         duration: MediaQuery.disableAnimationsOf(context)
@@ -1264,6 +1301,89 @@ class _SessionTimelineCardState extends State<_SessionTimelineCard> {
               ],
             ),
           ),
+        ),
+      ),
+      ),
+    );
+  }
+
+  Future<bool> _confirmDelete(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除这条观影记录？'),
+        content: const Text('删除后无法恢复。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFE94560),
+            ),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  Future<void> _deleteSession(BuildContext context) async {
+    final provider = context.read<MovieProvider>();
+    await provider.deleteViewingSession(widget.entry.session.id, widget.entry.movie.id);
+    if (!context.mounted) return;
+    if (provider.error != null) {
+      AppToast.error(context, provider.error!);
+    } else {
+      AppToast.success(context, '已删除《${widget.entry.movie.title}》的这条记录');
+    }
+  }
+}
+
+/// 「今天」呼吸圆点：右上角小圆点，透明度缓慢脉动，一眼定位今天。
+class _TodayDot extends StatefulWidget {
+  const _TodayDot();
+
+  @override
+  State<_TodayDot> createState() => _TodayDotState();
+}
+
+class _TodayDotState extends State<_TodayDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.4, end: 1.0).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+      ),
+      child: Container(
+        width: 7,
+        height: 7,
+        decoration: ShapeDecoration(
+          color: colorScheme.primary,
+          shape: const CircleBorder(),
+          shadows: [
+            BoxShadow(
+              color: colorScheme.primary.withValues(alpha: 0.5),
+              blurRadius: 4,
+              spreadRadius: 1,
+            ),
+          ],
         ),
       ),
     );
