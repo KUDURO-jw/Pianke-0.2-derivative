@@ -1,12 +1,15 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show compute;
 import 'package:html/dom.dart' show Element;
 import 'package:html/parser.dart' show parse;
 import 'package:random_movie/config/api_config.dart';
 import 'package:random_movie/models/movie.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DoulistScrapeProgress {
   final int total;
@@ -54,6 +57,10 @@ class MovieScraperService {
   final Dio _dio;
   final _CookieJarLite _doubanCookieJar = _CookieJarLite();
 
+  static const String _cookiePrefsKey = 'movie_app_douban_cookies';
+  bool _cookieLoaded = false;
+  bool _cookieDirty = false;
+
   void dispose() => _dio.close(force: true);
 
   MovieScraperService({Dio? dio})
@@ -65,6 +72,30 @@ class MovieScraperService {
               receiveTimeout: const Duration(seconds: 30),
             ),
           );
+
+  /// 从本地载入上次保存的豆瓣 Cookie，跨会话复用，减少挑战页触发。
+  Future<void> _ensureCookieLoaded() async {
+    if (_cookieLoaded) return;
+    _cookieLoaded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _doubanCookieJar.restore(prefs.getString(_cookiePrefsKey));
+    } catch (_) {
+      // 读取失败不影响抓取，按无 Cookie 走挑战页流程。
+    }
+  }
+
+  /// 持久化 Cookie（异步、失败静默，不阻断抓取）。
+  Future<void> _persistCookie() async {
+    if (!_cookieDirty) return;
+    _cookieDirty = false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_cookiePrefsKey, _doubanCookieJar.serialize());
+    } catch (_) {
+      // 写入失败仅影响下次复用，不影响本次抓取。
+    }
+  }
 
   /// 爬取单个影片（直接解析豆瓣页面）
   Future<Movie> scrapeMovie(String doubanUrl) async {
@@ -518,6 +549,7 @@ class MovieScraperService {
     required Map<String, String> headers,
     _CookieJarLite? cookieJar,
   }) async {
+    await _ensureCookieLoaded();
     final requestHeaders = Map<String, String>.from(headers);
     if (cookieJar != null && cookieJar.hasCookies) {
       requestHeaders['Cookie'] = cookieJar.buildHeader();
@@ -533,6 +565,10 @@ class MovieScraperService {
     );
 
     cookieJar?.absorb(response.headers);
+    if (cookieJar != null) {
+      _cookieDirty = true;
+      unawaited(_persistCookie());
+    }
 
     final statusCode = response.statusCode ?? 0;
     if (statusCode >= 400) {
@@ -678,22 +714,8 @@ class MovieScraperService {
   }
 
   Future<int> _powNonce(String data, {int difficulty = 4}) async {
-    final prefix = '0' * difficulty;
-    var nonce = 0;
-
-    while (true) {
-      nonce++;
-      if (_sha512Hex('$data$nonce').startsWith(prefix)) {
-        return nonce;
-      }
-      if (nonce % 2048 == 0) {
-        await Future<void>.delayed(Duration.zero);
-      }
-    }
-  }
-
-  String _sha512Hex(String value) {
-    return sha512.convert(utf8.encode(value)).toString();
+    // PoW 计算放到后台 isolate，避免阻塞 UI 线程。
+    return compute(_powNonceInIsolate, (data: data, difficulty: difficulty));
   }
 
   Movie _buildMovieFromPage({
@@ -954,6 +976,28 @@ class _CookieJarLite {
         .join('; ');
   }
 
+  /// 序列化为可持久化的字符串（`k=v; k2=v2`）。
+  String serialize() {
+    return _cookies.entries
+        .map((entry) => '${entry.key}=${entry.value}')
+        .join('; ');
+  }
+
+  /// 从持久化字符串恢复。
+  void restore(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return;
+    for (final part in raw.split(';')) {
+      final pair = part.trim();
+      final equalsIndex = pair.indexOf('=');
+      if (equalsIndex <= 0) continue;
+      final name = pair.substring(0, equalsIndex).trim();
+      final value = pair.substring(equalsIndex + 1).trim();
+      if (name.isNotEmpty && value.isNotEmpty) {
+        _cookies[name] = value;
+      }
+    }
+  }
+
   void absorb(Headers headers) {
     final values = headers.map['set-cookie'];
     if (values == null || values.isEmpty) return;
@@ -979,4 +1023,17 @@ class _FetchedMoviePage {
   final String finalUrl;
 
   const _FetchedMoviePage({required this.html, required this.finalUrl});
+}
+
+/// 在后台 isolate 里计算 PoW 答案（顶层函数，供 [compute] 使用）。
+int _powNonceInIsolate(({String data, int difficulty}) args) {
+  final prefix = '0' * args.difficulty;
+  final data = args.data;
+  var nonce = 0;
+  while (true) {
+    nonce++;
+    if (sha512.convert(utf8.encode('$data$nonce')).toString().startsWith(prefix)) {
+      return nonce;
+    }
+  }
 }
