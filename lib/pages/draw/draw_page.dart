@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:random_movie/config/api_config.dart';
 import 'package:provider/provider.dart';
@@ -82,6 +83,7 @@ class _DrawPageState extends State<DrawPage> {
   Timer? _shuffleTimer;
   int _displayIndex = 0;
   int _shuffleCount = 0;
+  bool _revealStarted = false;
 
   @override
   void initState() {
@@ -715,7 +717,10 @@ class _DrawPageState extends State<DrawPage> {
         if (_displayIndex == -1) {
           _displayIndex = 0;
         }
+        _revealStarted = true;
       });
+      // 开奖定格：一次中等触觉，配合海报回弹。
+      HapticFeedback.mediumImpact();
       Future.delayed(const Duration(milliseconds: 500), _onAnimationComplete);
       return;
     }
@@ -826,9 +831,19 @@ class _DrawPageState extends State<DrawPage> {
             duration: MediaQuery.disableAnimationsOf(context)
                 ? Duration.zero
                 : const Duration(milliseconds: 80),
-            child: DrawShuffleCard(
-              movie: currentMovie,
-              shuffleCount: _shuffleCount,
+            child: TweenAnimationBuilder<double>(
+              key: ValueKey('reveal-$_revealStarted'),
+              tween: Tween(begin: _revealStarted ? 1.06 : 1.0, end: 1.0),
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 360),
+              curve: Curves.easeOutBack,
+              builder: (context, scale, child) =>
+                  Transform.scale(scale: scale, child: child),
+              child: DrawShuffleCard(
+                movie: currentMovie,
+                shuffleCount: _shuffleCount,
+              ),
             ),
           ),
           const SizedBox(height: AppTheme.spacingLarge),
