@@ -13,6 +13,11 @@ import 'package:random_movie/providers/movie_provider.dart';
 import 'package:random_movie/widgets/collection/collection_icon.dart';
 import 'package:random_movie/widgets/common/app_components.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
+import 'package:random_movie/widgets/common/animated_entrance.dart';
+import 'package:random_movie/services/storage_service.dart';
+import 'package:random_movie/services/table_change_notifier.dart';
+import 'package:random_movie/widgets/common/skeleton.dart';
+import 'package:random_movie/widgets/common/undo_delete.dart';
 import 'package:random_movie/widgets/movie/movie_card.dart';
 import 'package:random_movie/router/movie_detail_arguments.dart';
 import 'package:random_movie/widgets/movie/library_scroll_request.dart';
@@ -32,6 +37,28 @@ class _MoviesPageState extends State<MoviesPage> {
   bool _requestedCollections = false;
   LibraryScrollRequest? _scrollRequest;
 
+  /// 已经在屏幕上出现过的影片 id。
+  ///
+  /// 用来区分「本批新增」和「一直在屏上的」：只有前者播放渐入，
+  /// 否则每次筛选/滚动都会让整屏卡片重新淡入，看起来像在闪。
+  final Set<String> _shownMovieIds = {};
+
+  /// 记住这一帧要展示的 id，供下一次构建判断哪些是新增的。
+  Set<String> _previouslyShown = const {};
+  LibraryFilter? _lastFilter;
+
+  void _rememberShown(Iterable<String> ids, LibraryFilter filter) {
+    _previouslyShown = Set<String>.of(_shownMovieIds);
+    if (_lastFilter != filter) {
+      // 切换筛选是整个列表换内容，全部按「新增」处理会有明显的整屏渐入，
+      // 这里交给外层的 AnimatedSwitcher 做整体过渡，卡片自身不逐个播。
+      _previouslyShown = ids.toSet();
+      _lastFilter = filter;
+    }
+    if (_shownMovieIds.length > 2000) _shownMovieIds.clear();
+    _shownMovieIds.addAll(ids);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -50,10 +77,29 @@ class _MoviesPageState extends State<MoviesPage> {
     if (_requestedCollections) return;
     _requestedCollections = true;
     context.read<CollectionProvider>().ensureLoaded();
+
+    // T5b：订阅数据库变更，替掉「返回页面时手动 refresh」。
+    // 详情页改了影片、标签或会话，片库在安静 80ms 后自动重新查询。
+    _tableChanges ??= TableChangeNotifier(
+      StorageService(),
+      watchTables: const {'movies', 'movie_tags', 'collection_members'},
+    )..addListener(_onDataChanged);
+  }
+
+  TableChangeNotifier? _tableChanges;
+
+  void _onDataChanged() {
+    if (!mounted) return;
+    final provider = context.read<MovieProvider>();
+    // 只重查首页，保留当前筛选与搜索词；滚动位置不动。
+    provider.refreshLibrary();
+    context.read<CollectionProvider>().refresh();
   }
 
   @override
   void dispose() {
+    _tableChanges?.removeListener(_onDataChanged);
+    _tableChanges?.dispose();
     _scrollRequest?.removeListener(_scrollToTop);
     _searchController.dispose();
     _scrollController
@@ -79,7 +125,7 @@ class _MoviesPageState extends State<MoviesPage> {
     } else {
       _scrollController.animateTo(
         position.minScrollExtent,
-        duration: const Duration(milliseconds: 420),
+        duration: Motion.of(context, Motion.scroll),
         curve: Curves.easeOutCubic,
       );
     }
@@ -221,9 +267,17 @@ class _MoviesPageState extends State<MoviesPage> {
 
                 if ((!state.hasLoadedLibrary || state.isLibraryLoading) &&
                     movies.isEmpty) {
-                  return const SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: LoadingState(message: '加载中…'),
+                  // 首次进入片库：先给一整屏与真实网格同参数的骨架，
+                  // 数据到位后高度和位置都不跳（比转圈稳得多）。
+                  return SliverToBoxAdapter(
+                    child: LibrarySkeletonGrid(
+                      padding: EdgeInsets.only(
+                        top: Spacing.md,
+                        left: Spacing.page,
+                        right: Spacing.page,
+                        bottom: DockMetrics.insetOf(context) + 24,
+                      ),
+                    ),
                   );
                 }
 
@@ -292,6 +346,13 @@ class _MoviesPageState extends State<MoviesPage> {
                     ? movies.length + 1
                     : movies.length;
 
+                // 计算哪些是本批新增（用于只让新增卡片渐入）。
+                _rememberShown(
+                  movies.map((movie) => movie.id),
+                  state.filter,
+                );
+                final previouslyShown = _previouslyShown;
+
                 return SliverPadding(
                   padding: EdgeInsets.only(
                     top: Spacing.md,
@@ -299,7 +360,14 @@ class _MoviesPageState extends State<MoviesPage> {
                     right: Spacing.page,
                     bottom: DockMetrics.insetOf(context) + 24,
                   ),
-                  sliver: SliverGrid.builder(
+                  // 切换「全部 / 未看 / 已看」时整块网格淡入淡出，
+                  // 而不是内容直接跳变。用 Sliver 版避免包一层 IndexedStack
+                  // 导致所有卡片同时驻留内存。
+                  sliver: SliverAnimatedOpacity(
+                    opacity: state.isLibraryLoading ? 0.45 : 1,
+                    duration: Motion.of(context, Motion.normal),
+                    curve: Motion.standard,
+                    sliver: SliverGrid.builder(
                     gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
                       // 高密度屏幕（如 3200×1440）上等比放大卡片宽度。
                       maxCrossAxisExtent: 190,
@@ -333,29 +401,35 @@ class _MoviesPageState extends State<MoviesPage> {
                       }
 
                       final movie = movies[index];
-                      return MovieCard(
+                      return AnimatedCardEntrance(
                         key: ValueKey(movie.id),
-                        movie: movie,
-                        posterHeroTag: 'library:${movie.id}',
-                        onTap: () async {
-                          await context.push(
-                            '/movies/detail/${movie.id}',
-                            extra: MovieDetailArguments(
-                              movie,
-                              posterTag: 'library:${movie.id}',
-                            ),
-                          );
-                          if (context.mounted) {
-                            context.read<CollectionProvider>().refresh();
-                          }
-                        },
-                        onDelete: () => _confirmDelete(
-                          context,
-                          context.read<MovieProvider>(),
-                          movie,
+                        // 只对本批新增的卡片播放渐入，已在屏上的不重复播放。
+                        play: !previouslyShown.contains(movie.id),
+                        reduceMotion: MediaQuery.disableAnimationsOf(context),
+                        child: MovieCard(
+                          movie: movie,
+                          posterHeroTag: 'library:${movie.id}',
+                          onTap: () async {
+                            await context.push(
+                              '/movies/detail/${movie.id}',
+                              extra: MovieDetailArguments(
+                                movie,
+                                posterTag: 'library:${movie.id}',
+                              ),
+                            );
+                            if (context.mounted) {
+                              context.read<CollectionProvider>().refresh();
+                            }
+                          },
+                          onDelete: () => _confirmDelete(
+                            context,
+                            context.read<MovieProvider>(),
+                            movie,
+                          ),
                         ),
                       );
                     },
+                    ),
                   ),
                 );
               },
@@ -452,7 +526,7 @@ class _MoviesPageState extends State<MoviesPage> {
           ),
         ),
         content: Text(
-          '确定要从片库中删除《${movie.title}》吗？',
+          '确定要从片库中删除《${movie.title}》吗？\n删除后 5 秒内还可以撤销。',
           style: TextStyle(color: colorScheme.onSurfaceVariant),
         ),
         actions: [
@@ -466,14 +540,7 @@ class _MoviesPageState extends State<MoviesPage> {
           TextButton(
             onPressed: () async {
               Navigator.of(dialogContext).pop();
-              await provider.deleteMovie(movie.id);
-              if (!context.mounted) return;
-              if (provider.error != null) {
-                AppToast.error(context, provider.error!);
-              } else {
-                AppToast.success(context, '已删除《${movie.title}》');
-                context.read<CollectionProvider>().refresh();
-              }
+              await _deleteWithUndo(context, provider, movie);
             },
             style: TextButton.styleFrom(foregroundColor: AppTheme.accent),
             child: const Text(
@@ -483,6 +550,34 @@ class _MoviesPageState extends State<MoviesPage> {
           ),
         ],
       ),
+    );
+  }
+
+  /// 先让卡片从列表消失，5 秒内可撤销，超时才真正删库。
+  Future<void> _deleteWithUndo(
+    BuildContext context,
+    MovieProvider provider,
+    Movie movie,
+  ) async {
+    if (!context.mounted) return;
+    await deleteWithUndo(
+      context,
+      label: '已删除《${movie.title}》',
+      hide: () => provider.hideMovie(movie.id),
+      restore: () {
+        provider.restoreMovie(movie.id);
+        if (!context.mounted) return;
+        AppToast.info(context, '已恢复《${movie.title}》');
+      },
+      commit: () async {
+        await provider.deleteMovie(movie.id);
+        if (!context.mounted) return;
+        if (provider.error != null) {
+          AppToast.error(context, provider.error!);
+        } else {
+          context.read<CollectionProvider>().refresh();
+        }
+      },
     );
   }
 }

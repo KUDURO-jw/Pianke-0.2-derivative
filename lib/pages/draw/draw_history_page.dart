@@ -10,6 +10,7 @@ import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/models/models.dart';
 import 'package:random_movie/providers/providers.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
+import 'package:random_movie/config/design_tokens.dart';
 
 /// Inline draw history list used on the draw entry page.
 class DrawHistoryList extends StatefulWidget {
@@ -211,9 +212,7 @@ class _DrawHistoryCardState extends State<_DrawHistoryCard> {
         onTap: widget.onTap,
       child: AnimatedScale(
         scale: _pressed ? 0.98 : 1.0,
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 120),
+        duration: Motion.of(context, Motion.fast),
         curve: Curves.easeInOut,
         child: Container(
           decoration: ShapeDecoration(

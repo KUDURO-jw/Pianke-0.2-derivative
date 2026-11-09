@@ -12,9 +12,11 @@ import 'package:random_movie/models/models.dart';
 import 'package:random_movie/providers/providers.dart';
 import 'package:random_movie/services/watch_status.dart';
 import 'package:random_movie/widgets/movie/movie_poster.dart';
+import 'package:random_movie/widgets/movie/poster_tint.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
 import 'package:random_movie/widgets/common/app_components.dart';
 import 'package:random_movie/config/design_tokens.dart';
+import 'package:random_movie/services/haptics.dart';
 import 'package:random_movie/widgets/movie/movie_tag_editor.dart';
 import 'package:random_movie/widgets/movie/viewing_session_editor.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -554,6 +556,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
         url: hasPoster ? movie.poster : '',
         heroTag: widget.posterHeroTag,
         radius: AppTheme.radiusMedium - 1.5,
+        tint: PosterTint.of(movie),
       ),
     );
   }
@@ -1819,7 +1822,7 @@ class _StarIconState extends State<_StarIcon>
     with SingleTickerProviderStateMixin {
   late final AnimationController _scale = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 150),
+    duration: Motion.panel,
     lowerBound: 0.0,
     upperBound: 1.25,
     value: 1.0,
@@ -1832,7 +1835,7 @@ class _StarIconState extends State<_StarIcon>
   }
 
   Future<void> _handleTap() async {
-    HapticFeedback.selectionClick();
+    Haptics.selection();
     widget.onTap();
     if (MediaQuery.disableAnimationsOf(context)) return;
     await _scale.animateTo(1.25, curve: Curves.easeOut);

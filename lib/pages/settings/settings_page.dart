@@ -16,6 +16,7 @@ import 'package:random_movie/widgets/common/common_widgets.dart';
 import 'package:random_movie/widgets/settings/webdav_sync_section.dart';
 import 'package:random_movie/widgets/settings/update_download_dialog.dart';
 import 'package:random_movie/services/local_data_guard.dart';
+import 'package:random_movie/services/haptics.dart';
 
 class SettingsPage extends StatefulWidget {
   final UpdateService? updateService;
@@ -40,6 +41,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _importLoading = false;
   bool _updateLoading = false;
   bool _updateDialogOpen = false;
+  bool _hapticsEnabled = Haptics.enabled;
 
   @override
   void initState() {
@@ -48,6 +50,11 @@ class _SettingsPageState extends State<SettingsPage> {
     _updateService = widget.updateService ?? UpdateService();
     _syncServiceFuture = _createSyncService();
     _packageInfoFuture = PackageInfo.fromPlatform();
+    // 从偏好读一次真实值，避免开关显示成默认值而实际状态不同。
+    Haptics.load().then((_) {
+      if (!mounted) return;
+      setState(() => _hapticsEnabled = Haptics.enabled);
+    });
   }
 
   Future<WebDavSyncService> _createSyncService() async {
@@ -76,6 +83,26 @@ class _SettingsPageState extends State<SettingsPage> {
           AppCard(
             padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
             child: const _ThemeModeSelector(),
+          ),
+          const SizedBox(height: Spacing.xxl),
+          _SectionHeader(label: '交互'),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: SwitchListTile.adaptive(
+              value: _hapticsEnabled,
+              onChanged: (value) async {
+                setState(() => _hapticsEnabled = value);
+                await Haptics.setEnabled(value);
+                // 开启时立刻给一次反馈，让用户明白这个开关是干嘛的。
+                if (value) Haptics.success();
+              },
+              secondary: Icon(
+                Icons.vibration_rounded,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              title: const Text('触觉反馈'),
+              subtitle: const Text('保存、删除、标记已看时轻微震动'),
+            ),
           ),
           const SizedBox(height: Spacing.xxl),
           _SectionHeader(label: '数据备份'),

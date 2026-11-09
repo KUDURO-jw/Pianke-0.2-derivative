@@ -10,7 +10,7 @@ import 'package:random_movie/services/backup_inventory.dart';
 import 'package:random_movie/services/storage_service.dart';
 import 'package:share_plus/share_plus.dart';
 
-const int _kSchemaVersion = 3;
+const int _kSchemaVersion = kDataSchemaVersion;
 
 class BackupImportPreview {
   final Map<String, dynamic> payload;
@@ -37,7 +37,10 @@ class BackupImportPreview {
     final schema = meta['schemaVersion'] ?? 0;
     if (schema is! int || schema < 0) throw const FormatException('备份版本格式不正确');
     if (schema > _kSchemaVersion) {
-      throw const FormatException('备份文件版本太新，请升级应用后再恢复');
+      // 与 WebDAV 同步共用同一句提示，避免同一个原因出现两种说法。
+      throw FormatException(
+        const BackupTooNewException(_kSchemaVersion + 1).message,
+      );
     }
     for (final key in [
       'movies',
@@ -249,7 +252,11 @@ class BackupService implements SyncBackupStore {
       throw const BackupSnapshotException('云端观影记录关联的影片缺失，已停止覆盖');
     }
 
-    await _storage.replaceBackupData(
+    // 覆盖前记下本地指纹；真正的比对发生在下面的写事务里，
+    // 这样「比对」和「替换」之间不存在可以让用户写入的窗口。
+    final fingerprint = await _storage.localFingerprint();
+    await _storage.replaceBackupDataIfUnchanged(
+      expectedFingerprint: fingerprint,
       movies: movies,
       drawRecords: drawRecords,
       sessions: sessions,
@@ -280,10 +287,8 @@ class BackupService implements SyncBackupStore {
   Future<Map<String, dynamic>> _collectPayload({
     required bool includeUserIdentity,
   }) async {
-    final movies = await _storage.getAllMoviesForBackup();
-    final drawRecords = await _storage.getAllDrawRecordsForBackup();
-    final sessions = await _storage.getAllSessionsForBackup();
-    final collectionsAndTags = await _storage.getCollectionsAndTagsForBackup();
+    // 一次事务读完，保证快照内部自洽：不会出现「会话指向一部没读到的影片」。
+    final bundle = await _storage.readBackupBundle();
     return {
       'meta': {
         'appId': 'Pianke',
@@ -296,13 +301,13 @@ class BackupService implements SyncBackupStore {
         'themeMode': _storage.getThemeMode(),
         'userName': _storage.userName,
       },
-      'movies': movies.map((m) => m.toJson()).toList(),
-      'drawRecords': drawRecords.map((r) => r.toJson()).toList(),
-      'viewingSessions': sessions.map((s) => s.toJson()).toList(),
-      'collections': collectionsAndTags['collections'],
-      'collectionMembers': collectionsAndTags['collectionMembers'],
-      'tags': collectionsAndTags['tags'],
-      'movieTags': collectionsAndTags['movieTags'],
+      'movies': bundle.movies.map((m) => m.toJson()).toList(),
+      'drawRecords': bundle.drawRecords.map((r) => r.toJson()).toList(),
+      'viewingSessions': bundle.sessions.map((s) => s.toJson()).toList(),
+      'collections': bundle.collectionsAndTags['collections'],
+      'collectionMembers': bundle.collectionsAndTags['collectionMembers'],
+      'tags': bundle.collectionsAndTags['tags'],
+      'movieTags': bundle.collectionsAndTags['movieTags'],
     };
   }
 

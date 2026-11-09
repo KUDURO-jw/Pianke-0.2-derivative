@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/models/models.dart';
 import 'package:random_movie/services/local_data_guard.dart';
+import 'package:random_movie/config/design_tokens.dart';
 
 /// 记录 / 编辑一次观影会话的底部弹窗。
 /// 确认返回填好的 [ViewingSession]，取消返回 null。
@@ -395,9 +396,7 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
     return GestureDetector(
       onTap: () => setState(() => _mood = selected ? WatchMood.none : mood),
       child: AnimatedContainer(
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 150),
+        duration: Motion.of(context, Motion.panel),
         padding: const EdgeInsets.symmetric(
           horizontal: AppTheme.spacingMedium,
           vertical: AppTheme.spacingSmall,
@@ -443,9 +442,7 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
         }
       }),
       child: AnimatedContainer(
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 150),
+        duration: Motion.of(context, Motion.panel),
         padding: const EdgeInsets.symmetric(
           horizontal: AppTheme.spacingMedium,
           vertical: AppTheme.spacingSmall,
@@ -492,9 +489,7 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
         }
       }),
       child: AnimatedContainer(
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 150),
+        duration: Motion.of(context, Motion.panel),
         padding: const EdgeInsets.symmetric(
           horizontal: AppTheme.spacingMedium,
           vertical: AppTheme.spacingSmall,

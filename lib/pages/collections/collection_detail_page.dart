@@ -13,6 +13,7 @@ import 'package:random_movie/widgets/common/common_widgets.dart';
 import 'package:random_movie/widgets/movie/movie_card.dart';
 import 'package:random_movie/router/movie_detail_arguments.dart';
 import 'package:random_movie/widgets/movie/selectable_movie_grid.dart';
+import 'package:random_movie/config/design_tokens.dart';
 
 /// 合集详情：展示合集内影片，支持编辑成员（手动合集）与「从本合集抽片」。
 class CollectionDetailPage extends StatefulWidget {
@@ -490,7 +491,7 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
       _loadingMore = false;
       _visible = [];
     });
-    _debounce = Timer(const Duration(milliseconds: 250), _load);
+    _debounce = Timer(Motion.debounce, _load);
   }
 
   void _toggle(Movie movie) {

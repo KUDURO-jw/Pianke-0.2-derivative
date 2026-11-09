@@ -97,6 +97,11 @@ class Movie {
   final String? userReview;
   final DateTime createdAt;
 
+  /// 海报主色的 ARGB 值。由下载海报时解码取平均色得到（T7 的 PosterStore）。
+  ///
+  /// 为 null 表示还没取过色，界面用派生色兜底；它随备份同步，但不含图片本身。
+  final int? posterColor;
+
   Movie({
     required this.id,
     required this.title,
@@ -120,6 +125,7 @@ class Movie {
     this.userRating,
     this.userReview,
     DateTime? createdAt,
+    this.posterColor,
   }) : createdAt = createdAt ?? DateTime.now(),
        durationMinutes = durationMinutes ?? parseDurationMinutes(durationText);
 
@@ -176,6 +182,7 @@ class Movie {
     'userRating': userRating,
     'userReview': userReview,
     'createdAt': createdAt.toIso8601String(),
+    'posterColor': posterColor,
   };
 
   factory Movie.fromJson(Map<String, dynamic> json) => Movie(
@@ -212,6 +219,9 @@ class Movie {
     createdAt: json['createdAt'] != null
         ? DateTime.parse(json['createdAt'])
         : DateTime.now(),
+    posterColor: json['posterColor'] is num
+        ? (json['posterColor'] as num).toInt()
+        : null,
   );
 
   Movie copyWith({
@@ -241,6 +251,8 @@ class Movie {
     String? userReview,
     bool clearUserReview = false,
     DateTime? createdAt,
+    int? posterColor,
+    bool clearPosterColor = false,
   }) {
     return Movie(
       id: id ?? this.id,
@@ -267,6 +279,7 @@ class Movie {
       userRating: clearUserRating ? null : (userRating ?? this.userRating),
       userReview: clearUserReview ? null : (userReview ?? this.userReview),
       createdAt: createdAt ?? this.createdAt,
+      posterColor: clearPosterColor ? null : (posterColor ?? this.posterColor),
     );
   }
 

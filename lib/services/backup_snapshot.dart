@@ -1,3 +1,4 @@
+// Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'dart:collection';
 import 'dart:convert';
 
@@ -5,6 +6,21 @@ import 'package:crypto/crypto.dart';
 
 /// 同步快照格式版本。改动载荷结构时递增，旧版本快照会被拒绝解析。
 const int syncSnapshotFormatVersion = 1;
+
+/// 数据合约版本：备份文件 `meta.schemaVersion` 与本地数据库共同遵守的版本。
+///
+/// 云端文件用它声明「这份数据由第几版结构写出」。本机版本低于它时说明云端
+/// 比这台设备新，本机绝不允许上传覆盖（见 [BackupTooNewException]）。
+const int kDataSchemaVersion = 3;
+
+/// 读取载荷声明的数据版本；缺失或格式不对时按 0（最老的备份）处理。
+int readPayloadSchemaVersion(Map<String, dynamic> payload) {
+  final meta = payload['meta'];
+  if (meta is! Map) return 0;
+  final raw = meta['schemaVersion'];
+  if (raw is int) return raw < 0 ? 0 : raw;
+  return int.tryParse(raw?.toString() ?? '') ?? 0;
+}
 
 /// 带校验值的备份快照。
 ///
@@ -46,10 +62,28 @@ class BackupSnapshot {
       throw const BackupSnapshotException('不是有效的片刻备份');
     }
 
+    // 先读版本、再校验内容：版本比本机新时，内容根本无从解读，
+    // 也不能让它在后续流程里被「理解成缺字段」再写回云端。
+    final remoteSchema = readPayloadSchemaVersion(payload);
+    if (remoteSchema > kDataSchemaVersion) {
+      throw BackupTooNewException(remoteSchema);
+    }
+
     final sync = payload['sync'];
-    if (sync is! Map ||
-        sync['formatVersion'] != syncSnapshotFormatVersion ||
-        sync['checksum']?.toString().isEmpty != false) {
+    if (sync is! Map) {
+      throw const BackupSnapshotException('备份缺少同步元数据');
+    }
+    final formatVersion = sync['formatVersion'] is int
+        ? sync['formatVersion'] as int
+        : int.tryParse(sync['formatVersion']?.toString() ?? '');
+    if (formatVersion == null) {
+      throw const BackupSnapshotException('备份缺少同步元数据');
+    }
+    if (formatVersion > syncSnapshotFormatVersion) {
+      // 用数据版本表述更贴近用户认知，也不泄露内部格式细节。
+      throw BackupTooNewException(remoteSchema, remoteFormat: formatVersion);
+    }
+    if (formatVersion < 1 || sync['checksum']?.toString().isEmpty != false) {
       throw const BackupSnapshotException('备份缺少同步元数据');
     }
 
@@ -65,6 +99,9 @@ class BackupSnapshot {
       checksum: checksum,
     );
   }
+
+  /// 这份数据声明的结构版本（`meta.schemaVersion`），缺失按 0 处理。
+  int get schemaVersion => readPayloadSchemaVersion(payload);
 
   Map<String, dynamic> toJson() => _copyMap(payload);
 
@@ -127,4 +164,21 @@ class BackupSnapshotException implements Exception {
 
   @override
   String toString() => message;
+}
+
+/// 云端数据来自更新版本的片刻。
+///
+/// 这个异常是「单向闸门」的信号：一旦抛出，本机就不能上传、不能覆盖云端，
+/// 否则老版本的 [Movie.fromJson] 会把不认识的字段丢掉，再写回就永久丢失。
+class BackupTooNewException extends BackupSnapshotException {
+  /// 云端声明的数据结构版本（`meta.schemaVersion`）。
+  final int remoteSchema;
+
+  /// 云端声明的快照格式版本（`sync.formatVersion`），未知时为 null。
+  final int? remoteFormat;
+
+  const BackupTooNewException(this.remoteSchema, {this.remoteFormat})
+    : super('云端数据来自更新版本的片刻，请先在这台设备上升级应用后再同步');
+  @override
+  String toString() => '$message（云端 v$remoteSchema，本机 v$kDataSchemaVersion）';
 }

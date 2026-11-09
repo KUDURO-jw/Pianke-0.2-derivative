@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:random_movie/models/models.dart';
 import 'package:random_movie/config/app_theme.dart';
+import 'package:random_movie/config/design_tokens.dart';
 import 'package:random_movie/router/movie_detail_arguments.dart';
 import 'package:random_movie/pages/collections/collections_page.dart';
 import 'package:random_movie/pages/collections/collection_detail_page.dart';
@@ -139,12 +140,8 @@ CustomTransitionPage<void> _secondaryPage(
   bool detail = false,
 }) => CustomTransitionPage<void>(
   key: state.pageKey,
-  transitionDuration: MediaQuery.disableAnimationsOf(context)
-      ? Duration.zero
-      : const Duration(milliseconds: 200),
-  reverseTransitionDuration: MediaQuery.disableAnimationsOf(context)
-      ? Duration.zero
-      : const Duration(milliseconds: 180),
+  transitionDuration: Motion.of(context, Motion.page),
+  reverseTransitionDuration: Motion.of(context, Motion.pageBack),
   transitionsBuilder: detail
       ? AppPageTransitionsBuilder.detailTransition
       : AppPageTransitionsBuilder.transition,
@@ -309,7 +306,7 @@ class _BranchTransitionState extends State<_BranchTransition>
   double _direction = 1;
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 300),
+    duration: Motion.slow,
     value: 1,
   )..addStatusListener(_onStatus);
 

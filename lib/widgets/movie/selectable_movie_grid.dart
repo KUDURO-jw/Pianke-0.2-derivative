@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:random_movie/config/api_config.dart';
 import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/models/movie.dart';
+import 'package:random_movie/config/design_tokens.dart';
 
 /// 可选择影片网格
 class SelectableMovieGrid extends StatelessWidget {
@@ -99,9 +100,7 @@ class _SelectableMovieTile extends StatelessWidget {
         onTap: onTap,
         child: AnimatedOpacity(
           opacity: selected ? 1.0 : 0.52,
-          duration: MediaQuery.disableAnimationsOf(context)
-              ? Duration.zero
-              : const Duration(milliseconds: 120),
+          duration: Motion.of(context, Motion.fast),
           child: Stack(
             children: [
               Container(

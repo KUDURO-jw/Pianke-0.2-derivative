@@ -5,8 +5,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/physics.dart';
-import 'package:flutter/services.dart';
 import 'package:random_movie/config/design_tokens.dart';
+import 'package:random_movie/services/haptics.dart';
 import 'package:random_movie/widgets/common/continuous_rrect.dart';
 
 class NavItemData {
@@ -68,7 +68,7 @@ class _FloatingNavBarState extends State<FloatingNavBar>
 
   late final AnimationController _swell = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 260),
+    duration: Motion.page,
     lowerBound: 0.0,
     upperBound: 1.0,
   );
@@ -192,8 +192,8 @@ class _DockTrackState extends State<_DockTrack> with TickerProviderStateMixin {
   );
   late final AnimationController _press = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 160),
-    reverseDuration: const Duration(milliseconds: 140),
+    duration: Motion.settle,
+    reverseDuration: Motion.fast,
   );
   final ValueNotifier<int?> _pressedIndex = ValueNotifier(null);
   late final Listenable _motion = Listenable.merge([
@@ -264,7 +264,7 @@ class _DockTrackState extends State<_DockTrack> with TickerProviderStateMixin {
   void _select(int index, {bool haptic = true}) {
     _settle(index);
     if (index != widget.currentIndex) {
-      if (haptic) HapticFeedback.selectionClick();
+      if (haptic) Haptics.selection();
       widget.onSelected(index);
     }
   }
@@ -329,7 +329,7 @@ class _DockTrackState extends State<_DockTrack> with TickerProviderStateMixin {
           _position.value = next;
           _pressedIndex.value = index;
           if (_lastHapticIndex != index) {
-            HapticFeedback.selectionClick();
+            Haptics.selection();
             _lastHapticIndex = index;
           }
         }
@@ -401,7 +401,7 @@ class _DockTrackState extends State<_DockTrack> with TickerProviderStateMixin {
                   (releaseIndex + (projected - releaseIndex).clamp(-1, 1))
                       .clamp(0, widget.items.length - 1);
               _dragging = false;
-              if (_lastHapticIndex != target) HapticFeedback.selectionClick();
+              if (_lastHapticIndex != target) Haptics.selection();
               _settle(target, velocity / itemWidth);
               if (target != widget.currentIndex) widget.onSelected(target);
             },

@@ -313,6 +313,22 @@ class WebDavSyncService extends ChangeNotifier {
                   inspection.remote?.snapshot.checksum)) {
         throw const WebDavException('预览后数据已变化，请重新确认本地和云端版本');
       }
+
+      // 单向闸门：云端数据比本机新时，本机只能读、不能写。
+      // 这一步必须排在任何 upload 分支之前，否则老设备会用"缺字段"的数据
+      // 覆盖云端，把新字段永久抹掉（静默丢数据）。
+      final remoteSnapshot = inspection.remote?.snapshot;
+      if (remoteSnapshot != null &&
+          remoteSnapshot.schemaVersion > kDataSchemaVersion) {
+        final tooNew = BackupTooNewException(remoteSnapshot.schemaVersion);
+        return WebDavSyncOutcome(
+          state: WebDavSyncState.failure,
+          action: WebDavSyncAction.none,
+          message: tooNew.message,
+          inspection: inspection,
+        );
+      }
+
       var action = inspection.decision.action;
       if (direction == WebDavSyncDirection.upload) {
         action = WebDavSyncAction.upload;
@@ -389,6 +405,13 @@ class WebDavSyncService extends ChangeNotifier {
         inspection: inspection,
       );
     } on BackupSnapshotException catch (error) {
+      return WebDavSyncOutcome(
+        state: WebDavSyncState.failure,
+        action: WebDavSyncAction.none,
+        message: error.message,
+      );
+    } on StaleLocalDataException catch (error) {
+      // 覆盖过程中本地又变了：事务已回滚，数据库保持原样，提示稍后重试。
       return WebDavSyncOutcome(
         state: WebDavSyncState.failure,
         action: WebDavSyncAction.none,

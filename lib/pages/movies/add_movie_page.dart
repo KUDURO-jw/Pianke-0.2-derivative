@@ -66,7 +66,7 @@ class _AddMoviePageState extends State<AddMoviePage>
     _tabController.addListener(_syncPlaceholderAnimation);
     _placeholderController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1100),
+      duration: Motion.placeholderFade,
     );
   }
 

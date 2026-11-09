@@ -23,7 +23,7 @@ class AppToast {
 
   /// 给刚关闭的弹窗留出淡出时间（Material 弹窗淡出约 150ms），
   /// 避免提示条被淡出中的遮罩盖住。过长会让用户觉得「点了没反应」。
-  static const Duration _dialogSettleDelay = Duration(milliseconds: 160);
+  static const Duration _dialogSettleDelay = Motion.settle;
 
   static void show(
     BuildContext context,

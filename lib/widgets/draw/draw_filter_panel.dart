@@ -4,6 +4,7 @@ import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/models/models.dart';
 import 'package:random_movie/services/services.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
+import 'package:random_movie/config/design_tokens.dart';
 
 /// 抽片筛选面板（底部弹窗内容）。
 ///
@@ -408,9 +409,7 @@ class _DrawFilterPanelState extends State<DrawFilterPanel> {
               });
             },
             child: AnimatedContainer(
-              duration: MediaQuery.disableAnimationsOf(context)
-                  ? Duration.zero
-                  : const Duration(milliseconds: 150),
+              duration: Motion.of(context, Motion.panel),
               padding: const EdgeInsets.symmetric(
                 horizontal: AppTheme.spacingMedium,
                 vertical: AppTheme.spacingSmall,
@@ -563,9 +562,7 @@ class _QuickChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 150),
+        duration: Motion.of(context, Motion.panel),
         padding: const EdgeInsets.symmetric(
           horizontal: AppTheme.spacingMedium,
           vertical: AppTheme.spacingSmall,

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/models/models.dart';
 import 'package:random_movie/providers/providers.dart';
+import 'package:random_movie/config/design_tokens.dart';
 
 /// 影片标签编辑器：展示 / 勾选个人标签，并可新建带颜色的标签。
 ///
@@ -153,9 +154,7 @@ class _TagChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 150),
+        duration: Motion.of(context, Motion.panel),
         padding: const EdgeInsets.symmetric(
           horizontal: AppTheme.spacingMedium,
           vertical: AppTheme.spacingSmall,

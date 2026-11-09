@@ -41,10 +41,20 @@ class _MyAppState extends State<MyApp> {
         }
 
         if (snapshot.hasError) {
+          // 数据库被更新版本创建过：重试永远不会成功，所以不给「重试」按钮，
+          // 只把「需要装回新版本」讲清楚，避免用户反复点重试以为应用坏了。
+          final error = snapshot.error;
+          if (error is DatabaseTooNewException) {
+            return _BootstrapShell(
+              child: Scaffold(
+                body: ErrorState(message: error.message),
+              ),
+            );
+          }
           return _BootstrapShell(
             child: Scaffold(
               body: ErrorState(
-                message: '初始化失败: ${snapshot.error}',
+                message: '初始化失败: $error',
                 onRetry: () {
                   setState(() {
                     _bootstrapFuture = StorageService().init();

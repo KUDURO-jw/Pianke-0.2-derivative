@@ -3,12 +3,15 @@
   "versionCode": 26,
   "title": "片刻·焕新版 0.2.20",
   "changelog": [
-    "同步更省流量：云端没变化时不再重复下载整份备份",
-    "修复搜索 % 或 _ 会匹配到全部影片的问题",
-    "提示反馈更快，底部距离自适应字体大小",
-    "抽片按钮改为进入页面呼吸几次后静止，遵守减少动效"
+    "片库加载改为骨架屏，不再转圈，加载完成页面不跳动",
+    "海报渐显出现，占位色取自海报主色",
+    "删除影片后 5 秒内可撤销",
+    "设置页新增触觉反馈开关",
+    "换时区后观影日历不再错位一天",
+    "防止老版本设备覆盖云端新数据",
+    "云同步覆盖前先校验，避免误删本地刚存的内容"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.20-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "c9c3ae9f6dbe11e18ac5a6c0424daaebf8d148edbbcbd362e09521ed81268d33",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.20-ui.2/Pianke-UI-arm64-release.apk",
+  "sha256": "631b5d100180a8ce90276112a42bf16eb7e51997fbc0dbfb782cc43b4a7a4613",
   "forceUpdate": false
 }

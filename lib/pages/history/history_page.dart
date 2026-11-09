@@ -12,6 +12,7 @@ import 'package:random_movie/models/models.dart';
 import 'package:random_movie/providers/movie_provider.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
 import 'package:random_movie/widgets/movie/quick_viewing_entry.dart';
+import 'package:random_movie/config/design_tokens.dart';
 
 /// 观影记录页面
 class HistoryPage extends StatefulWidget {
@@ -808,9 +809,7 @@ class _HistoryCalendarCell extends StatelessWidget {
         borderRadius: BorderRadius.circular(cellRadius),
         onTap: onTap,
         child: AnimatedContainer(
-          duration: MediaQuery.disableAnimationsOf(context)
-              ? Duration.zero
-              : const Duration(milliseconds: 140),
+          duration: Motion.of(context, Motion.fast),
           curve: Curves.easeOut,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(cellRadius),
@@ -1137,9 +1136,7 @@ class _SessionTimelineCardState extends State<_SessionTimelineCard> {
         onTap: widget.onTap,
       child: AnimatedScale(
         scale: _pressed ? 0.985 : 1.0,
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 100),
+        duration: Motion.of(context, Motion.fast),
         curve: Curves.easeOut,
         child: Container(
           decoration: ShapeDecoration(
@@ -1355,7 +1352,7 @@ class _TodayDotState extends State<_TodayDot>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1600),
+    duration: Motion.breath,
   )..repeat(reverse: true);
 
   @override

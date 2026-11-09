@@ -70,7 +70,7 @@ class _PrimaryDrawCardState extends State<_PrimaryDrawCard>
 
   late final AnimationController _breath = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1600),
+    duration: Motion.breath,
   );
   bool _breathStarted = false;
 

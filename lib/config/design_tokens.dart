@@ -258,15 +258,87 @@ class Spacing {
 /// 六、动效
 /// ─────────────────────────────────────────────
 
+/// 动效令牌。
+///
+/// 全应用只从这里取动画时长与曲线，避免 `Duration(milliseconds: N)` 散落在
+/// 十几个文件里（文档写 280/220，代码里却写成 200/180，对不上就是这么来的）。
+///
+/// **所有**新动画都必须经由 [of] 取值：用户开启系统「移除动画」时它返回
+/// `Duration.zero`，不需要每个组件各自判断。
 class Motion {
   const Motion._();
 
+  /// 极短：按下反馈、微小的颜色/透明度变化。
   static const Duration fast = Duration(milliseconds: 120);
-  static const Duration normal = Duration(milliseconds: 200);
-  static const Duration slow = Duration(milliseconds: 300);
+
+  /// 常规：淡入淡出、卡片展开收起。
+  static const Duration normal = Duration(milliseconds: 220);
+
+  /// 慢：需要被看清的位移或强调。
+  static const Duration slow = Duration(milliseconds: 320);
+
+  /// 二级页面前进。
+  static const Duration page = Duration(milliseconds: 260);
+
+  /// 二级页面返回。返回略快于进入，是常见的手感约定。
+  static const Duration pageBack = Duration(milliseconds: 220);
+
+  /// 容器展开 / 收起（面板高度、内边距变化）。
+  static const Duration panel = Duration(milliseconds: 150);
+
+  /// 弹窗关闭后给提示条留的缓冲，避免被淡出中的遮罩盖住。
+  static const Duration settle = Duration(milliseconds: 160);
+
+  /// 骨架屏高光扫过一轮。
+  static const Duration shimmer = Duration(milliseconds: 1400);
+
+  /// 呼吸 / 脉冲循环（抽片入口、空态插图）。
+  static const Duration breath = Duration(milliseconds: 1600);
+
+  /// 结果揭晓时的弹起。
+  static const Duration reveal = Duration(milliseconds: 380);
+
+  /// 占位符交叉淡入（添加影片页的骨架文字）。
+  static const Duration placeholderFade = Duration(milliseconds: 1100);
+
+  /// 回到顶部的滚动对齐。
+  static const Duration scroll = Duration(milliseconds: 420);
+
+  /// 抽片洗牌的单步间隔。
+  static const Duration shuffleTick = Duration(milliseconds: 100);
+
+  /// 抽片转盘的完整时长（一个控制器跑完）。
+  static const Duration drawSpin = Duration(milliseconds: 2600);
+
+  /// 抽片转盘曲线：前期快、末尾明显减速，观感「转不动了才停」。
+  static const Curve spinCurve = Curves.easeOutQuart;
+
+  /// 抽片揭晓后停留多久再进入结果页。
+  static const Duration resultHold = Duration(milliseconds: 500);
+
+  /// 输入防抖：停止输入多久后才真正查询。
+  static const Duration debounce = Duration(milliseconds: 250);
 
   static const Curve standard = Curves.easeOutCubic;
   static const Curve emphasized = Cubic(0.2, 0.0, 0.0, 1.0);
+
+  /// 回弹规格，参数取自悬浮底栏现有配置。
+  static const SpringDescription spring = SpringDescription(
+    mass: 1,
+    stiffness: 350,
+    damping: 30,
+  );
+
+  /// 统一入口：用户开启「移除动画」时返回 [Duration.zero]。
+  ///
+  /// 需要 `context` 是因为减少动效开关在 [MediaQuery] 上，
+  /// 它支持运行中切换，不能缓存成静态值。
+  static Duration of(BuildContext context, Duration duration) =>
+      MediaQuery.disableAnimationsOf(context) ? Duration.zero : duration;
+
+  /// 当前是否应当播放动画。
+  static bool enabled(BuildContext context) =>
+      !MediaQuery.disableAnimationsOf(context);
 }
 
 /// ─────────────────────────────────────────────

@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/scheduler.dart';
 import 'package:random_movie/models/models.dart';
 import 'package:random_movie/services/services.dart';
+import 'package:random_movie/config/design_tokens.dart';
 
 /// Library filter mode: all / watched / unwatched.
 enum LibraryFilter { all, watched, unwatched }
@@ -60,8 +61,30 @@ class MovieProvider extends AppNotifier {
   String _searchQuery = '';
   Timer? _searchDebounce;
 
-  List<Movie> get movies => _libraryMovies;
-  List<Movie> get allMovies => _libraryMovies;
+  /// 「已从界面移除、但还没真正删库」的影片 id。
+  ///
+  /// 可撤销删除的实现方式：先让条目从列表消失（即时反馈），
+  /// 5 秒内不撤销才真正 `deleteMovie`。这样撤销只是把它从集合里去掉，
+  /// 不涉及任何数据库回滚——也正因为如此，撤销必定是完整的。
+  final Set<String> _hiddenMovieIds = {};
+
+  List<Movie> get movies => _libraryMovies
+      .where((movie) => !_hiddenMovieIds.contains(movie.id))
+      .toList(growable: false);
+  List<Movie> get allMovies => movies;
+
+  /// 从界面隐藏一条影片（撤销删除的「先隐藏」步骤）。
+  void hideMovie(String movieId) {
+    if (_hiddenMovieIds.add(movieId)) notifyListeners();
+  }
+
+  /// 恢复被隐藏的影片（用户点了「撤销」）。
+  void restoreMovie(String movieId) {
+    if (_hiddenMovieIds.remove(movieId)) notifyListeners();
+  }
+
+  /// 该影片当前是否处于「待删除」状态。
+  bool isMovieHidden(String movieId) => _hiddenMovieIds.contains(movieId);
   List<SessionEntry> get sessionEntries => _sessionEntries;
   ViewingStats get viewingStats => _viewingStats;
   bool get isLoading => _isBusy;
@@ -90,6 +113,18 @@ class MovieProvider extends AppNotifier {
     : _storageService = storage ?? StorageService(),
       _ownsScraper = scraper == null,
       _scraperService = scraper ?? MovieScraperService();
+
+  /// 仅供测试：用给定影片直接构造，跳过数据库读取。
+  ///
+  /// 用于验证「待删除隐藏集合」这类纯内存行为，不需要真库。
+  MovieProvider.forTesting({required List<Movie> movies})
+    : _storageService = StorageService(),
+      _ownsScraper = false,
+      _scraperService = MovieScraperService() {
+    _libraryMovies = List<Movie>.of(movies);
+    _cacheMovies(movies);
+    _hasLoadedLibrary = true;
+  }
 
   void _cacheMovies(Iterable<Movie> movies) {
     if (isDisposed) return;
@@ -473,7 +508,7 @@ class MovieProvider extends AppNotifier {
     _searchQuery = query;
     _libraryError = null;
     _searchDebounce?.cancel();
-    _searchDebounce = Timer(const Duration(milliseconds: 250), refreshLibrary);
+    _searchDebounce = Timer(Motion.debounce, refreshLibrary);
     notifyListeners();
   }
 
@@ -711,9 +746,13 @@ class MovieProvider extends AppNotifier {
     try {
       await _storageService.deleteMovie(movieId);
       _movieCache.remove(movieId);
+      // 删库成功后隐藏标记必须清掉，否则同 id 的影片重新导入时就永远不显示。
+      _hiddenMovieIds.remove(movieId);
       await _reloadVisibleCollections();
       await _refreshVisibleHistoryCalendarIfNeeded();
     } catch (error) {
+      // 删库失败：把它放回界面，别让用户以为已经删掉了。
+      _hiddenMovieIds.remove(movieId);
       _error = '删除失败: $error';
       notifyListeners();
     }

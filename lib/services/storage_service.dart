@@ -1,9 +1,12 @@
 // Modified for the personal UI edition, 2026-11-08. Apache-2.0.
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' show Random, min, max, pow;
 
 import 'package:path/path.dart' as path;
 import 'package:random_movie/models/models.dart';
+import 'package:random_movie/services/hlc.dart';
+import 'package:random_movie/services/time_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
@@ -14,6 +17,56 @@ String escapeSqlLike(String input) => input
     .replaceAll('%', r'\%')
     .replaceAll('_', r'\_');
 
+/// 本机数据库被更新版本的片刻创建过。
+///
+/// 典型场景：用户装回了旧版 APK。此时旧代码不认识新表结构，继续打开只会
+/// 在写入时损坏数据，所以这里直接停下，并把「需要装回新版本」讲清楚。
+/// 界面应当显示不带「重试」按钮的说明页——重试永远不会成功。
+class DatabaseTooNewException implements Exception {
+  /// 本机数据库文件里的实际版本（由更新版本写入）。
+  final int fileVersion;
+
+  /// 当前安装的片刻所期望的版本。
+  final int appVersion;
+
+  const DatabaseTooNewException(this.fileVersion, this.appVersion);
+
+  String get message =>
+      '这份数据由更新版本创建（数据库 v$fileVersion），'
+      '请安装不低于该版本的片刻后再打开';
+
+  @override
+  String toString() => message;
+}
+
+/// 覆盖本地数据前发现本地已经变了。
+///
+/// 抛出它意味着「差点覆盖掉用户刚存的内容」，属于保护性失败：
+/// 数据库保持原样，调用方应提示用户稍后重试，而不是重试覆盖。
+class StaleLocalDataException implements Exception {
+  const StaleLocalDataException();
+
+  String get message => '本地数据刚刚发生变化，已停止覆盖，请稍后重试';
+
+  @override
+  String toString() => message;
+}
+
+/// 备份时一次性读出的整库快照。四张表的行来自同一个事务视图，彼此自洽。
+class BackupBundle {
+  final List<Movie> movies;
+  final List<DrawRecord> drawRecords;
+  final List<ViewingSession> sessions;
+  final Map<String, List<Map<String, Object?>>> collectionsAndTags;
+
+  const BackupBundle({
+    required this.movies,
+    required this.drawRecords,
+    required this.sessions,
+    required this.collectionsAndTags,
+  });
+}
+
 /// 本地存储服务
 class StorageService {
   static const String _userIdKey = 'movie_app_user_id';
@@ -23,7 +76,11 @@ class StorageService {
   static const String _migrationFlagKey = 'movie_app_storage_migrated_v2';
   static const String _themeModeKey = 'movie_app_theme_mode';
   static const String _databaseName = 'random_movie.db';
-  static const int _databaseVersion = 7;
+  static const int _databaseVersion = 9;
+
+  /// 当前数据库结构版本。测试用它构造旧版夹具，避免另抄一份数字。
+  static const int databaseVersionForTest = _databaseVersion;
+
   static const int _maxDrawHistory = 100;
   static const String _moviesTable = 'movies';
   static const String _drawRecordsTable = 'draw_records';
@@ -33,8 +90,36 @@ class StorageService {
   static const String _tagsTable = 'tags';
   static const String _movieTagsTable = 'movie_tags';
 
+  /// 「是否已看」的**唯一**判定表达式。
+  ///
+  /// 这是 T4 阶段 A 的核心：此前多处各自手写 `watched = 1 OR EXISTS(...)`，
+  /// 一处改动没跟上就会让列表、计数、抽片候选给出不同答案。现在只有这一份。
+  ///
+  /// 三个来源依次是：
+  /// 1. 显式 `watched = 1`；
+  /// 2. 存在未删除的观影会话；
+  /// 3. 剧集的分集全部看完（历史数据里存在 `watched = 0` 但分集已追完的行）。
+  ///
+  /// 第 3 条与 Dart 侧 [WatchStatus] 的剧集规则一一对应，
+  /// 两边对同一批数据必须给出相同答案（由 watch_state_view_test 守护）。
   static const String _movieWatchedPredicate =
-      '(m.watched = 1 OR EXISTS(SELECT 1 FROM $_viewingSessionsTable vs WHERE vs.movie_id = m.id))';
+      '(m.watched = 1 '
+      'OR EXISTS(SELECT 1 FROM $_viewingSessionsTable vs '
+      'WHERE vs.movie_id = m.id AND vs.deleted_at IS NULL) '
+      'OR $_seriesCompletedPredicate)';
+
+  /// 剧集「全部分集已看完」的 SQL 判定。
+  ///
+  /// `episodes_json` 是 `[{"number":1,"watched":true}, ...]` 形式。
+  /// 判断条件：是剧集、有分集、且**不存在**任何 `"watched":false`。
+  ///
+  /// 用一个简单的字符串匹配（而不是 json_each）：Android 7 的系统 SQLite
+  /// 未必编译了 JSON1 扩展，而 `LIKE` 到处都能用。
+  static const String _seriesCompletedPredicate =
+      "(m.subject_type = 'tvSeries' "
+      "AND m.episodes_json <> '[]' "
+      "AND m.episodes_json NOT LIKE '%\"watched\":false%' "
+      "AND m.episodes_json NOT LIKE '%\"watched\": false%')";
 
   /// 派生字段：影片是否看过（显式状态或存在观影会话）
   static const String _derivedWatchedExpr =
@@ -42,33 +127,159 @@ class StorageService {
 
   /// 派生字段：最近一次观影时间，兼容没有会话的显式已看状态。
   static const String _derivedWatchedAtExpr =
-      'COALESCE((SELECT MAX(vs.watched_at) FROM $_viewingSessionsTable vs WHERE vs.movie_id = m.id), m.watched_at) AS derived_watched_at';
+      'COALESCE((SELECT MAX(vs.watched_at) FROM $_viewingSessionsTable vs '
+      'WHERE vs.movie_id = m.id AND vs.deleted_at IS NULL), '
+      'm.watched_at) AS derived_watched_at';
+
+  /// 统一视图：所有影片查询都读它，而不是各写一遍子查询。
+  ///
+  /// T4 阶段 A。视图把「已看」与「最近观影时间」收进一处，查询侧只剩
+  /// `FROM v_movie_state m`。已在多个版本上验证过视图与直接查询结果一致。
+  static const String _movieStateView = 'v_movie_state';
+
+  static const String _createMovieStateView = '''
+    CREATE VIEW IF NOT EXISTS $_movieStateView AS
+    SELECT m.*,
+      $_derivedWatchedExpr,
+      $_derivedWatchedAtExpr
+    FROM $_moviesTable m
+  ''';
 
   late SharedPreferences _prefs;
   late Database _db;
   bool _initialized = false;
 
+  /// 记录级版本时钟。所有写入路径都必须从这里取时间戳。
+  ///
+  /// 懒初始化：`init()` 里已经有 _prefs 了，但为测试构造的实例可能还没走到。
+  HlcClock? _clock;
+  HlcClock get _hlc => _clock ??= HlcClock(
+    deviceId: _prefs.getString(_deviceIdKey) ?? 'unknown',
+  );
+
+  static const String _deviceIdKey = 'pianke_device_id';
+
+  /// 给「将要写库的一行」打上版本戳。
+  ///
+  /// 所有 `insert` / `update` 都必须经过它，否则这一行在合并时会被当成
+  /// 「最旧」而永远输给另一台设备——正是 T3 要消除的问题。
+  Map<String, Object?> _stamp(Map<String, Object?> row) => {
+    ...row,
+    'updated_at': _hlc.now().encode(),
+    'deleted_at': row['deleted_at'],
+  };
+
   static final StorageService _instance = StorageService._internal();
   factory StorageService() => _instance;
+
+  /// 仅供测试：返回一个非单例实例，可配合 [init] 的 `dbPath` / `factory`
+  /// 指向内存数据库，从而让真实 SQL 与迁移链进入测试覆盖。
+  ///
+  /// 生产代码一律用 `StorageService()`，行为与之前完全一致。
+  StorageService.forTesting();
+
   StorageService._internal();
 
-  Future<void> init() async {
+  /// 打开数据库并完成初始化。
+  ///
+  /// [dbPath] / [factory] 供测试注入（`sqflite_common_ffi` + `inMemoryDatabasePath`）；
+  /// 生产环境两者都为空，走原来的 `getDatabasesPath()` + 默认工厂。
+  Future<void> init({String? dbPath, DatabaseFactory? factory}) async {
     if (_initialized) return;
 
     _prefs = await SharedPreferences.getInstance();
-    final dbPath = await getDatabasesPath();
-    _db = await openDatabase(
-      path.join(dbPath, _databaseName),
-      version: _databaseVersion,
-      onCreate: (db, _) async {
-        await _createTables(db);
-      },
-      onUpgrade: (db, oldVersion, newVersion) async {
-        await _upgradeDatabase(db, oldVersion, newVersion);
-      },
+    final resolvedFactory = factory ?? databaseFactory;
+    final resolvedPath =
+        dbPath ?? path.join(await getDatabasesPath(), _databaseName);
+    _db = await resolvedFactory.openDatabase(
+      resolvedPath,
+      options: OpenDatabaseOptions(
+        version: _databaseVersion,
+        onConfigure: (db) async {
+          // sqlite 默认不开外键，必须每个连接显式打开。
+          // 打开后删影片会自动带走会话 / 合集成员 / 标签关联，
+          // 不再依赖各处手写清理，漏一处也不会留下孤儿数据。
+          await db.execute('PRAGMA foreign_keys = ON');
+        },
+        onCreate: (db, _) async {
+          await _createTables(db);
+        },
+        onUpgrade: (db, oldVersion, newVersion) async {
+          await _upgradeDatabase(db, oldVersion, newVersion);
+        },
+        onDowngrade: (db, oldVersion, newVersion) async {
+          // 旧版 APK 打开新版数据库：立刻停下，绝不尝试读写。
+          // 界面据此显示不带「重试」的说明页（见 app.dart）。
+          throw DatabaseTooNewException(oldVersion, newVersion);
+        },
+      ),
     );
     _initialized = true;
     await _migrateLegacyData();
+  }
+
+  /// 仅供测试：关闭数据库并复位初始化状态，便于同一进程内重复打开。
+  Future<void> closeForTest() async {
+    if (!_initialized) return;
+    await _db.close();
+    _initialized = false;
+  }
+
+  /// 仅供测试：直接执行 SQL（无权限时抛错），用于读取 PRAGMA 与夹具校验。
+  Future<List<Map<String, Object?>>> rawQueryForTest(String sql) async {
+    _ensureInitialized();
+    return _db.rawQuery(sql);
+  }
+
+  /// 仅供测试：底层数据库，便于断言事务与版本。
+  Database get databaseForTest {
+    _ensureInitialized();
+    return _db;
+  }
+
+  // ========== 变更通知（T5b）==========
+
+  /// 每次写事务提交后，向订阅者发出「被改动的逻辑表名」。
+  ///
+  /// 为什么用「表变更」而不是逐条记录：界面关心的是「我该重新查了」，
+  /// 不关心具体哪一行变了。这样 StorageService 不需要知道谁在看什么，
+  /// 也不会因为订阅者变多而变慢。
+  final StreamController<Set<String>> _tableChanges =
+      StreamController<Set<String>>.broadcast();
+
+  /// 待提交的变更集合。一次事务里改多张表只发一次通知。
+  Set<String>? _pendingTables;
+  int _writeDepth = 0;
+
+  /// 对外暴露的变更流。订阅者应当自行防抖后再查询。
+  Stream<Set<String>> get tableChanges => _tableChanges.stream;
+
+  /// 包装一次写操作：结束后统一发出变更通知。
+  ///
+  /// 约定（很关键）：**只有真正提交成功才通知**。事务回滚时 `_pendingTables`
+  /// 会被丢弃，界面不会因为一次失败的操作去刷新——否则用户会看到
+  /// 「数据闪了一下又变回去」。
+  Future<T> _notifyOnWrite<T>(Set<String> tables, Future<T> Function() body) async {
+    final outermost = _writeDepth == 0;
+    if (outermost) _pendingTables = <String>{};
+    _writeDepth++;
+    try {
+      final result = await body();
+      _pendingTables?.addAll(tables);
+      return result;
+    } catch (error) {
+      if (outermost) _pendingTables = null;
+      rethrow;
+    } finally {
+      _writeDepth--;
+      if (_writeDepth == 0) {
+        final pending = _pendingTables;
+        _pendingTables = null;
+        if (pending != null && pending.isNotEmpty && !_tableChanges.isClosed) {
+          _tableChanges.add(Set<String>.unmodifiable(pending));
+        }
+      }
+    }
   }
 
   Future<void> _createTables(Database db) async {
@@ -95,6 +306,9 @@ class StorageService {
         watched_at TEXT,
         user_rating REAL,
         user_review TEXT,
+        poster_color INTEGER,
+        updated_at TEXT NOT NULL DEFAULT '',
+        deleted_at TEXT,
         created_at TEXT NOT NULL
       )
     ''');
@@ -123,19 +337,24 @@ class StorageService {
 
     await _createViewingSessionsTable(db);
     await _createCollectionAndTagTables(db);
+    await db.execute(_createMovieStateView);
   }
 
   Future<void> _createViewingSessionsTable(Database db) async {
     await db.execute('''
       CREATE TABLE $_viewingSessionsTable (
         id TEXT PRIMARY KEY,
-        movie_id TEXT NOT NULL,
+        movie_id TEXT NOT NULL REFERENCES $_moviesTable(id) ON DELETE CASCADE,
         watched_at TEXT NOT NULL,
+        watched_at_utc INTEGER,
+        watched_on TEXT,
         mood TEXT NOT NULL DEFAULT 'none',
         watched_with TEXT NOT NULL DEFAULT '',
         note TEXT NOT NULL DEFAULT '',
         is_rewatch INTEGER NOT NULL DEFAULT 0,
         rating REAL,
+        updated_at TEXT NOT NULL DEFAULT '',
+        deleted_at TEXT,
         created_at TEXT NOT NULL
       )
     ''');
@@ -144,6 +363,9 @@ class StorageService {
     );
     await db.execute(
       'CREATE INDEX idx_sessions_watched_at ON $_viewingSessionsTable(watched_at DESC)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_sessions_watched_on ON $_viewingSessionsTable(watched_on)',
     );
   }
 
@@ -154,14 +376,18 @@ class StorageService {
         name TEXT NOT NULL,
         icon_key TEXT NOT NULL DEFAULT 'collections',
         sort_order INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL DEFAULT '',
+        deleted_at TEXT,
         created_at TEXT NOT NULL
       )
     ''');
     await db.execute('''
       CREATE TABLE $_collectionMembersTable (
-        collection_id TEXT NOT NULL,
-        movie_id TEXT NOT NULL,
+        collection_id TEXT NOT NULL REFERENCES $_collectionsTable(id) ON DELETE CASCADE,
+        movie_id TEXT NOT NULL REFERENCES $_moviesTable(id) ON DELETE CASCADE,
         sort_order INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL DEFAULT '',
+        deleted_at TEXT,
         added_at TEXT NOT NULL,
         PRIMARY KEY (collection_id, movie_id)
       )
@@ -175,13 +401,17 @@ class StorageService {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         color_value INTEGER NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT '',
+        deleted_at TEXT,
         created_at TEXT NOT NULL
       )
     ''');
     await db.execute('''
       CREATE TABLE $_movieTagsTable (
-        movie_id TEXT NOT NULL,
-        tag_id TEXT NOT NULL,
+        movie_id TEXT NOT NULL REFERENCES $_moviesTable(id) ON DELETE CASCADE,
+        tag_id TEXT NOT NULL REFERENCES $_tagsTable(id) ON DELETE CASCADE,
+        updated_at TEXT NOT NULL DEFAULT '',
+        deleted_at TEXT,
         PRIMARY KEY (movie_id, tag_id)
       )
     ''');
@@ -263,6 +493,354 @@ class StorageService {
 
     if (oldVersion < 7) {
       await _backfillCompletedSeriesWatchState(db);
+    }
+
+    if (oldVersion < 8) {
+      await _migrateToForeignKeys(db);
+      await _migrateSessionTimeColumns(db);
+      await _addColumnIfMissing(
+        db,
+        table: _moviesTable,
+        columnName: 'poster_color',
+        columnDefinition: 'INTEGER',
+      );
+    }
+
+    if (oldVersion < 9) {
+      await _migrateMergeMetadata(db);
+    }
+
+    // 视图是幂等的：老库升级时补建，新建库（onCreate）时也会建。
+    // 放在最后，保证它依赖的 deleted_at 列已经存在。
+    await db.execute(_createMovieStateView);
+  }
+
+  /// v9：给可同步的表加记录级版本（`updated_at`）与墓碑（`deleted_at`）。
+  ///
+  /// 这是记录级合并的地基。迁移时把已有的 `created_at` / `watched_at` 等
+  /// 转成 HLC，保证「老记录不会被判定成比新记录更新」。
+  ///
+  /// 注意 `deleted_at` 全部留空：历史数据里没有删除痕迹，
+  /// 也不该凭空把任何行标成已删。
+  Future<void> _migrateMergeMetadata(Database db) async {
+    final deviceId = await _deviceIdForMigration();
+    final clock = HlcClock(deviceId: deviceId);
+
+    for (final table in _syncedTables) {
+      await _addColumnIfMissing(
+        db,
+        table: table,
+        columnName: 'updated_at',
+        columnDefinition: "TEXT NOT NULL DEFAULT ''",
+      );
+      await _addColumnIfMissing(
+        db,
+        table: table,
+        columnName: 'deleted_at',
+        columnDefinition: 'TEXT',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_${table}_updated_at '
+        'ON $table(updated_at)',
+      );
+    }
+
+    // 用各表自己的「有意义的时间」回填，缺什么用什么。
+    await _backfillHlcColumn(
+      db,
+      table: _moviesTable,
+      sourceColumns: const ['created_at', 'watched_at'],
+      clock: clock,
+    );
+    await _backfillHlcColumn(
+      db,
+      table: _viewingSessionsTable,
+      sourceColumns: const ['watched_at', 'created_at'],
+      clock: clock,
+    );
+    // 抽片记录不参与记录级合并（它按「最近 N 条」滚动淘汰，冲突价值低），
+    // 所以不在 [_syncedTables] 里，这里也就不回填。
+    for (final table in const [
+      _collectionsTable,
+      _tagsTable,
+      _collectionMembersTable,
+    ]) {
+      await _backfillHlcColumn(
+        db,
+        table: table,
+        sourceColumns: const ['created_at', 'added_at'],
+        clock: clock,
+      );
+    }
+    // movie_tags 没有时间列：统一给一个固定的很早时间戳，
+    // 让它们在未来任何一次真实修改面前都「更旧」。
+    await db.execute(
+      'UPDATE $_movieTagsTable SET updated_at = ? WHERE updated_at = ?',
+      [Hlc(physicalMs: 0, counter: 0, deviceId: deviceId).encode(), ''],
+    );
+  }
+
+  /// 需要记录级版本（合并）的同步表。
+  ///
+  /// **不含 `draw_records`**：抽片历史按「最近 N 条」滚动淘汰，
+  /// 记录级合并对它价值低，加进来只会让迁移和合并多一份复杂度。
+  static const List<String> _syncedTables = [
+    _moviesTable,
+    _viewingSessionsTable,
+    _collectionsTable,
+    _collectionMembersTable,
+    _tagsTable,
+    _movieTagsTable,
+  ];
+
+  /// 逐行把已有时间列转换成 HLC 写进 updated_at。
+  ///
+  /// 转换时通过 [HlcClock] 依次取时间戳，保证同一毫秒内的多行也有确定顺序。
+  Future<void> _backfillHlcColumn(
+    Database db, {
+    required String table,
+    required List<String> sourceColumns,
+    required HlcClock clock,
+  }) async {
+    final rows = await db.query(table);
+    if (rows.isEmpty) return;
+
+    // 找出这张表实际存在的候选时间列。
+    final columns = (await db.rawQuery('PRAGMA table_info($table)'))
+        .map((row) => row['name']?.toString() ?? '')
+        .toSet();
+    final usable = sourceColumns.where(columns.contains).toList();
+
+    final batch = db.batch();
+    var patched = 0;
+    for (final row in rows) {
+      if ((row['updated_at']?.toString() ?? '').isNotEmpty) continue;
+
+      DateTime? stamp;
+      for (final column in usable) {
+        final parsed = DateTime.tryParse(row[column]?.toString() ?? '');
+        if (parsed != null) {
+          stamp = parsed;
+          break;
+        }
+      }
+      // 完全解析不出时间：用当前时刻，至少不会比新记录更「新」得离谱。
+      final observed = stamp == null
+          ? null
+          : Hlc(
+              physicalMs: stamp.millisecondsSinceEpoch,
+              counter: 0,
+              deviceId: clock.deviceId,
+            );
+      clock.observe(observed);
+      final encoded = clock.now().encode();
+      batch.update(
+        table,
+        {'updated_at': encoded},
+        where: _primaryKeyWhere(table),
+        whereArgs: _primaryKeyArgs(table, row),
+      );
+      patched++;
+    }
+    if (patched > 0) await batch.commit(noResult: true);
+  }
+
+  /// 各表主键列（movie_tags / collection_members 是联合主键）。
+  List<String> _primaryKeyColumns(String table) => switch (table) {
+    _collectionMembersTable => const ['collection_id', 'movie_id'],
+    _movieTagsTable => const ['movie_id', 'tag_id'],
+    _ => const ['id'],
+  };
+
+  String _primaryKeyWhere(String table) =>
+      _primaryKeyColumns(table).map((c) => '$c = ?').join(' AND ');
+
+  List<Object?> _primaryKeyArgs(String table, Map<String, Object?> row) =>
+      _primaryKeyColumns(table).map((c) => row[c]).toList();
+
+  /// 本机设备 id，用于 HLC 的设备段。存在偏好里，缺失时生成并写回。
+  Future<String> _deviceIdForMigration() async {
+    const key = 'pianke_device_id';
+    final existing = _prefs.getString(key);
+    if (existing != null && existing.isNotEmpty) return existing;
+    final generated =
+        'dev_${DateTime.now().millisecondsSinceEpoch}_${_generateRandomString(4)}';
+    await _prefs.setString(key, generated);
+    return generated;
+  }
+
+  /// v8：把观影时间拆成「UTC 毫秒（排序）」+「当地日期（分组）」。
+  ///
+  /// 旧数据里 `watched_at` 格式混杂：有的带时区，有的是不带时区的本地串。
+  /// 逐行解析，能解析的补齐两列；解析不了的留空并保持原串不动，
+  /// 由读取时的 [ViewingSession.effectiveWatchedOn] 兜底——绝不丢行。
+  Future<void> _migrateSessionTimeColumns(Database db) async {
+    await _addColumnIfMissing(
+      db,
+      table: _viewingSessionsTable,
+      columnName: 'watched_at_utc',
+      columnDefinition: 'INTEGER',
+    );
+    await _addColumnIfMissing(
+      db,
+      table: _viewingSessionsTable,
+      columnName: 'watched_on',
+      columnDefinition: 'TEXT',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_sessions_watched_on '
+      'ON $_viewingSessionsTable(watched_on)',
+    );
+
+    final rows = await db.query(
+      _viewingSessionsTable,
+      columns: const ['id', 'watched_at'],
+    );
+    final batch = db.batch();
+    var patched = 0;
+    for (final row in rows) {
+      final id = row['id']?.toString() ?? '';
+      if (id.isEmpty) continue;
+      final raw = row['watched_at']?.toString();
+      final utcMs = parseUtcMillis(raw);
+      final on = salvageWatchedOn(raw);
+      if (utcMs == null && on == null) continue; // 无法解析：保持原样
+      batch.update(
+        _viewingSessionsTable,
+        {'watched_at_utc': utcMs, 'watched_on': on},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      patched++;
+    }
+    if (patched > 0) await batch.commit(noResult: true);
+  }
+
+  /// v8：开启外键并加级联删除。
+  ///
+  /// SQLite 不能给已有表「就地」加外键，只能建新表 → 拷数据 → 删旧表 → 改名
+  /// → 重建索引（沿用 [_rebuildDrawRecordsWithoutLegacyColumns] 的思路）。
+  ///
+  /// 关键顺序：**先清孤儿再开约束**。历史数据里可能已有指向已删影片的会话行，
+  /// 不清掉的话建表拷贝阶段就会因外键失败，整个升级回滚——用户会在启动时
+  /// 看到「初始化失败」。sqflite 的升级本身在事务内，任何一步抛错都会整体回滚，
+  /// 数据库保持 v7 原样。
+  Future<void> _migrateToForeignKeys(Database db) async {
+    // 1) 清孤儿。draw_records 故意不加外键：影片删了，抽片历史仍要保留。
+    await db.execute(
+      'DELETE FROM $_viewingSessionsTable '
+      'WHERE movie_id NOT IN (SELECT id FROM $_moviesTable)',
+    );
+    await db.execute(
+      'DELETE FROM $_collectionMembersTable '
+      'WHERE movie_id NOT IN (SELECT id FROM $_moviesTable) '
+      '   OR collection_id NOT IN (SELECT id FROM $_collectionsTable)',
+    );
+    await db.execute(
+      'DELETE FROM $_movieTagsTable '
+      'WHERE movie_id NOT IN (SELECT id FROM $_moviesTable) '
+      '   OR tag_id NOT IN (SELECT id FROM $_tagsTable)',
+    );
+
+    // 2) 重建三张子表，带上外键与级联。
+    await _rebuildTableWithForeignKeys(
+      db,
+      table: _viewingSessionsTable,
+      createSql: '''
+        CREATE TABLE $_viewingSessionsTable (
+          id TEXT PRIMARY KEY,
+          movie_id TEXT NOT NULL REFERENCES $_moviesTable(id) ON DELETE CASCADE,
+          watched_at TEXT NOT NULL,
+          mood TEXT NOT NULL DEFAULT 'none',
+          watched_with TEXT NOT NULL DEFAULT '',
+          note TEXT NOT NULL DEFAULT '',
+          is_rewatch INTEGER NOT NULL DEFAULT 0,
+          rating REAL,
+          created_at TEXT NOT NULL
+        )
+      ''',
+      columns: const [
+        'id',
+        'movie_id',
+        'watched_at',
+        'mood',
+        'watched_with',
+        'note',
+        'is_rewatch',
+        'rating',
+        'created_at',
+      ],
+      indexes: const [
+        'CREATE INDEX idx_sessions_movie ON $_viewingSessionsTable(movie_id, watched_at DESC)',
+        'CREATE INDEX idx_sessions_watched_at ON $_viewingSessionsTable(watched_at DESC)',
+      ],
+    );
+
+    await _rebuildTableWithForeignKeys(
+      db,
+      table: _collectionMembersTable,
+      createSql: '''
+        CREATE TABLE $_collectionMembersTable (
+          collection_id TEXT NOT NULL REFERENCES $_collectionsTable(id) ON DELETE CASCADE,
+          movie_id TEXT NOT NULL REFERENCES $_moviesTable(id) ON DELETE CASCADE,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          added_at TEXT NOT NULL,
+          PRIMARY KEY (collection_id, movie_id)
+        )
+      ''',
+      columns: const ['collection_id', 'movie_id', 'sort_order', 'added_at'],
+      indexes: const [
+        'CREATE INDEX idx_collection_members ON $_collectionMembersTable(collection_id, sort_order)',
+      ],
+    );
+
+    await _rebuildTableWithForeignKeys(
+      db,
+      table: _movieTagsTable,
+      createSql: '''
+        CREATE TABLE $_movieTagsTable (
+          movie_id TEXT NOT NULL REFERENCES $_moviesTable(id) ON DELETE CASCADE,
+          tag_id TEXT NOT NULL REFERENCES $_tagsTable(id) ON DELETE CASCADE,
+          PRIMARY KEY (movie_id, tag_id)
+        )
+      ''',
+      columns: const ['movie_id', 'tag_id'],
+      indexes: const [
+        'CREATE INDEX idx_movie_tags_tag ON $_movieTagsTable(tag_id)',
+        'CREATE INDEX idx_movie_tags_movie ON $_movieTagsTable(movie_id)',
+      ],
+    );
+
+    // 3) 收尾自检：还有违规行就抛错，让整个升级回滚，绝不带着坏数据启动。
+    final violations = await db.rawQuery('PRAGMA foreign_key_check');
+    if (violations.isNotEmpty) {
+      throw StateError(
+        '数据库升级校验失败：存在 ${violations.length} 行违反外键约束',
+      );
+    }
+  }
+
+  /// 用「建新表 → 拷数据 → 删旧表 → 改名 → 重建索引」替换一张表。
+  Future<void> _rebuildTableWithForeignKeys(
+    Database db, {
+    required String table,
+    required String createSql,
+    required List<String> columns,
+    required List<String> indexes,
+  }) async {
+    final tempTable = '${table}_v8';
+    final columnList = columns.join(', ');
+    await db.execute('DROP TABLE IF EXISTS $tempTable');
+    await db.execute(
+      createSql.replaceFirst('CREATE TABLE $table', 'CREATE TABLE $tempTable'),
+    );
+    await db.execute(
+      'INSERT INTO $tempTable ($columnList) SELECT $columnList FROM $table',
+    );
+    await db.execute('DROP TABLE $table');
+    await db.execute('ALTER TABLE $tempTable RENAME TO $table');
+    for (final index in indexes) {
+      await db.execute(index);
     }
   }
 
@@ -436,7 +1014,7 @@ class StorageService {
         for (final movie in movies) {
           batch.insert(
             _moviesTable,
-            _movieToDbMap(movie),
+            _stamp(_movieToDbMap(movie)),
             conflictAlgorithm: ConflictAlgorithm.replace,
           );
         }
@@ -560,7 +1138,7 @@ class StorageService {
       unwatchedOnly: unwatchedOnly,
     );
     final result = await _db.rawQuery(
-      'SELECT COUNT(*) AS count FROM $_moviesTable m${clause.where == null ? '' : ' WHERE ${clause.where}'}',
+      'SELECT COUNT(*) AS count FROM $_movieStateView m${clause.where == null ? '' : ' WHERE ${clause.where}'}',
       clause.whereArgs,
     );
     if (result.isEmpty) return 0;
@@ -568,14 +1146,17 @@ class StorageService {
   }
 
   /// 统一的影片读取：附带 watched / watched_at 派生字段。
+  /// 统一的影片读取：直接读 [v_movie_state] 视图，派生字段由视图提供。
+  ///
+  /// 视图已经把 `derived_watched` / `derived_watched_at` 算好，
+  /// 这里不再重复写子查询——「已看」只有一份定义，就不会再出现
+  /// 列表说已看、计数说未看这种自相矛盾。
   String _movieSelect({
     String? where,
     String? orderBy,
     bool withLimit = false,
   }) {
-    final buffer = StringBuffer(
-      'SELECT m.*, $_derivedWatchedExpr, $_derivedWatchedAtExpr FROM $_moviesTable m',
-    );
+    final buffer = StringBuffer('SELECT m.* FROM $_movieStateView m');
     if (where != null) buffer.write(' WHERE $where');
     if (orderBy != null) buffer.write(' ORDER BY $orderBy');
     if (withLimit) buffer.write(' LIMIT ? OFFSET ?');
@@ -627,11 +1208,13 @@ class StorageService {
         (SELECT MAX(vs.watched_at) FROM $_viewingSessionsTable vs
          WHERE vs.movie_id = m.id AND vs.watched_at >= ? AND vs.watched_at < ?)
           AS derived_watched_at
-      FROM $_moviesTable m
+      FROM $_movieStateView m
       WHERE EXISTS(
         SELECT 1 FROM $_viewingSessionsTable vs
         WHERE vs.movie_id = m.id AND vs.watched_at >= ? AND vs.watched_at < ?
+          AND vs.deleted_at IS NULL
       )
+        AND m.deleted_at IS NULL
       ORDER BY derived_watched_at DESC, m.created_at DESC
       ''',
       [
@@ -657,8 +1240,7 @@ class StorageService {
       unwatchedOnly: unwatchedOnly,
     );
     final rows = await _db.rawQuery(
-      'SELECT m.id, $_derivedWatchedExpr, $_derivedWatchedAtExpr '
-      'FROM $_moviesTable m'
+      'SELECT m.id FROM $_movieStateView m'
       '${clause.where == null ? '' : ' WHERE ${clause.where}'}'
       ' ORDER BY ${_movieOrderBy(watchedOnly: watchedOnly)}',
       clause.whereArgs,
@@ -673,7 +1255,7 @@ class StorageService {
     _ensureInitialized();
 
     final rows = await _db.rawQuery(
-      '${_movieSelect(where: 'm.id = ?')} LIMIT 1',
+      '${_movieSelect(where: 'm.id = ? AND m.deleted_at IS NULL')} LIMIT 1',
       [id],
     );
     if (rows.isEmpty) return null;
@@ -691,7 +1273,7 @@ class StorageService {
     final legacyById = await getMovieById(normalizedSubjectId);
     if (legacyById != null) return legacyById;
 
-    final rows = await _db.rawQuery(_movieSelect(where: "m.douban_url <> ''"));
+    final rows = await _db.rawQuery(_movieSelect(where: "m.douban_url <> '' AND m.deleted_at IS NULL"));
     for (final row in rows) {
       final movie = _movieFromDbMap(row);
       if (_extractDoubanSubjectId(movie.doubanUrl) == normalizedSubjectId) {
@@ -714,7 +1296,7 @@ class StorageService {
     for (final chunk in _chunkList(orderedIds, 800)) {
       final placeholders = List.filled(chunk.length, '?').join(', ');
       final rows = await _db.rawQuery(
-        _movieSelect(where: 'm.id IN ($placeholders)'),
+        _movieSelect(where: 'm.id IN ($placeholders) AND m.deleted_at IS NULL'),
         chunk,
       );
       for (final row in rows) {
@@ -750,11 +1332,13 @@ class StorageService {
             id: 'movie_${DateTime.now().millisecondsSinceEpoch}_${_generateRandomString(4)}',
           );
 
-    await _db.insert(
-      _moviesTable,
-      _movieToDbMap(newMovie),
-      conflictAlgorithm: ConflictAlgorithm.abort,
-    );
+    await _notifyOnWrite({_moviesTable}, () async {
+      await _db.insert(
+        _moviesTable,
+        _stamp(_movieToDbMap(newMovie)),
+        conflictAlgorithm: ConflictAlgorithm.abort,
+      );
+    });
     return newMovie;
   }
 
@@ -765,25 +1349,99 @@ class StorageService {
 
   Future<void> updateMovie(Movie updatedMovie) async {
     _ensureInitialized();
-    await _db.update(
-      _moviesTable,
-      _movieToDbMap(updatedMovie),
-      where: 'id = ?',
-      whereArgs: [updatedMovie.id],
-    );
+    await _notifyOnWrite({_moviesTable}, () async {
+      await _db.update(
+        _moviesTable,
+        _stamp(_movieToDbMap(updatedMovie)),
+        where: 'id = ?',
+        whereArgs: [updatedMovie.id],
+      );
+    });
   }
 
+  /// 删除影片 —— 写墓碑而不是物理删除。
+  ///
+  /// 为什么必须软删除：记录级合并靠「谁的删除标记更新」判断删除是否生效。
+  /// 如果这里直接把行删掉，另一台设备离线时的那份备份里还有这部影片，
+  /// 合并时本机根本没有对应的墓碑，那条旧数据就会被当成「新记录」复活。
+  ///
+  /// 墓碑行对用户完全不可见（所有查询都带 `deleted_at IS NULL`），
+  /// 也不会参与抽片与计数；它只在下一次同步时告诉另一端「这条已经删了」。
+  /// 满 90 天后由同步流程统一物理清理。
   Future<void> deleteMovie(String movieId) async {
     _ensureInitialized();
-    await _db.transaction((txn) async {
+    final stamp = _hlc.now().encode();
+    await _notifyOnWrite({
+      _moviesTable,
+      _viewingSessionsTable,
+      _collectionMembersTable,
+      _movieTagsTable,
+    }, () => _db.transaction((txn) async {
+      // 子记录跟着父记录一起打墓碑，父记录复活时它们也会一起回来。
       for (final table in [
         _viewingSessionsTable,
         _collectionMembersTable,
         _movieTagsTable,
       ]) {
-        await txn.delete(table, where: 'movie_id = ?', whereArgs: [movieId]);
+        await txn.update(
+          table,
+          {'deleted_at': stamp, 'updated_at': stamp},
+          where: 'movie_id = ? AND deleted_at IS NULL',
+          whereArgs: [movieId],
+        );
       }
-      await txn.delete(_moviesTable, where: 'id = ?', whereArgs: [movieId]);
+      await txn.update(
+        _moviesTable,
+        {'deleted_at': stamp, 'updated_at': stamp},
+        where: 'id = ? AND deleted_at IS NULL',
+        whereArgs: [movieId],
+      );
+    }));
+  }
+
+  /// 给若干行打墓碑（软删除）。统一入口，保证 `deleted_at` 与 `updated_at`
+  /// 用的是同一个时间戳——两者不一致会让合并逻辑对「删除还是修改更新」判断错误。
+  Future<void> _markDeleted(
+    String table,
+    String where,
+    List<Object?> whereArgs,
+  ) async {
+    final stamp = _hlc.now().encode();
+    await _db.update(
+      table,
+      {'deleted_at': stamp, 'updated_at': stamp},
+      where: '$where AND deleted_at IS NULL',
+      whereArgs: whereArgs,
+    );
+  }
+
+  /// 物理移除墓碑行（同步流程在保留期满后调用）。
+  Future<void> purgeTombstones({int retentionDays = 90}) async {
+    _ensureInitialized();
+    final cutoff = DateTime.now()
+        .subtract(Duration(days: retentionDays))
+        .millisecondsSinceEpoch;
+    final cutoffHlc = Hlc(
+      physicalMs: cutoff,
+      counter: 0,
+      deviceId: '',
+    ).encode();
+    await _db.transaction((txn) async {
+      // 先清子表再清主表，避免外键级联把它们提前带走导致统计不准。
+      for (final table in const [
+        _movieTagsTable,
+        _collectionMembersTable,
+        _viewingSessionsTable,
+        _collectionsTable,
+        _tagsTable,
+        _moviesTable,
+      ]) {
+        await txn.delete(
+          table,
+          where: "deleted_at IS NOT NULL AND deleted_at <> '' AND deleted_at < ?",
+          whereArgs: [cutoffHlc],
+        );
+      }
     });
   }
 
@@ -971,9 +1629,9 @@ class StorageService {
     _ensureInitialized();
     final rows = await _db.query(
       _viewingSessionsTable,
-      where: 'movie_id = ?',
+      where: 'movie_id = ? AND deleted_at IS NULL',
       whereArgs: [movieId],
-      orderBy: 'watched_at DESC, created_at DESC',
+      orderBy: 'COALESCE(watched_at_utc, 9223372036854775807) DESC, watched_at DESC, created_at DESC',
     );
     return rows.map(_sessionFromDbMap).toList();
   }
@@ -985,9 +1643,9 @@ class StorageService {
     final nextMonth = DateTime(month.year, month.month + 1);
     final rows = await _db.query(
       _viewingSessionsTable,
-      where: 'watched_at >= ? AND watched_at < ?',
+      where: 'watched_at >= ? AND watched_at < ? AND deleted_at IS NULL',
       whereArgs: [firstDay.toIso8601String(), nextMonth.toIso8601String()],
-      orderBy: 'watched_at DESC, created_at DESC',
+      orderBy: 'COALESCE(watched_at_utc, 9223372036854775807) DESC, watched_at DESC, created_at DESC',
     );
     return rows.map(_sessionFromDbMap).toList();
   }
@@ -1000,7 +1658,8 @@ class StorageService {
     _ensureInitialized();
     final rows = await _db.query(
       _viewingSessionsTable,
-      orderBy: 'watched_at DESC, created_at DESC',
+      where: 'deleted_at IS NULL',
+      orderBy: 'COALESCE(watched_at_utc, 9223372036854775807) DESC, watched_at DESC, created_at DESC',
       limit: limit,
       offset: offset,
     );
@@ -1010,7 +1669,7 @@ class StorageService {
   Future<int> countSessions() async {
     _ensureInitialized();
     final result = await _db.rawQuery(
-      'SELECT COUNT(*) AS count FROM $_viewingSessionsTable',
+      'SELECT COUNT(*) AS count FROM $_viewingSessionsTable WHERE deleted_at IS NULL',
     );
     if (result.isEmpty) return 0;
     return (result.first['count'] as num?)?.toInt() ?? 0;
@@ -1021,7 +1680,7 @@ class StorageService {
     final rows = await _db.query(
       _viewingSessionsTable,
       columns: const ['id'],
-      where: 'movie_id = ?',
+      where: 'movie_id = ? AND deleted_at IS NULL',
       whereArgs: [movieId],
       limit: 1,
     );
@@ -1030,6 +1689,10 @@ class StorageService {
 
   Future<ViewingSession> addSession(ViewingSession session) async {
     _ensureInitialized();
+    return _notifyOnWrite({_viewingSessionsTable}, () => _addSessionInner(session));
+  }
+
+  Future<ViewingSession> _addSessionInner(ViewingSession session) async {
     final stored = session.id.isNotEmpty
         ? session
         : session.copyWith(
@@ -1047,7 +1710,7 @@ class StorageService {
     _ensureInitialized();
     await _db.update(
       _viewingSessionsTable,
-      _sessionToDbMap(session),
+      _stamp(_sessionToDbMap(session)),
       where: 'id = ?',
       whereArgs: [session.id],
     );
@@ -1055,20 +1718,19 @@ class StorageService {
 
   Future<void> deleteSession(String sessionId) async {
     _ensureInitialized();
-    await _db.delete(
-      _viewingSessionsTable,
-      where: 'id = ?',
-      whereArgs: [sessionId],
+    // 软删除：让另一台设备同步时能看到「这条被删了」。
+    await _notifyOnWrite(
+      {_viewingSessionsTable},
+      () => _markDeleted(_viewingSessionsTable, 'id = ?', [sessionId]),
     );
   }
 
   /// 删除某部影片的全部会话（用于「取消已看」）。
   Future<void> deleteSessionsByMovie(String movieId) async {
     _ensureInitialized();
-    await _db.delete(
-      _viewingSessionsTable,
-      where: 'movie_id = ?',
-      whereArgs: [movieId],
+    await _notifyOnWrite(
+      {_viewingSessionsTable},
+      () => _markDeleted(_viewingSessionsTable, 'movie_id = ?', [movieId]),
     );
   }
 
@@ -1077,7 +1739,8 @@ class StorageService {
     _ensureInitialized();
     final rows = await _db.query(
       _viewingSessionsTable,
-      orderBy: 'watched_at ASC',
+      where: 'deleted_at IS NULL',
+      orderBy: 'COALESCE(watched_at_utc, -1) ASC, watched_at ASC',
     );
     return rows.map(_sessionFromDbMap).toList();
   }
@@ -1096,7 +1759,7 @@ class StorageService {
     if (existing.isNotEmpty) return false;
     await _db.insert(
       _viewingSessionsTable,
-      _sessionToDbMap(session),
+      _stamp(_sessionToDbMap(session)),
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
     return true;
@@ -1108,10 +1771,13 @@ class StorageService {
   getCollectionsAndTagsForBackup() async {
     _ensureInitialized();
     return {
-      'collections': await _db.query(_collectionsTable),
-      'collectionMembers': await _db.query(_collectionMembersTable),
-      'tags': await _db.query(_tagsTable),
-      'movieTags': await _db.query(_movieTagsTable),
+      'collections': await _db.query(_collectionsTable, where: 'deleted_at IS NULL'),
+      'collectionMembers': await _db.query(
+        _collectionMembersTable,
+        where: 'deleted_at IS NULL',
+      ),
+      'tags': await _db.query(_tagsTable, where: 'deleted_at IS NULL'),
+      'movieTags': await _db.query(_movieTagsTable, where: 'deleted_at IS NULL'),
     };
   }
 
@@ -1139,7 +1805,7 @@ class StorageService {
         if (raw is! Map) continue;
         batch.insert(
           table,
-          Map<String, Object?>.from(raw),
+          _stamp(Map<String, Object?>.from(raw)),
           conflictAlgorithm: ConflictAlgorithm.ignore,
         );
         imported++;
@@ -1172,13 +1838,13 @@ class StorageService {
 
       final batch = txn.batch();
       for (final movie in movies) {
-        batch.insert(_moviesTable, _movieToDbMap(movie));
+        batch.insert(_moviesTable, _stamp(_movieToDbMap(movie)));
       }
       for (final record in drawRecords) {
         batch.insert(_drawRecordsTable, _drawRecordToDbMap(record));
       }
       for (final session in sessions) {
-        batch.insert(_viewingSessionsTable, _sessionToDbMap(session));
+        batch.insert(_viewingSessionsTable, _stamp(_sessionToDbMap(session)));
       }
       for (final table in const [
         _collectionsTable,
@@ -1195,7 +1861,7 @@ class StorageService {
                 ? 'tags'
                 : 'movieTags'];
         for (final row in rows ?? const <Map<String, Object?>>[]) {
-          batch.insert(table, row);
+          batch.insert(table, _stamp(Map<String, Object?>.from(row)));
         }
       }
       await batch.commit(noResult: true);
@@ -1207,14 +1873,17 @@ class StorageService {
 
     final now = DateTime.now();
     final monthStart = DateTime(now.year, now.month);
-    final nextMonth = DateTime(now.year, now.month + 1);
 
     final totalCount = await countSessions();
     if (totalCount == 0) return const ViewingStats();
 
+    // 按月计数用 watched_on（当地日期）判断归属月份：
+    // 这本来就是「哪个月看的」问题，跟 UTC 时刻无关，也不怕旧数据格式不一。
+    final monthPrefix = formatWatchedOn(monthStart).substring(0, 7);
     final monthlyResult = await _db.rawQuery(
-      'SELECT COUNT(*) AS count FROM $_viewingSessionsTable WHERE watched_at >= ? AND watched_at < ?',
-      [monthStart.toIso8601String(), nextMonth.toIso8601String()],
+      'SELECT COUNT(*) AS count FROM $_viewingSessionsTable '
+      'WHERE COALESCE(watched_on, substr(watched_at, 1, 7)) = ?',
+      [monthPrefix],
     );
     final monthlyCount = (monthlyResult.first['count'] as num?)?.toInt() ?? 0;
 
@@ -1240,9 +1909,12 @@ class StorageService {
     final genreDistribution = genreCounts.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
-    // 连续观影天数：取所有观影日期去重，从今天/昨天往前数
+    // 连续观影天数：按「当地日期」去重。
+    // 用 watched_on 而不是 substr(watched_at,1,10)：后者切的是字符串字面量，
+    // 对 UTC 或不带时区的旧串会切出错误的一天。
     final dateRows = await _db.rawQuery(
-      'SELECT DISTINCT substr(watched_at, 1, 10) AS day FROM $_viewingSessionsTable',
+      'SELECT DISTINCT COALESCE(watched_on, substr(watched_at, 1, 10)) AS day '
+      'FROM $_viewingSessionsTable',
     );
     final watchedDays = dateRows
         .map((row) => row['day']?.toString() ?? '')
@@ -1284,6 +1956,10 @@ class StorageService {
       'id': session.id,
       'movie_id': session.movieId,
       'watched_at': session.watchedAt.toIso8601String(),
+      // 写入时就把两个派生值算好落库：此后不再从 watched_at 反推，
+      // 换时区也改不动「那天算哪一天」。
+      'watched_at_utc': session.watchedAt.toUtc().millisecondsSinceEpoch,
+      'watched_on': session.effectiveWatchedOn,
       'mood': session.mood.value,
       'watched_with': session.watchedWith,
       'note': session.note,
@@ -1308,6 +1984,8 @@ class StorageService {
       createdAt:
           DateTime.tryParse(row['created_at']?.toString() ?? '') ??
           DateTime.now(),
+      watchedAtUtcMs: (row['watched_at_utc'] as num?)?.toInt(),
+      watchedOn: row['watched_on']?.toString(),
     );
   }
 
@@ -1318,6 +1996,7 @@ class StorageService {
     _ensureInitialized();
     final rows = await _db.query(
       _collectionsTable,
+      where: 'deleted_at IS NULL',
       orderBy: 'sort_order ASC, created_at ASC',
     );
     if (rows.isEmpty) return const [];
@@ -1385,13 +2064,13 @@ class StorageService {
           : 'col_${DateTime.now().millisecondsSinceEpoch}_${_generateRandomString(4)}',
       sortOrder: collection.sortOrder == 0 ? nextOrder : collection.sortOrder,
     );
-    await _db.insert(_collectionsTable, {
+    await _db.insert(_collectionsTable, _stamp({
       'id': stored.id,
       'name': stored.name,
       'icon_key': stored.iconKey,
       'sort_order': stored.sortOrder,
       'created_at': stored.createdAt.toIso8601String(),
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }), conflictAlgorithm: ConflictAlgorithm.replace);
     return stored;
   }
 
@@ -1431,7 +2110,7 @@ class StorageService {
     final rows = await _db.query(
       _collectionMembersTable,
       columns: const ['movie_id'],
-      where: 'collection_id = ?',
+      where: 'collection_id = ? AND deleted_at IS NULL',
       whereArgs: [collectionId],
       orderBy: 'sort_order ASC',
     );
@@ -1448,12 +2127,12 @@ class StorageService {
       [collectionId],
     );
     final nextOrder = (orderResult.first['next'] as num?)?.toInt() ?? 0;
-    await _db.insert(_collectionMembersTable, {
+    await _db.insert(_collectionMembersTable, _stamp({
       'collection_id': collectionId,
       'movie_id': movieId,
       'sort_order': nextOrder,
       'added_at': DateTime.now().toIso8601String(),
-    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }), conflictAlgorithm: ConflictAlgorithm.ignore);
   }
 
   /// Apply just the member differences atomically, preserving existing ordering.
@@ -1525,7 +2204,7 @@ class StorageService {
     final rows = await _db.query(
       _collectionMembersTable,
       columns: const ['collection_id'],
-      where: 'movie_id = ?',
+      where: 'movie_id = ? AND deleted_at IS NULL',
       whereArgs: [movieId],
     );
     return rows
@@ -1795,7 +2474,11 @@ class StorageService {
 
   Future<List<MovieTag>> queryAllTags() async {
     _ensureInitialized();
-    final rows = await _db.query(_tagsTable, orderBy: 'created_at ASC');
+    final rows = await _db.query(
+      _tagsTable,
+      where: 'deleted_at IS NULL',
+      orderBy: 'created_at ASC',
+    );
     return rows.map(_tagFromDbMap).toList();
   }
 
@@ -1806,12 +2489,12 @@ class StorageService {
           ? tag.id
           : 'tag_${DateTime.now().millisecondsSinceEpoch}_${_generateRandomString(4)}',
     );
-    await _db.insert(_tagsTable, {
+    await _db.insert(_tagsTable, _stamp({
       'id': stored.id,
       'name': stored.name,
       'color_value': stored.colorValue,
       'created_at': stored.createdAt.toIso8601String(),
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }), conflictAlgorithm: ConflictAlgorithm.replace);
     return stored;
   }
 
@@ -1845,6 +2528,8 @@ class StorageService {
       SELECT t.* FROM $_movieTagsTable mt
       JOIN $_tagsTable t ON t.id = mt.tag_id
       WHERE mt.movie_id = ?
+        AND mt.deleted_at IS NULL
+        AND t.deleted_at IS NULL
       ORDER BY t.created_at ASC
       ''',
       [movieId],
@@ -1857,10 +2542,10 @@ class StorageService {
     final batch = _db.batch();
     batch.delete(_movieTagsTable, where: 'movie_id = ?', whereArgs: [movieId]);
     for (final tagId in tagIds) {
-      batch.insert(_movieTagsTable, {
+      batch.insert(_movieTagsTable, _stamp({
         'movie_id': movieId,
         'tag_id': tagId,
-      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      }), conflictAlgorithm: ConflictAlgorithm.ignore);
     }
     await batch.commit(noResult: true);
   }
@@ -1895,6 +2580,158 @@ class StorageService {
 
   // ========== 备份 / 恢复专用接口 ==========
 
+  /// 在一个事务里读完所有需要备份的表，返回彼此一致的快照。
+  ///
+  /// 之前的实现连续 4 次 `await getAll*ForBackup()`，都不在同一事务里：
+  /// 读取过程中用户保存一次数据，快照就会自相矛盾（例如会话指向还没读到的
+  /// 影片）。这种坏快照一旦上传，另一台设备会因为「关联的影片缺失，已停止
+  /// 覆盖」而永远无法恢复，同步直接卡死。
+  ///
+  /// 事务里读到的是同一个数据库版本视图，因此每一行都互相自洽。
+  Future<BackupBundle> readBackupBundle() async {
+    _ensureInitialized();
+    return _db.transaction((txn) async {
+      final movieRows = await txn.query(
+        _moviesTable,
+        orderBy: 'created_at ASC',
+      );
+      final drawRows = await txn.query(
+        _drawRecordsTable,
+        orderBy: 'drawn_at ASC',
+      );
+      final sessionRows = await txn.query(
+        _viewingSessionsTable,
+        orderBy: 'COALESCE(watched_at_utc, -1) ASC, watched_at ASC',
+      );
+      final collectionsAndTags = <String, List<Map<String, Object?>>>{
+        'collections': await txn.query(_collectionsTable),
+        'collectionMembers': await txn.query(_collectionMembersTable),
+        'tags': await txn.query(_tagsTable),
+        'movieTags': await txn.query(_movieTagsTable),
+      };
+      return BackupBundle(
+        movies: movieRows.map(_movieFromDbMap).toList(growable: false),
+        drawRecords: drawRows.map(_drawRecordFromDbMap).toList(growable: false),
+        sessions: sessionRows.map(_sessionFromDbMap).toList(growable: false),
+        collectionsAndTags: collectionsAndTags,
+      );
+    });
+  }
+
+  /// 在**同一个写事务**里完成「校验本地没变 + 整体替换」。
+  ///
+  /// 覆盖云端数据是不可撤回操作。原先的做法是先算校验值、再另开事务替换，
+  /// 两步之间的窗口期里用户保存的内容会被无声覆盖。这里把复查与替换放进
+  /// 同一个事务：只要指纹对不上就抛 [StaleLocalDataException]，数据库保持原样。
+  ///
+  /// [expectedFingerprint] 由 [localFingerprint] 在覆盖前取得。
+  Future<void> replaceBackupDataIfUnchanged({
+    required String expectedFingerprint,
+    required List<Movie> movies,
+    required List<DrawRecord> drawRecords,
+    required List<ViewingSession> sessions,
+    required Map<String, List<Map<String, Object?>>> tableData,
+  }) async {
+    _ensureInitialized();
+    await _db.transaction((txn) async {
+      final current = await _fingerprintInTxn(txn);
+      if (current != expectedFingerprint) {
+        throw const StaleLocalDataException();
+      }
+      await _replaceAllInTxn(
+        txn,
+        movies: movies,
+        drawRecords: drawRecords,
+        sessions: sessions,
+        tableData: tableData,
+      );
+    });
+  }
+
+  /// 本地数据指纹：各表行数 + 关键时间列的最大值。
+  ///
+  /// 只用来判断「这几张表自上次读数以来有没有变过」，不必把几 MB 内容读进事务，
+  /// 因此可以和替换动作放进同一把写锁里做。覆盖前后各取一次即可发现任何写入。
+  Future<String> localFingerprint() async {
+    _ensureInitialized();
+    return _fingerprintInTxn(_db);
+  }
+
+  Future<String> _fingerprintInTxn(DatabaseExecutor txn) async {
+    final parts = <String>[];
+    for (final (table, column) in const [
+      (_moviesTable, 'created_at'),
+      (_drawRecordsTable, 'drawn_at'),
+      (_viewingSessionsTable, 'watched_at'),
+      (_collectionsTable, 'created_at'),
+      (_tagsTable, 'created_at'),
+      (_collectionMembersTable, 'added_at'),
+    ]) {
+      final rows = await txn.rawQuery(
+        'SELECT COUNT(*) AS c, MAX($column) AS m FROM $table',
+      );
+      final count = (rows.first['c'] as num?)?.toInt() ?? 0;
+      final latest = rows.first['m']?.toString() ?? '';
+      parts.add('$table:$count:$latest');
+    }
+    // movie_tags 没有时间列，只数行数。
+    final tags = await txn.rawQuery(
+      'SELECT COUNT(*) AS c FROM $_movieTagsTable',
+    );
+    parts.add('movieTags:${(tags.first['c'] as num?)?.toInt() ?? 0}');
+    return parts.join('|');
+  }
+
+  Future<void> _replaceAllInTxn(
+    DatabaseExecutor txn, {
+    required List<Movie> movies,
+    required List<DrawRecord> drawRecords,
+    required List<ViewingSession> sessions,
+    required Map<String, List<Map<String, Object?>>> tableData,
+  }) async {
+    for (final table in const [
+      _movieTagsTable,
+      _collectionMembersTable,
+      _tagsTable,
+      _collectionsTable,
+      _drawRecordsTable,
+      _viewingSessionsTable,
+      _moviesTable,
+    ]) {
+      await txn.delete(table);
+    }
+
+    final batch = txn.batch();
+    for (final movie in movies) {
+      batch.insert(_moviesTable, _stamp(_movieToDbMap(movie)));
+    }
+    for (final record in drawRecords) {
+      batch.insert(_drawRecordsTable, _drawRecordToDbMap(record));
+    }
+    for (final session in sessions) {
+      batch.insert(_viewingSessionsTable, _stamp(_sessionToDbMap(session)));
+    }
+    for (final table in const [
+      _collectionsTable,
+      _collectionMembersTable,
+      _tagsTable,
+      _movieTagsTable,
+    ]) {
+      final rows =
+          tableData[table == _collectionsTable
+              ? 'collections'
+              : table == _collectionMembersTable
+              ? 'collectionMembers'
+              : table == _tagsTable
+              ? 'tags'
+              : 'movieTags'];
+      for (final row in rows ?? const <Map<String, Object?>>[]) {
+        batch.insert(table, _stamp(Map<String, Object?>.from(row)));
+      }
+    }
+    await batch.commit(noResult: true);
+  }
+
   Future<List<Movie>> getAllMoviesForBackup() async {
     _ensureInitialized();
     final rows = await _db.query(_moviesTable, orderBy: 'created_at ASC');
@@ -1912,7 +2749,7 @@ class StorageService {
     _ensureInitialized();
     await _db.insert(
       _moviesTable,
-      _movieToDbMap(movie),
+      _stamp(_movieToDbMap(movie)),
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
   }
@@ -1945,6 +2782,16 @@ class StorageService {
   }) {
     final conditions = <String>[];
     final args = <Object?>[];
+
+    // 墓碑行永不出现在任何面向用户的查询里。
+    // 这条必须无条件生效，因此放在最前面，让「已删除」的影片在
+    // 片库、搜索、计数、抽片候选里统统消失。
+    //
+    // 用别名 `m` 而不是表名：三个调用方（countMovies / queryMovies /
+    // queryMovieIds）都以 `FROM movies m` 起手，SQLite 一旦起了别名
+    // 就不再接受用原表名限定列，写成 `movies.deleted_at` 会直接报
+    // 「no such column」。
+    conditions.add('m.deleted_at IS NULL');
 
     if (watchedOnly) {
       conditions.add(_movieWatchedPredicate);
@@ -1998,6 +2845,7 @@ class StorageService {
       'watched_at': movie.watchedAt?.toIso8601String(),
       'user_rating': movie.userRating,
       'user_review': movie.userReview,
+      'poster_color': movie.posterColor,
       'created_at': movie.createdAt.toIso8601String(),
     };
   }
@@ -2036,6 +2884,7 @@ class StorageService {
           : null,
       userRating: (row['user_rating'] as num?)?.toDouble(),
       userReview: row['user_review']?.toString(),
+      posterColor: (row['poster_color'] as num?)?.toInt(),
       createdAt:
           DateTime.tryParse(row['created_at']?.toString() ?? '') ??
           DateTime.now(),

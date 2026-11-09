@@ -4,7 +4,6 @@ import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:random_movie/config/api_config.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +11,7 @@ import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/models/models.dart';
 import 'package:random_movie/providers/providers.dart';
 import 'package:random_movie/services/services.dart';
+import 'package:random_movie/services/haptics.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
 import 'package:random_movie/widgets/draw/draw_filter_panel.dart';
 import 'package:random_movie/services/draw_candidate_report.dart';
@@ -20,6 +20,8 @@ import 'package:random_movie/widgets/movie/movie_card.dart';
 import 'package:random_movie/router/movie_detail_arguments.dart';
 import 'package:random_movie/widgets/movie/selectable_movie_grid.dart';
 import 'package:random_movie/widgets/movie/viewing_session_editor.dart';
+import 'package:random_movie/config/design_tokens.dart';
+import 'package:random_movie/pages/draw/draw_state.dart';
 
 enum DrawPhase { selecting, animating, picking, result }
 
@@ -43,17 +45,31 @@ class DrawPage extends StatefulWidget {
   State<DrawPage> createState() => _DrawPageState();
 }
 
-class _DrawPageState extends State<DrawPage> {
+class _DrawPageState extends State<DrawPage>
+    with SingleTickerProviderStateMixin {
   static const int _pageSize = 48;
 
   late final StorageService _storageService;
   final ScrollController _scrollController = ScrollController();
 
-  DrawPhase _phase = DrawPhase.selecting;
   DrawMode _mode = DrawMode.pureRandom;
   DrawFilter _filter = DrawFilter.none;
   MovieFacets _facets = const MovieFacets();
   List<MovieTag> _tags = const [];
+
+  /// 单一状态机：页面只渲染它，不再用多个布尔/枚举拼凑「当前在哪一步」。
+  DrawState _state = const DrawSelecting();
+
+  /// 当前阶段。**由 [_state] 派生**，不是独立字段。
+  ///
+  /// 保留它是因为现有渲染分支都读它；改成 getter 之后就不可能再出现
+  /// 「状态机说在转动、枚举却说在结果」这种不一致。
+  DrawPhase get _phase => switch (_state) {
+    DrawSelecting() => DrawPhase.selecting,
+    DrawSpinning() => DrawPhase.animating,
+    DrawPicking() => DrawPhase.picking,
+    DrawRevealed() => DrawPhase.result,
+  };
 
   final DrawSelectionState _selectionState = DrawSelectionState();
   final Map<DrawMode, bool> _unwatchedOnlyByMode = {
@@ -85,6 +101,7 @@ class _DrawPageState extends State<DrawPage> {
   int _displayIndex = 0;
   int _shuffleCount = 0;
   bool _revealStarted = false;
+  final ShuffleHapticGate _hapticGate = ShuffleHapticGate();
 
   @override
   void initState() {
@@ -97,6 +114,7 @@ class _DrawPageState extends State<DrawPage> {
   @override
   void dispose() {
     _shuffleTimer?.cancel();
+    _spinController?.dispose();
     _scrollController
       ..removeListener(_handleScroll)
       ..dispose();
@@ -662,14 +680,20 @@ class _DrawPageState extends State<DrawPage> {
         mode: _mode,
         context: drawContext,
       );
-      setState(() => _phase = DrawPhase.picking);
+      setState(() => _state = DrawPicking(options: _threeOptions));
       return;
     }
 
     _result = DrawService.draw(_candidates, mode: _mode, context: drawContext);
 
     setState(() {
-      _phase = DrawPhase.animating;
+      // 预先算出结果在候选环里的下标，界面据此转动并恰好停在它上面，
+      // 不再需要转完后用 indexOf 回找。
+      final resultIndex = _candidates.indexOf(_result!.selectedMovie);
+      _state = DrawSpinning(
+        ring: _candidates,
+        resultIndex: resultIndex < 0 ? 0 : resultIndex,
+      );
       _shuffleCount = 0;
       _displayIndex = 0;
     });
@@ -689,58 +713,77 @@ class _DrawPageState extends State<DrawPage> {
     );
   }
 
+  /// 转动动画的唯一时间源。
+  ///
+  /// 原先用「一个 periodic Timer 走 20 下 + 4 个 Future.delayed」拼节奏，
+  /// 每 100ms 整页 setState 一次，且节奏在快慢交界处会突兀停顿。
+  /// 现在改成一个控制器跑完，由曲线决定快慢，观感连续。
+  AnimationController? _spinController;
+
   void _startShuffleAnimation() {
+    final state = _state;
+    if (state is! DrawSpinning) return;
+
     if (MediaQuery.disableAnimationsOf(context)) {
-      _onAnimationComplete();
+      // 减少动效：不转，直接定格到结果。
+      _displayIndex = state.resultIndex;
+      _revealStarted = true;
+      Haptics.success();
+      Future.delayed(Motion.resultHold, _onAnimationComplete);
       return;
     }
-    const int fastCount = 20;
 
-    _shuffleTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      _shuffleCount++;
-      if (_shuffleCount <= fastCount) {
-        if (!mounted) return;
-        setState(() {
-          _displayIndex = (_displayIndex + 1) % _candidates.length;
-        });
-      } else {
-        timer.cancel();
-        _startSlowPhase(0);
+    final timeline = DrawTimeline(
+      ringLength: state.ring.length,
+      resultIndex: state.resultIndex,
+    );
+    _hapticGate.reset();
+
+    final controller = AnimationController(
+      vsync: this,
+      duration: Motion.drawSpin,
+    );
+    _spinController = controller;
+
+    controller.addListener(() {
+      if (!mounted) return;
+      final index = timeline.indexAt(Motion.spinCurve.transform(controller.value));
+      if (index != _displayIndex) {
+        _displayIndex = index;
+        _shuffleCount++;
+        // 只有卡片区域依赖 _displayIndex，这里用 setState 保持简单；
+        // 页面其它部分由 const 子组件隔开，不参与重建。
+        setState(() {});
+      }
+      if (_hapticGate.shouldFire(index, isFastPhase: controller.value < 0.6)) {
+        Haptics.light();
       }
     });
-  }
 
-  void _startSlowPhase(int step) {
-    const int slowSteps = 4;
-    if (step >= slowSteps) {
+    controller.addStatusListener((status) {
+      if (status != AnimationStatus.completed || !mounted) return;
+      // 时间表保证终点就是结果，这里不再回找下标。
       setState(() {
-        _displayIndex = _candidates.indexOf(_result!.selectedMovie);
-        if (_displayIndex == -1) {
-          _displayIndex = 0;
-        }
+        _displayIndex = timeline.resultIndex;
         _revealStarted = true;
       });
-      // 开奖定格：一次中等触觉，配合海报回弹。
-      HapticFeedback.mediumImpact();
-      Future.delayed(const Duration(milliseconds: 500), _onAnimationComplete);
-      return;
-    }
-
-    final delay = Duration(milliseconds: 200 + step * 100);
-    Future.delayed(delay, () {
-      if (!mounted) return;
-      setState(() {
-        _displayIndex = (_displayIndex + 1) % _candidates.length;
-      });
-      _startSlowPhase(step + 1);
+      Haptics.success();
+      Future.delayed(Motion.resultHold, _onAnimationComplete);
     });
+
+    controller.forward();
   }
 
   Future<void> _onAnimationComplete() async {
     if (!mounted || _result == null) return;
     await _recordDraw(_result!);
     if (!mounted) return;
-    setState(() => _phase = DrawPhase.result);
+    setState(
+      () => _state = DrawRevealed(
+        movie: _result!.selectedMovie,
+        recordId: _recordId,
+      ),
+    );
   }
 
   /// 写入一条 pending 记录，记下 id 以便后续标记 accepted/skipped。
@@ -815,13 +858,21 @@ class _DrawPageState extends State<DrawPage> {
     );
     await _recordDraw(_result!);
     if (!mounted) return;
-    setState(() => _phase = DrawPhase.result);
+    setState(
+      () => _state = DrawRevealed(
+        movie: _result!.selectedMovie,
+        recordId: _recordId,
+      ),
+    );
   }
 
   // ==================== 动画阶段 ====================
 
   Widget _buildAnimatingPhase(BuildContext context) {
-    final currentMovie = _candidates[_displayIndex % _candidates.length];
+    // 转动阶段用的影片环来自状态机，不再依赖「候选列表 + 外部下标」两处拼合。
+    final spinning = _state as DrawSpinning;
+    final ring = spinning.ring;
+    final currentMovie = ring[_displayIndex % ring.length];
     final colorScheme = Theme.of(context).colorScheme;
 
     return Center(
@@ -829,9 +880,7 @@ class _DrawPageState extends State<DrawPage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           AnimatedSwitcher(
-            duration: MediaQuery.disableAnimationsOf(context)
-                ? Duration.zero
-                : const Duration(milliseconds: 80),
+            duration: Motion.of(context, Motion.fast),
             child: _RevealPop(
               key: ValueKey('reveal-$_revealStarted'),
               trigger: _revealStarted,
@@ -893,9 +942,7 @@ class _DrawPageState extends State<DrawPage> {
           // 抽中结果弹性登场：0.85 → 1.0，带一点回弹。
           TweenAnimationBuilder<double>(
             tween: Tween(begin: 0.85, end: 1.0),
-            duration: MediaQuery.disableAnimationsOf(context)
-                ? Duration.zero
-                : const Duration(milliseconds: 420),
+            duration: Motion.of(context, Motion.scroll),
             curve: Curves.easeOutBack,
             builder: (context, scale, child) =>
                 Transform.scale(scale: scale, child: child),
@@ -1011,7 +1058,7 @@ class _DrawPageState extends State<DrawPage> {
 
   void _retry() {
     setState(() {
-      _phase = DrawPhase.selecting;
+      _state = const DrawSelecting();
       _result = null;
       _threeOptions = [];
       _recordId = null;
@@ -1067,9 +1114,7 @@ class _ModeChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 150),
+        duration: Motion.of(context, Motion.panel),
         alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMedium),
         decoration: ShapeDecoration(
@@ -1349,7 +1394,7 @@ class _RevealPopState extends State<_RevealPop>
 
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 380),
+    duration: Motion.reveal,
   );
 
   // 目标放大比例：DrawShuffleCard 最长边 320dp，固定增量 16dp → 1.05。

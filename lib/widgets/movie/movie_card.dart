@@ -2,8 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:random_movie/config/app_theme.dart';
 import 'package:random_movie/widgets/movie/movie_poster.dart';
+import 'package:random_movie/widgets/movie/poster_tint.dart';
 import 'package:random_movie/models/movie.dart';
 import 'package:random_movie/services/watch_status.dart';
+import 'package:random_movie/config/design_tokens.dart';
 
 /// 影片卡片组件，带点击缩放动效
 class MovieCard extends StatefulWidget {
@@ -36,7 +38,7 @@ class _MovieCardState extends State<MovieCard>
     lowerBound: 0.975,
     upperBound: 1,
     value: 1,
-    duration: const Duration(milliseconds: 90),
+    duration: Motion.fast,
   );
 
   void _setPressed(bool pressed) {
@@ -113,6 +115,7 @@ class _MovieCardState extends State<MovieCard>
                         url: movie.poster,
                         heroTag: widget.posterHeroTag,
                         radius: AppTheme.radiusLarge,
+                        tint: PosterTint.of(movie),
                       ),
                       if (widget.showWatchedBadge)
                         Positioned(

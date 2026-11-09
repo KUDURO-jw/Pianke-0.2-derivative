@@ -8,6 +8,7 @@ import 'package:random_movie/services/local_data_guard.dart';
 import 'package:random_movie/services/storage_service.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
 import 'package:random_movie/widgets/movie/viewing_session_editor.dart';
+import 'package:random_movie/config/design_tokens.dart';
 
 Future<void> showQuickViewingEntry(
   BuildContext context, {
@@ -136,7 +137,7 @@ class _LocalMoviePickerState extends State<_LocalMoviePicker> {
               onChanged: (value) {
                 _revision++;
                 _debounce?.cancel();
-                _debounce = Timer(const Duration(milliseconds: 250), () {
+                _debounce = Timer(Motion.debounce, () {
                   _query = value.trim();
                   _load(reset: true);
                 });
