@@ -305,20 +305,13 @@ class SegmentedSwitch extends StatelessWidget {
           final slot = (constraints.maxWidth - 6) / labels.length;
           return Stack(
             children: [
-              // 选中块：位置与颜色随 p 连续移动
-              AnimatedPositioned(
-                duration: MediaQuery.disableAnimationsOf(context)
-                    ? Duration.zero
-                    : (progress != null
-                          ? const Duration(milliseconds: 60)
-                          : Motion.normal),
-                curve: progress != null ? Curves.linear : Motion.emphasized,
+              // 选中块：位置严格跟随 p，不做二次缓动，滑动时绝对跟手。
+              Positioned(
                 left: 3 + p * slot,
                 top: 0,
                 bottom: 0,
                 width: slot - 6,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 60),
+                child: Container(
                   decoration: ShapeDecoration(
                     color: scheme.accent,
                     shape: RoundedSuperellipseBorder(
@@ -347,9 +340,12 @@ class SegmentedSwitch extends StatelessWidget {
                                   fontWeight: i == selectedIndex
                                       ? FontWeight.w600
                                       : FontWeight.w500,
-                                  color: i == selectedIndex
-                                      ? scheme.onPrimary
-                                      : scheme.secondaryText,
+                                  // 颜色随进度连续渐变，滑动时文字不瞬跳。
+                                  color: Color.lerp(
+                                    scheme.secondaryText,
+                                    scheme.onPrimary,
+                                    (1 - (p - i).abs()).clamp(0.0, 1.0),
+                                  ),
                                 ),
                               ),
                               if (counts.length > i) ...[
@@ -359,9 +355,11 @@ class SegmentedSwitch extends StatelessWidget {
                                   style: TextStyle(
                                     fontSize: TypeScale.caption,
                                     fontWeight: FontWeight.w500,
-                                    color: i == selectedIndex
-                                        ? scheme.onPrimary.withValues(alpha: 0.8)
-                                        : scheme.secondaryText,
+                                    color: Color.lerp(
+                                      scheme.secondaryText,
+                                      scheme.onPrimary.withValues(alpha: 0.8),
+                                      (1 - (p - i).abs()).clamp(0.0, 1.0),
+                                    ),
                                   ),
                                 ),
                               ],
