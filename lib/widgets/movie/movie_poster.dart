@@ -2,6 +2,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:random_movie/config/api_config.dart';
+import 'package:random_movie/config/design_tokens.dart';
 
 /// A shared, bounded-decode poster. Badges and labels never join its Hero flight.
 class MoviePoster extends StatelessWidget {
@@ -19,12 +20,13 @@ class MoviePoster extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    // 骨架占位：浅灰块 + 弱图标，加载时不再是一片纯色/闪白。
     Widget placeholder() => ColoredBox(
-      color: scheme.surfaceContainerHighest,
+      color: SurfaceLevel.inset.colorOf(scheme),
       child: Icon(
         Icons.movie_outlined,
         size: 30,
-        color: scheme.onSurfaceVariant,
+        color: scheme.onSurfaceVariant.withValues(alpha: 0.35),
       ),
     );
     final poster = ClipRSuperellipse(
