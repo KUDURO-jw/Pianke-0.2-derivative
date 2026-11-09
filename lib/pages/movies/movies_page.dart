@@ -106,7 +106,7 @@ class _MoviesPageState extends State<MoviesPage> {
           controller: _scrollController,
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           scrollCacheExtent: ScrollCacheExtent.pixels(
-            MediaQuery.sizeOf(context).height * 0.55,
+            MediaQuery.sizeOf(context).height * 0.9,
           ),
           slivers: [
             // ── 页面头部：大标题 + 搜索 + 分段控件 ──
@@ -309,8 +309,8 @@ class _MoviesPageState extends State<MoviesPage> {
                       mainAxisSpacing: Spacing.lg,
                     ),
                     itemCount: itemCount,
-                    addAutomaticKeepAlives: false,
-                    addRepaintBoundaries: false,
+                    addAutomaticKeepAlives: true,
+                    addRepaintBoundaries: true,
                     itemBuilder: (context, index) {
                       if (index >= movies.length) {
                         return state.error == null
