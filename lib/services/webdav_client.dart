@@ -142,6 +142,48 @@ class WebDavClient {
     _ensureSuccess(response, operation: '测试连接');
   }
 
+  /// 轻量检查云端备份文件有没有变化：只问文件的「指纹」，不下载内容。
+  ///
+  /// 返回值：
+  /// - `null`：云端还没有备份文件；
+  /// - 空字符串：服务器没有给出可用于比较的信息（调用方应当做完整同步）；
+  /// - 其他：由 etag / 修改时间 / 大小拼成的指纹，文件变了它就会变。
+  Future<String?> fetchRemoteFingerprint(WebDavConfig config) async {
+    _validateConfig(config);
+    final response = await _send(
+      'PROPFIND',
+      _fileUri(config.remoteDirectory),
+      config,
+      headers: {'Depth': '0', 'Content-Type': 'application/xml'},
+      body: utf8.encode(_fingerprintRequestBody),
+    );
+    if (response.statusCode == HttpStatus.notFound) return null;
+    _ensureSuccess(response, operation: '检查云端备份');
+    final xml = utf8.decode(response.body, allowMalformed: true);
+    final parts = [
+      _davProperty(xml, 'getetag'),
+      _davProperty(xml, 'getlastmodified'),
+      _davProperty(xml, 'getcontentlength'),
+    ];
+    if (parts.every((part) => part.isEmpty)) return '';
+    return parts.join('|');
+  }
+
+  static const _fingerprintRequestBody =
+      '<?xml version="1.0"?>'
+      '<propfind xmlns="DAV:"><prop>'
+      '<getetag/><getlastmodified/><getcontentlength/>'
+      '</prop></propfind>';
+
+  /// 从 WebDAV 返回的 XML 里取出某个属性的文本；兼容 `D:getetag` 这类前缀写法。
+  static String _davProperty(String xml, String name) {
+    final match = RegExp(
+      '<(?:[A-Za-z0-9_-]+:)?$name[^>]*>([\\s\\S]*?)</(?:[A-Za-z0-9_-]+:)?$name>',
+      caseSensitive: false,
+    ).firstMatch(xml);
+    return match?.group(1)?.trim() ?? '';
+  }
+
   Future<WebDavBackup?> download(
     WebDavConfig config, {
     WebDavProgress? onProgress,
