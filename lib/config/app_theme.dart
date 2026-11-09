@@ -1,6 +1,5 @@
 // Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart' show CupertinoPageTransition;
 import 'package:flutter/services.dart';
 import 'package:random_movie/config/design_tokens.dart';
 import 'package:random_movie/widgets/common/continuous_rrect.dart';
@@ -577,7 +576,8 @@ class MellowPanelPainter extends CustomPainter {
 class AppPageTransitionsBuilder extends PageTransitionsBuilder {
   const AppPageTransitionsBuilder();
 
-  /// Keep the detail surface opaque: no full-screen fade layer on every frame.
+  /// 详情页转场：保留 iOS 左滑入观感，但不使用 Cupertino 内置的整层边缘阴影，
+  /// 以降低进出详情页时的每帧重绘开销（方案 C）。
   static Widget detailTransition(
     BuildContext context,
     Animation<double> animation,
@@ -585,10 +585,16 @@ class AppPageTransitionsBuilder extends PageTransitionsBuilder {
     Widget child,
   ) {
     if (MediaQuery.disableAnimationsOf(context)) return child;
-    return CupertinoPageTransition(
-      primaryRouteAnimation: animation,
-      secondaryRouteAnimation: secondaryAnimation,
-      linearTransition: false,
+    final direction = Directionality.of(context) == TextDirection.rtl
+        ? -1.0
+        : 1.0;
+    final curved = animation.drive(
+      CurveTween(curve: Curves.easeOutCubic),
+    );
+    return SlideTransition(
+      position: curved.drive(
+        Tween(begin: Offset(1.0 * direction, 0), end: Offset.zero),
+      ),
       child: RepaintBoundary(child: child),
     );
   }
