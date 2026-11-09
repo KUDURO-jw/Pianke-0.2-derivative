@@ -7,6 +7,13 @@ import 'package:random_movie/models/models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
+/// 把用户输入变成 SQL `LIKE ... ESCAPE '\'` 可以安全使用的文本：
+/// `%`、`_` 和 `\` 都当作普通字符，而不是通配符。
+String escapeSqlLike(String input) => input
+    .replaceAll(r'\', r'\\')
+    .replaceAll('%', r'\%')
+    .replaceAll('_', r'\_');
+
 /// 本地存储服务
 class StorageService {
   static const String _userIdKey = 'movie_app_user_id';
@@ -1706,11 +1713,14 @@ class StorageService {
       case CollectionKind.smartGenre:
         // genre_json 为 JSON 数组字符串，用 LIKE 匹配带引号的值
         return _SqlClause(
-          where: 'genre_json LIKE ?',
-          whereArgs: ['%"$value"%'],
+          where: "genre_json LIKE ? ESCAPE '\\'",
+          whereArgs: ['%"${escapeSqlLike(value)}"%'],
         );
       case CollectionKind.smartDirector:
-        return _SqlClause(where: 'director LIKE ?', whereArgs: ['%$value%']);
+        return _SqlClause(
+          where: "director LIKE ? ESCAPE '\\'",
+          whereArgs: ['%${escapeSqlLike(value)}%'],
+        );
       case CollectionKind.smartDecade:
         final decade = int.tryParse(value);
         if (decade == null) return null;
@@ -1949,9 +1959,9 @@ class StorageService {
         'LOWER(m.director)',
         'LOWER(m.cast_text)',
       ];
-      final like = '%$normalizedQuery%';
+      final like = '%${escapeSqlLike(normalizedQuery)}%';
       conditions.add(
-        '(${fields.map((field) => '$field LIKE ?').join(' OR ')})',
+        '(${fields.map((field) => "$field LIKE ? ESCAPE '\\'").join(' OR ')})',
       );
       args.addAll(List<Object?>.filled(fields.length, like));
     }
