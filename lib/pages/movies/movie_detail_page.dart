@@ -328,6 +328,8 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
           child: SegmentedSwitch(
             labels: const ['记录', '资料'],
             selectedIndex: index,
+            // 跟手：滑动时选中块随动画值连续移动，不再等整数切换。
+            progress: controller.animation?.value ?? index.toDouble(),
             onChanged: (i) {
               if (i == index) return;
               controller.animateTo(i);
