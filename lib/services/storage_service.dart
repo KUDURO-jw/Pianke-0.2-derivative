@@ -833,6 +833,16 @@ class StorageService {
     await _db.delete(_drawRecordsTable);
   }
 
+  /// 删除单条抽片记录。
+  Future<void> deleteDrawRecord(String recordId) async {
+    _ensureInitialized();
+    await _db.delete(
+      _drawRecordsTable,
+      where: 'id = ?',
+      whereArgs: [recordId],
+    );
+  }
+
   /// 更新某条抽片记录的处理状态（accepted/skipped）。
   Future<void> updateDrawRecordOutcome(
     String recordId,
