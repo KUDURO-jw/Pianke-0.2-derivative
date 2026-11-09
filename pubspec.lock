@@ -484,10 +484,10 @@ packages:
     dependency: transitive
     description:
       name: octo_image
-      sha256: "1db70031049945ac032e3d1c7a53739ce8c3f721d0e3c15aecfc2858ea5112a4"
+      sha256: "9c9e56f655c301fd2e6c26390461b4fbd23be861b29607c5e2e4d16e8231ce50"
       url: "https://pub.flutter-io.cn"
     source: hosted
-    version: "2.1.3"
+    version: "2.1.4"
   package_config:
     dependency: transitive
     description:
