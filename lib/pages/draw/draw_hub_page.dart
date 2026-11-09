@@ -53,17 +53,34 @@ class DrawHubPage extends StatelessWidget {
 }
 
 /// 主入口大卡片 —— 今晚看什么？
-class _PrimaryDrawCard extends StatelessWidget {
+class _PrimaryDrawCard extends StatefulWidget {
   final VoidCallback onTap;
 
   const _PrimaryDrawCard({required this.onTap});
+
+  @override
+  State<_PrimaryDrawCard> createState() => _PrimaryDrawCardState();
+}
+
+class _PrimaryDrawCardState extends State<_PrimaryDrawCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _breath = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2000),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _breath.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return AppCard(
       padding: const EdgeInsets.all(Spacing.xxl),
-      onTap: onTap,
+      onTap: widget.onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -89,10 +106,15 @@ class _PrimaryDrawCard extends StatelessWidget {
           const SizedBox(height: Spacing.xxl),
           SizedBox(
             width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: onTap,
-              icon: const Icon(Icons.play_arrow_rounded),
-              label: const Text('开始抽片'),
+            child: FadeTransition(
+              opacity: Tween<double>(begin: 1.0, end: 0.85).animate(
+                CurvedAnimation(parent: _breath, curve: Curves.easeInOut),
+              ),
+              child: FilledButton.icon(
+                onPressed: widget.onTap,
+                icon: const Icon(Icons.play_arrow_rounded),
+                label: const Text('开始抽片'),
+              ),
             ),
           ),
         ],
