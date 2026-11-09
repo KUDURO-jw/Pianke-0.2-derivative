@@ -64,10 +64,33 @@ class _PrimaryDrawCard extends StatefulWidget {
 
 class _PrimaryDrawCardState extends State<_PrimaryDrawCard>
     with SingleTickerProviderStateMixin {
+  /// 「开始抽片」按钮呼吸的次数：只在进入页面时提示几下，之后保持静止，
+  /// 不再无限循环（省电，也不会一直抢注意力）。
+  static const int _breathCycles = 3;
+
   late final AnimationController _breath = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 2000),
-  )..repeat(reverse: true);
+    duration: const Duration(milliseconds: 1600),
+  );
+  bool _breathStarted = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_breathStarted) return;
+    _breathStarted = true;
+    // 系统开启「减少动态效果」时不呼吸，按钮保持静止。
+    if (!MediaQuery.disableAnimationsOf(context)) _runBreath();
+  }
+
+  Future<void> _runBreath() async {
+    for (var i = 0; i < _breathCycles; i++) {
+      await _breath.forward();
+      if (!mounted) return;
+      await _breath.reverse();
+      if (!mounted) return;
+    }
+  }
 
   @override
   void dispose() {
