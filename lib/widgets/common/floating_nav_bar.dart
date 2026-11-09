@@ -36,7 +36,7 @@ class DockMetrics {
       : heightOf(context) + bottomOf(context) + 16;
 }
 
-class FloatingNavBar extends StatelessWidget {
+class FloatingNavBar extends StatefulWidget {
   final int currentIndex;
   final ValueChanged<int> onSelected;
   final ValueChanged<int>? onDoubleTap;
@@ -49,6 +49,45 @@ class FloatingNavBar extends StatelessWidget {
     this.onDoubleTap,
     required this.items,
   }) : assert(items.length > 0);
+
+  @override
+  State<FloatingNavBar> createState() => _FloatingNavBarState();
+}
+
+class _FloatingNavBarState extends State<FloatingNavBar>
+    with SingleTickerProviderStateMixin {
+  // 对齐 FlClash dock 的按压膨胀：按下整体放大，松开回弹。
+  static final SpringDescription _swellSpring =
+      SpringDescription.withDampingRatio(
+        mass: 1,
+        stiffness: 311,
+        ratio: 0.593,
+      );
+  // 最长边（dock 高度 62 + 内边距）约 70dp，固定增量约 8dp → 1.11。
+  static const double _growth = 0.11;
+
+  late final AnimationController _swell = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+    lowerBound: 0.0,
+    upperBound: 1.0,
+  );
+
+  @override
+  void dispose() {
+    _swell.dispose();
+    super.dispose();
+  }
+
+  void _pressStart() {
+    if (MediaQuery.disableAnimationsOf(context)) return;
+    _swell.animateTo(1.0, curve: Curves.easeOut);
+  }
+
+  void _pressEnd() {
+    if (MediaQuery.disableAnimationsOf(context)) return;
+    _swell.animateWith(SpringSimulation(_swellSpring, _swell.value, 0, 0));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,40 +105,51 @@ class FloatingNavBar extends StatelessWidget {
         padding: EdgeInsets.fromLTRB(21, 8, 21, DockMetrics.bottomOf(context)),
         child: Center(
           heightFactor: 1,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 384),
-            child: RepaintBoundary(
-              child: DecoratedBox(
-                decoration: ShapeDecoration(
-                  shape: shape,
-                  shadows: Shadows.floating(scheme),
-                ),
-                child: ClipPath(
-                  clipper: ShapeBorderClipper(shape: shape),
-                  child: BackdropFilter(
-                    filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                    child: DecoratedBox(
-                      decoration: ShapeDecoration(
-                        color: (dark ? scheme.blockSurface : scheme.cardSurface)
-                            .withValues(alpha: dark ? 0.78 : 0.65),
-                        shape: ContinuousRRect.all(
-                          Radii.pill,
-                          side: BorderSide(
-                            color: Colors.white.withValues(
-                              alpha: dark ? 0.12 : 0.65,
+          child: AnimatedBuilder(
+            animation: _swell,
+            builder: (context, child) {
+              final scale = 1 + _swell.value * _growth;
+              return Transform.scale(scale: scale, child: child);
+            },
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 384),
+              child: RepaintBoundary(
+                child: DecoratedBox(
+                  decoration: ShapeDecoration(
+                    shape: shape,
+                    shadows: Shadows.floating(scheme),
+                  ),
+                  child: ClipPath(
+                    clipper: ShapeBorderClipper(shape: shape),
+                    child: BackdropFilter(
+                      filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                      child: DecoratedBox(
+                        decoration: ShapeDecoration(
+                          color: (dark
+                                  ? scheme.blockSurface
+                                  : scheme.cardSurface)
+                              .withValues(alpha: dark ? 0.78 : 0.65),
+                          shape: ContinuousRRect.all(
+                            Radii.pill,
+                            side: BorderSide(
+                              color: Colors.white.withValues(
+                                alpha: dark ? 0.12 : 0.65,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      child: SizedBox(
-                        height: DockMetrics.heightOf(context),
-                        child: Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: _DockTrack(
-                            currentIndex: currentIndex,
-                            onSelected: onSelected,
-                            onDoubleTap: onDoubleTap,
-                            items: items,
+                        child: SizedBox(
+                          height: DockMetrics.heightOf(context),
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: _DockTrack(
+                              currentIndex: widget.currentIndex,
+                              onSelected: widget.onSelected,
+                              onDoubleTap: widget.onDoubleTap,
+                              items: widget.items,
+                              onPressStart: _pressStart,
+                              onPressEnd: _pressEnd,
+                            ),
                           ),
                         ),
                       ),
@@ -120,11 +170,15 @@ class _DockTrack extends StatefulWidget {
   final ValueChanged<int> onSelected;
   final ValueChanged<int>? onDoubleTap;
   final List<NavItemData> items;
+  final VoidCallback? onPressStart;
+  final VoidCallback? onPressEnd;
   const _DockTrack({
     required this.currentIndex,
     required this.onSelected,
     required this.onDoubleTap,
     required this.items,
+    this.onPressStart,
+    this.onPressEnd,
   });
 
   @override
@@ -307,6 +361,7 @@ class _DockTrackState extends State<_DockTrack> with TickerProviderStateMixin {
             } else {
               _press.forward();
             }
+            widget.onPressStart?.call();
           },
           onPointerMove: (event) =>
               _tracker?.addPosition(event.timeStamp, event.localPosition),
@@ -314,8 +369,12 @@ class _DockTrackState extends State<_DockTrack> with TickerProviderStateMixin {
             _releaseVelocity = _tracker?.getVelocity().pixelsPerSecond.dx;
             _tracker = null;
             _releasePress();
+            widget.onPressEnd?.call();
           },
-          onPointerCancel: (_) => cancel(),
+          onPointerCancel: (_) {
+            widget.onPressEnd?.call();
+            cancel();
+          },
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onHorizontalDragStart: (details) {
