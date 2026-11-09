@@ -263,10 +263,16 @@ class AppSearchField extends StatelessWidget {
 // ────────────────────────────────────────────
 
 /// 分段切换器。整体一个容器，选中块在内部，比一排胶囊更整体。
+///
+/// [selectedIndex] 是选中项（整数）。当需要选中块跟随滑动实时过渡时，
+/// 传入 [progress]（浮点，0..labels.length-1），此时选中块的位置与颜色
+/// 随该值连续变化，不再等到整数切换才跳变。片库页只传 [selectedIndex]，
+/// 行为与之前完全一致。
 class SegmentedSwitch extends StatelessWidget {
   final List<String> labels;
   final List<int> counts;
   final int selectedIndex;
+  final double? progress;
   final ValueChanged<int> onChanged;
 
   const SegmentedSwitch({
@@ -275,11 +281,14 @@ class SegmentedSwitch extends StatelessWidget {
     required this.selectedIndex,
     required this.onChanged,
     this.counts = const [],
+    this.progress,
   });
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final double p = (progress ?? selectedIndex.toDouble())
+        .clamp(0.0, (labels.length - 1).toDouble());
 
     return Container(
       height: 44 + (MediaQuery.textScalerOf(context).scale(13) - 13),
@@ -291,63 +300,81 @@ class SegmentedSwitch extends StatelessWidget {
           side: BorderSide.none,
         ),
       ),
-      child: Row(
-        children: [
-          for (var i = 0; i < labels.length; i++)
-            Expanded(
-              child: GestureDetector(
-                onTap: () => onChanged(i),
-                behavior: HitTestBehavior.opaque,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final slot = (constraints.maxWidth - 6) / labels.length;
+          return Stack(
+            children: [
+              // 选中块：位置与颜色随 p 连续移动
+              AnimatedPositioned(
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : (progress != null
+                          ? const Duration(milliseconds: 60)
+                          : Motion.normal),
+                curve: progress != null ? Curves.linear : Motion.emphasized,
+                left: 3 + p * slot,
+                top: 0,
+                bottom: 0,
+                width: slot - 6,
                 child: AnimatedContainer(
-                  duration: MediaQuery.disableAnimationsOf(context)
-                      ? Duration.zero
-                      : Motion.normal,
-                  curve: Motion.emphasized,
+                  duration: const Duration(milliseconds: 60),
                   decoration: ShapeDecoration(
-                    color: i == selectedIndex
-                        ? scheme.accent
-                        : Colors.transparent,
-
+                    color: scheme.accent,
                     shape: RoundedSuperellipseBorder(
                       borderRadius: BorderRadius.circular(Radii.pill),
                       side: BorderSide.none,
                     ),
                   ),
-                  alignment: Alignment.center,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        labels[i],
-                        style: TextStyle(
-                          fontSize: TypeScale.label,
-                          fontWeight: i == selectedIndex
-                              ? FontWeight.w600
-                              : FontWeight.w500,
-                          color: i == selectedIndex
-                              ? scheme.onPrimary
-                              : scheme.secondaryText,
-                        ),
-                      ),
-                      if (counts.length > i) ...[
-                        const SizedBox(width: 5),
-                        Text(
-                          '${counts[i]}',
-                          style: TextStyle(
-                            fontSize: TypeScale.caption,
-                            fontWeight: FontWeight.w500,
-                            color: i == selectedIndex
-                                ? scheme.onPrimary.withValues(alpha: 0.8)
-                                : scheme.secondaryText,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
                 ),
               ),
-            ),
-        ],
+              // 标签层（透明，仅文字）
+              Row(
+                children: [
+                  for (var i = 0; i < labels.length; i++)
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => onChanged(i),
+                        behavior: HitTestBehavior.opaque,
+                        child: Center(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                labels[i],
+                                style: TextStyle(
+                                  fontSize: TypeScale.label,
+                                  fontWeight: i == selectedIndex
+                                      ? FontWeight.w600
+                                      : FontWeight.w500,
+                                  color: i == selectedIndex
+                                      ? scheme.onPrimary
+                                      : scheme.secondaryText,
+                                ),
+                              ),
+                              if (counts.length > i) ...[
+                                const SizedBox(width: 5),
+                                Text(
+                                  '${counts[i]}',
+                                  style: TextStyle(
+                                    fontSize: TypeScale.caption,
+                                    fontWeight: FontWeight.w500,
+                                    color: i == selectedIndex
+                                        ? scheme.onPrimary.withValues(alpha: 0.8)
+                                        : scheme.secondaryText,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }
