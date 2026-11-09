@@ -238,18 +238,26 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
           child: DefaultTabController(
             length: 2,
             child: Scaffold(
-              bottomNavigationBar: _hasChanges
-                  ? SafeArea(
-                      minimum: const EdgeInsets.all(AppTheme.spacingMedium),
-                      child: FilledButton.icon(
-                        onPressed: _saving || _isSyncingWatchState
-                            ? null
-                            : () => _save(provider, movie),
-                        icon: const Icon(Icons.check),
-                        label: Text(_saving ? '保存中…' : '保存修改'),
-                      ),
-                    )
-                  : null,
+              // 键盘弹出不再整体挤压页面，避免输入短评时整页重排闪屏。
+              resizeToAvoidBottomInset: false,
+              bottomNavigationBar: AnimatedOpacity(
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : Motion.normal,
+                opacity: _hasChanges ? 1 : 0,
+                child: _hasChanges
+                    ? SafeArea(
+                        minimum: const EdgeInsets.all(AppTheme.spacingMedium),
+                        child: FilledButton.icon(
+                          onPressed: _saving || _isSyncingWatchState
+                              ? null
+                              : () => _save(provider, movie),
+                          icon: const Icon(Icons.check),
+                          label: Text(_saving ? '保存中…' : '保存修改'),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
               body: AbsorbPointer(
                 absorbing: _saving,
                 child: NestedScrollView(
