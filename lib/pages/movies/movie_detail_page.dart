@@ -315,9 +315,16 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
   Widget _buildSegmentedTabBar(BuildContext context) {
     final controller = DefaultTabController.of(context);
     final scheme = Theme.of(context).colorScheme;
+    final animation = controller.animation;
+    // 动画对象正常情况下一定存在；防御性处理可空。
+    if (animation == null) {
+      return const SizedBox.shrink();
+    }
 
     return AnimatedBuilder(
-      animation: controller,
+      // 关键：监听 controller.animation（滑动时每帧连续通知），
+      // 而不是 controller 本身（只在 index 整数跳变时才通知一次）。
+      animation: animation,
       builder: (context, _) {
         final index = controller.index;
         return Container(
@@ -336,8 +343,8 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
           child: SegmentedSwitch(
             labels: const ['记录', '资料'],
             selectedIndex: index,
-            // 跟手：滑动时选中块随动画值连续移动，不再等整数切换。
-            progress: controller.animation?.value ?? index.toDouble(),
+            // 跟手：选中块位置严格跟随连续动画值。
+            progress: animation.value,
             onChanged: (i) {
               if (i == index) return;
               controller.animateTo(i);
