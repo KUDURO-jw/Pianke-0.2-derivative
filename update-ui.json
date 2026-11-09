@@ -1,16 +1,12 @@
 {
-  "versionName": "0.2.16",
-  "versionCode": 22,
-  "title": "片刻·焕新版 0.2.16",
+  "versionName": "0.2.17",
+  "versionCode": 23,
+  "title": "片刻·焕新版 0.2.17",
   "changelog": [
-    "抽片开奖加入触觉反馈与海报回弹，更有仪式感",
-    "日历「今天」增加呼吸圆点，一眼定位",
-    "观影记录支持左滑删除",
-    "抽片入口按钮增加呼吸高亮",
-    "评分星星点按回弹 + 轻震",
-    "片库空状态文案更友好"
+    "抽片定格反馈改为弹性放大，借鉴 FlClash 底部导航的按压手感",
+    "整体卡片弹簧式轻微放大并回弹，替代原先的生硬缩放"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.16-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "db6d06fa182cf5260a0923074329cf788a4777d0a6437f5ba1a50cf1b64b8677",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.17-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "ce6eaebafdfe111424faf745ca43cb213e156d0893e062deda60d37310df968d",
   "forceUpdate": false
 }
