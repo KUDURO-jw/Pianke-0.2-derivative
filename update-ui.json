@@ -1,13 +1,14 @@
 {
-  "versionName": "0.2.19",
-  "versionCode": 25,
-  "title": "片刻·焕新版 0.2.19",
+  "versionName": "0.2.20",
+  "versionCode": 26,
+  "title": "片刻·焕新版 0.2.20",
   "changelog": [
-    "添加影片更快：豆瓣验证通行证跨会话复用，冷启动不再每次重新验证",
-    "验证计算移到后台，界面不再卡顿",
-    "进一步降低触发豆瓣安全验证的频率"
+    "同步更省流量：云端没变化时不再重复下载整份备份",
+    "修复搜索 % 或 _ 会匹配到全部影片的问题",
+    "提示反馈更快，底部距离自适应字体大小",
+    "抽片按钮改为进入页面呼吸几次后静止，遵守减少动效"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.19-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "f447f9864ef703924c7408bb62950cfb5684047bea1612e4fe737da312af1aac",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.20-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "c9c3ae9f6dbe11e18ac5a6c0424daaebf8d148edbbcbd362e09521ed81268d33",
   "forceUpdate": false
 }
