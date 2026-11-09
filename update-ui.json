@@ -1,12 +1,12 @@
 {
-  "versionName": "0.2.17",
-  "versionCode": 23,
-  "title": "片刻·焕新版 0.2.17",
+  "versionName": "0.2.18",
+  "versionCode": 24,
+  "title": "片刻·焕新版 0.2.18",
   "changelog": [
-    "抽片定格反馈改为弹性放大，借鉴 FlClash 底部导航的按压手感",
-    "整体卡片弹簧式轻微放大并回弹，替代原先的生硬缩放"
+    "底部导航按下时整个 Dock 弹性放大，松开回弹，对齐 FlClash 手感",
+    "抽片历史支持左滑删除单条记录"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.17-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "ce6eaebafdfe111424faf745ca43cb213e156d0893e062deda60d37310df968d",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.18-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "8e49b3278807a20764d92005ef507dd549f42dfd17cac72cd08c96f9be7e6499",
   "forceUpdate": false
 }
