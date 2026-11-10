@@ -363,7 +363,7 @@ class _BranchTransitionState extends State<_BranchTransition>
                   builder: (context, child) {
                     final progress = MediaQuery.disableAnimationsOf(context)
                         ? 1.0
-                        : Curves.easeInOutCubic.transform(_controller.value);
+                        : Motion.shared.transform(_controller.value);
                     return FractionalTranslation(
                       translation: Offset(
                         direction *

@@ -1,6 +1,7 @@
 // Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:flutter/material.dart';
 import 'package:random_movie/config/app_theme.dart';
+import 'package:random_movie/config/design_tokens.dart';
 import 'package:random_movie/services/backup_snapshot.dart';
 import 'package:random_movie/services/backup_inventory.dart';
 import 'package:random_movie/services/local_data_guard.dart';
@@ -271,7 +272,7 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
                             '本机的影片、观影记录、合集与标签将被云端备份'
                             '整份替换，本地独有的内容将移出当前片库。覆盖前会尝试创建安全备份。',
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: TypeScale.label,
                               height: 1.5,
                               color: colorScheme.onErrorContainer,
                             ),
@@ -387,7 +388,7 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
               Text(
                 '${_service!.statusMessage}\n上次成功：${_service!.lastSuccessAt?.toLocal().toString().split(".").first ?? "暂无"}',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: TypeScale.caption,
                   color: _service!.lastAttemptFailed
                       ? colorScheme.error
                       : colorScheme.onSurfaceVariant,
@@ -403,7 +404,7 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
                       Text(
                         'WebDAV 地址：${WebDavClient.endpoint}',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: TypeScale.caption,
                           color: colorScheme.onSurface.withValues(alpha: 0.55),
                         ),
                       ),
@@ -457,7 +458,7 @@ class _WebDavSyncSectionState extends State<WebDavSyncSection> {
                     color: _messageIsError
                         ? colorScheme.error
                         : colorScheme.primary,
-                    fontSize: 12,
+                    fontSize: TypeScale.caption,
                   ),
                 ),
                 const SizedBox(height: AppTheme.spacingSmall),

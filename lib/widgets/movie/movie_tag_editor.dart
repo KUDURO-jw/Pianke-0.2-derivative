@@ -123,7 +123,7 @@ class _MovieTagEditorState extends State<MovieTagEditor> {
                     Text(
                       '新标签',
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: TypeScale.label,
                         color: colorScheme.onSurface.withValues(alpha: 0.7),
                       ),
                     ),
@@ -176,7 +176,7 @@ class _TagChip extends StatelessWidget {
             Text(
               tag.name,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: TypeScale.label,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                 color: selected ? Colors.white : tag.color,
               ),
@@ -275,7 +275,7 @@ class _TagCreatorDialogState extends State<_TagCreatorDialog> {
             if (name.isEmpty) return;
             Navigator.of(context).pop((name: name, colorValue: _colorValue));
           },
-          style: TextButton.styleFrom(foregroundColor: AppTheme.accent),
+          style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.accent),
           child: const Text(
             '创建',
             style: TextStyle(fontWeight: FontWeight.bold),

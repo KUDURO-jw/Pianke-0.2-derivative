@@ -132,7 +132,11 @@ void main() {
 
       final notifier = TableChangeNotifier(
         storage,
-        debounce: const Duration(milliseconds: 40),
+        // 防抖窗口取得足够宽（200ms）：三次真实 SQLite 写入在并发测试机
+        // 上可能各自耗时几十毫秒，窗口只有 40ms 时偶发「第 2、3 次写入
+        // 落在窗口外」，于是合并成 2 次通知，测试随机失败。
+        // 这个用例要验证的是「窗口内的多次变更被合并」，不是「写入有多快」。
+        debounce: const Duration(milliseconds: 200),
       );
       addTearDown(notifier.dispose);
       var notifications = 0;
@@ -147,7 +151,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 10));
 
       // 等待防抖窗口过去。
-      await Future<void>.delayed(const Duration(milliseconds: 120));
+      await Future<void>.delayed(const Duration(milliseconds: 400));
 
       expect(notifier.rawNotificationCount, greaterThanOrEqualTo(3));
       expect(

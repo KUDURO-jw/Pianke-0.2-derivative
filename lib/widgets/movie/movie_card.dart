@@ -5,6 +5,7 @@ import 'package:random_movie/widgets/movie/movie_poster.dart';
 import 'package:random_movie/widgets/movie/poster_tint.dart';
 import 'package:random_movie/models/movie.dart';
 import 'package:random_movie/services/watch_status.dart';
+import 'package:random_movie/widgets/common/spring_press.dart';
 import 'package:random_movie/config/design_tokens.dart';
 
 /// 影片卡片组件，带点击缩放动效
@@ -32,34 +33,19 @@ class MovieCard extends StatefulWidget {
 
 class _MovieCardState extends State<MovieCard>
     with SingleTickerProviderStateMixin {
-  bool _reduceMotion = false;
-  late final AnimationController _scale = AnimationController(
-    vsync: this,
-    lowerBound: 0.975,
-    upperBound: 1,
-    value: 1,
-    duration: Motion.fast,
-  );
+  /// 用 ValueNotifier 而不是 setState：按压只是缩放变化，
+  /// 不能让整张卡片（含海报子树）重建 —— 那会在滚动列表里每按一次就
+  /// 重新解码/重建图片 widget，也破坏 Hero 的子树复用。
+  final ValueNotifier<bool> _pressed = ValueNotifier<bool>(false);
 
   void _setPressed(bool pressed) {
     if (!mounted) return;
-    final target = pressed ? 0.975 : 1.0;
-    if (_reduceMotion) {
-      _scale.value = target;
-    } else {
-      _scale.animateTo(target, curve: Curves.easeOut);
-    }
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _reduceMotion = MediaQuery.disableAnimationsOf(context);
+    _pressed.value = pressed;
   }
 
   @override
   void dispose() {
-    _scale.dispose();
+    _pressed.dispose();
     super.dispose();
   }
 
@@ -99,8 +85,8 @@ class _MovieCardState extends State<MovieCard>
                 _setPressed(false);
                 widget.onDelete!();
               },
-        child: ScaleTransition(
-          scale: _scale,
+        child: ValueListenableBuilder<bool>(
+          valueListenable: _pressed,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -148,7 +134,7 @@ class _MovieCardState extends State<MovieCard>
                                   Text(
                                     statusLabel,
                                     style: const TextStyle(
-                                      fontSize: 12,
+                                      fontSize: TypeScale.caption,
                                       fontWeight: FontWeight.bold,
                                       color: Colors.white,
                                     ),
@@ -187,7 +173,7 @@ class _MovieCardState extends State<MovieCard>
                                   Text(
                                     movie.rating.toStringAsFixed(1),
                                     style: const TextStyle(
-                                      fontSize: 13,
+                                      fontSize: TypeScale.label,
                                       fontWeight: FontWeight.bold,
                                       color: Colors.white,
                                     ),
@@ -213,7 +199,7 @@ class _MovieCardState extends State<MovieCard>
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 15,
+                  fontSize: TypeScale.bodyLarge,
                   fontWeight: FontWeight.bold,
                   color: colorScheme.onSurface,
                 ),
@@ -225,7 +211,7 @@ class _MovieCardState extends State<MovieCard>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: TypeScale.label,
                     fontWeight: FontWeight.w600,
                     color: colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
@@ -234,7 +220,7 @@ class _MovieCardState extends State<MovieCard>
               if (hasEpisodeProgress) ...[
                 const SizedBox(height: 6),
                 ClipRSuperellipse(
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(Radii.pill),
                   child: LinearProgressIndicator(
                     value: progressValue,
                     minHeight: 5,
@@ -248,6 +234,11 @@ class _MovieCardState extends State<MovieCard>
                 ),
               ],
             ],
+          ),
+          builder: (context, pressed, child) => SpringPressScale(
+            pressed: pressed,
+            minScale: 0.975,
+            child: child!,
           ),
         ),
       ),

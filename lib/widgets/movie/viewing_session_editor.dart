@@ -260,7 +260,7 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
                             Text(
                               DateFormat('yyyy 年 M 月 d 日').format(_watchedAt),
                               style: TextStyle(
-                                fontSize: 15,
+                                fontSize: TypeScale.bodyLarge,
                                 color: colorScheme.onSurface,
                               ),
                             ),
@@ -336,12 +336,12 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
                       title: Text(
                         '这是一次重看',
                         style: TextStyle(
-                          fontSize: 15,
+                          fontSize: TypeScale.bodyLarge,
                           color: colorScheme.onSurface,
                         ),
                       ),
                       value: _isRewatch,
-                      activeThumbColor: AppTheme.accent,
+                      activeThumbColor: Theme.of(context).colorScheme.accent,
                       onChanged: (v) => setState(() => _isRewatch = v),
                     ),
                   ],
@@ -362,7 +362,7 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
                     icon: const Icon(Icons.check),
                     label: Text(widget.existing == null ? '保存记录' : '保存修改'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.accent,
+                      backgroundColor: Theme.of(context).colorScheme.accent,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
@@ -382,7 +382,7 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
       child: Text(
         text,
         style: TextStyle(
-          fontSize: 14,
+          fontSize: TypeScale.body,
           fontWeight: FontWeight.w600,
           color: Theme.of(context).colorScheme.onSurface,
         ),
@@ -403,13 +403,13 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
         ),
         decoration: ShapeDecoration(
           color: selected
-              ? AppTheme.accent
+              ? Theme.of(context).colorScheme.accent
               : colorScheme.surfaceContainerHighest,
           shape: RoundedSuperellipseBorder(
             borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
             side: BorderSide(
               color: selected
-                  ? AppTheme.accent
+                  ? Theme.of(context).colorScheme.accent
                   : colorScheme.outline.withValues(alpha: 0.2),
             ),
           ),
@@ -417,7 +417,7 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
         child: Text(
           '${mood.emoji ?? ''} ${mood.label}',
           style: TextStyle(
-            fontSize: 13,
+            fontSize: TypeScale.label,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
             color: selected ? Colors.white : colorScheme.onSurface,
           ),
@@ -449,13 +449,13 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
         ),
         decoration: ShapeDecoration(
           color: selected
-              ? AppTheme.accent
+              ? Theme.of(context).colorScheme.accent
               : colorScheme.surfaceContainerHighest,
           shape: RoundedSuperellipseBorder(
             borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
             side: BorderSide(
               color: selected
-                  ? AppTheme.accent
+                  ? Theme.of(context).colorScheme.accent
                   : colorScheme.outline.withValues(alpha: 0.2),
             ),
           ),
@@ -463,7 +463,7 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
         child: Text(
           '${option.emoji} ${option.label}',
           style: TextStyle(
-            fontSize: 13,
+            fontSize: TypeScale.label,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
             color: selected ? Colors.white : colorScheme.onSurface,
           ),
@@ -496,13 +496,13 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
         ),
         decoration: ShapeDecoration(
           color: selected
-              ? AppTheme.accent
+              ? Theme.of(context).colorScheme.accent
               : colorScheme.surfaceContainerHighest,
           shape: RoundedSuperellipseBorder(
             borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
             side: BorderSide(
               color: selected
-                  ? AppTheme.accent
+                  ? Theme.of(context).colorScheme.accent
                   : colorScheme.outline.withValues(alpha: 0.2),
             ),
           ),
@@ -510,7 +510,7 @@ class _ViewingSessionEditorState extends State<_ViewingSessionEditor> {
         child: Text(
           '✏️ 其他',
           style: TextStyle(
-            fontSize: 13,
+            fontSize: TypeScale.label,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
             color: selected ? Colors.white : colorScheme.onSurface,
           ),

@@ -126,7 +126,7 @@ class _MoviesPageState extends State<MoviesPage> {
       _scrollController.animateTo(
         position.minScrollExtent,
         duration: Motion.of(context, Motion.scroll),
-        curve: Curves.easeOutCubic,
+        curve: Motion.fadeIn,
       );
     }
   }
@@ -542,7 +542,7 @@ class _MoviesPageState extends State<MoviesPage> {
               Navigator.of(dialogContext).pop();
               await _deleteWithUndo(context, provider, movie);
             },
-            style: TextButton.styleFrom(foregroundColor: AppTheme.accent),
+            style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.accent),
             child: const Text(
               '删除',
               style: TextStyle(fontWeight: FontWeight.bold),
@@ -722,7 +722,7 @@ class _CollectionStripCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 13,
+                            fontSize: TypeScale.label,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),

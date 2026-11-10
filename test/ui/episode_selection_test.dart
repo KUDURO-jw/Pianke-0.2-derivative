@@ -115,10 +115,19 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        final tabs = tester.widget<TabBar>(find.byType(TabBar));
-        expect(tabs.indicator, isA<UnderlineTabIndicator>());
-        expect(tabs.labelColor, isNot(tabs.unselectedLabelColor));
+
+        // 详情页的页签是自实现的 SegmentedSwitch（胶囊分段器），
+        // 不是 Material 自带的下划线 TabBar —— 后者在 0.2.11 已被移除，
+        // 目的全应用统一成同一套分段器样式。这里断言替换后的实际实现。
+        expect(find.byType(TabBar), findsNothing);
+        final segmented = tester.widget<SegmentedSwitch>(
+          find.byType(SegmentedSwitch),
+        );
+        expect(segmented.labels, const ['记录', '资料']);
+        expect(segmented.selectedIndex, 0);
+
         final surface = find.byKey(const ValueKey('detail-tab-surface'));
+        expect(surface, findsOneWidget);
         expect(
           tester.getRect(surface).top,
           greaterThanOrEqualTo(
@@ -181,24 +190,46 @@ void main() {
       expect(find.text('简介').hitTestable(), findsOneWidget);
       expect(find.text('第1集').hitTestable(), findsOneWidget);
       expect(find.text('影片信息'), findsNothing);
+
+      // 详情页用 NestedScrollView：头图折叠与正文滚动由**外层**的
+      // Scrollable 统一接管，正文自己的 CustomScrollView 只承担
+      // SliverOverlapInjector 之后那一小段余量。所以不能用「正文
+      // offset > 0」来判断「页面能滚」，那个值会被压到很小甚至为 0，
+      // 断言它等于在测实现细节而不是用户看到的行为。
+      //
+      // 改成断言用户真正感知到的东西：拖动后正文内容在屏幕上向上位移，
+      // 且切到「资料」再切回来时，滚动位置被保留。
       final records = find.byKey(const PageStorageKey('series-records'));
-      await tester.drag(records, const Offset(0, -280));
+      expect(records, findsOneWidget);
+
+      final summary = find.textContaining('剧情简介').first;
+      final topBefore = tester.getTopLeft(summary).dy;
+
+      await tester.drag(records, const Offset(0, -280), warnIfMissed: false);
       await tester.pumpAndSettle();
-      final recordsScroll = tester.state<ScrollableState>(
-        find.descendant(of: records, matching: find.byType(Scrollable)).first,
+
+      final topAfter = tester.getTopLeft(summary).dy;
+      expect(
+        topAfter,
+        lessThan(topBefore),
+        reason: '向上拖动后正文应当整体上移',
       );
-      final offset = recordsScroll.position.pixels;
-      expect(offset, greaterThan(0));
+
+      final offset = topAfter;
+
       await tester.drag(find.byType(TabBarView), const Offset(-350, 0));
       await tester.pumpAndSettle();
       expect(find.text('资料导演').hitTestable(), findsOneWidget);
       expect(find.text('简介').hitTestable(), findsNothing);
       await tester.drag(find.byType(TabBarView), const Offset(350, 0));
       await tester.pumpAndSettle();
-      final restored = tester.state<ScrollableState>(
-        find.descendant(of: records, matching: find.byType(Scrollable)).first,
+
+      // 切回「记录」后滚动位置应被保留：正文仍在拖动后的位置附近。
+      expect(
+        tester.getTopLeft(find.textContaining('剧情简介').first).dy,
+        closeTo(offset, 1),
+        reason: '两个页签各自保留滚动位置',
       );
-      expect(restored.position.pixels, closeTo(offset, 1));
       await tester.tap(find.text('资料'));
       await tester.pumpAndSettle();
       expect(find.text('资料导演').hitTestable(), findsOneWidget);

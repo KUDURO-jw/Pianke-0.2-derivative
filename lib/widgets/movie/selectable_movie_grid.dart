@@ -110,7 +110,7 @@ class _SelectableMovieTile extends StatelessWidget {
                           borderRadius: BorderRadius.circular(
                             AppTheme.radiusLarge,
                           ),
-                          side: BorderSide(color: AppTheme.accent, width: 2),
+                          side: BorderSide(color: Theme.of(context).colorScheme.accent, width: 2),
                         ),
                       )
                     : null,
@@ -168,7 +168,7 @@ class _SelectableMovieTile extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: selected
-                        ? AppTheme.accent
+                        ? Theme.of(context).colorScheme.accent
                         : Colors.black.withValues(alpha: 0.45),
                   ),
                   child: SizedBox(

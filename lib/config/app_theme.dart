@@ -132,7 +132,7 @@ class AppTheme {
         ),
         labelColor: scheme.accent,
         unselectedLabelColor: scheme.secondaryText,
-        labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        labelStyle: const TextStyle(fontSize: TypeScale.label, fontWeight: FontWeight.w600),
       ),
       primaryTextTheme: text,
       scaffoldBackgroundColor: scheme.pageSurface,
@@ -589,7 +589,7 @@ class AppPageTransitionsBuilder extends PageTransitionsBuilder {
         ? -1.0
         : 1.0;
     final curved = animation.drive(
-      CurveTween(curve: Curves.easeOutCubic),
+      CurveTween(curve: Motion.fadeIn),
     );
     return SlideTransition(
       position: curved.drive(
@@ -617,7 +617,7 @@ class AppPageTransitionsBuilder extends PageTransitionsBuilder {
     Widget child,
   ) {
     if (MediaQuery.disableAnimationsOf(context)) return child;
-    final curved = animation.drive(CurveTween(curve: Curves.easeOutCubic));
+    final curved = animation.drive(CurveTween(curve: Motion.fadeIn));
     final direction = Directionality.of(context) == TextDirection.rtl
         ? -1.0
         : 1.0;

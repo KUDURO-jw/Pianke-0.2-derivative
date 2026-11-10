@@ -400,7 +400,7 @@ class _DrawPageState extends State<DrawPage>
                       Text(
                         '已选 ${_selectedIds.length} / 共 $_totalCount 部',
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: TypeScale.body,
                           fontWeight: FontWeight.w600,
                           color: colorScheme.onSurface.withValues(alpha: 0.7),
                         ),
@@ -436,7 +436,7 @@ class _DrawPageState extends State<DrawPage>
                         _selectionError!,
                         style: TextStyle(
                           color: colorScheme.error,
-                          fontSize: 12,
+                          fontSize: TypeScale.caption,
                         ),
                       ),
                     ),
@@ -505,7 +505,7 @@ class _DrawPageState extends State<DrawPage>
                 child: Text(
                   _mode.description,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: TypeScale.caption,
                     color: colorScheme.onSurface.withValues(alpha: 0.5),
                   ),
                 ),
@@ -817,7 +817,7 @@ class _DrawPageState extends State<DrawPage>
       child: Column(
         children: [
           const SizedBox(height: AppTheme.spacingSmall),
-          Icon(Icons.looks_3_rounded, size: 42, color: AppTheme.accent),
+          Icon(Icons.looks_3_rounded, size: 42, color: Theme.of(context).colorScheme.accent),
           const SizedBox(height: AppTheme.spacingSmall),
           Text(
             '三选一',
@@ -832,7 +832,7 @@ class _DrawPageState extends State<DrawPage>
             '抽出了这 ${_threeOptions.length} 部，可以先看详情再决定',
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 13,
+              fontSize: TypeScale.label,
               color: colorScheme.onSurface.withValues(alpha: 0.62),
             ),
           ),
@@ -929,7 +929,7 @@ class _DrawPageState extends State<DrawPage>
       child: Column(
         children: [
           const SizedBox(height: AppTheme.spacingLarge),
-          Icon(Icons.celebration, size: 48, color: AppTheme.accent),
+          Icon(Icons.celebration, size: 48, color: Theme.of(context).colorScheme.accent),
           const SizedBox(height: AppTheme.spacingSmall),
           Text(
             '就决定是它了！',
@@ -944,18 +944,14 @@ class _DrawPageState extends State<DrawPage>
             '已写入抽片历史，接下来可以接受、跳过或补记观影',
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 13,
+              fontSize: TypeScale.label,
               color: colorScheme.onSurface.withValues(alpha: 0.62),
             ),
           ),
           const SizedBox(height: AppTheme.spacingLarge),
-          // 抽中结果弹性登场：0.85 → 1.0，带一点回弹。
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0.85, end: 1.0),
-            duration: Motion.of(context, Motion.scroll),
-            curve: Curves.easeOutBack,
-            builder: (context, scale, child) =>
-                Transform.scale(scale: scale, child: child),
+          // 抽中结果弹性登场：从 0.85 弹到 1.0，走弹簧而不是补间曲线，
+          // 这样才有真正的过冲回弹（easeOutBack 只是曲线形状像，不能接初速度）。
+          _SpringReveal(
             child: SizedBox(
               width: 200,
               height: 330,
@@ -1046,7 +1042,7 @@ class _DrawPageState extends State<DrawPage>
                   alpha: 0.55,
                 ),
                 shape: RoundedSuperellipseBorder(
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(Radii.pill),
                   side: BorderSide.none,
                 ),
               ),
@@ -1135,13 +1131,13 @@ class _ModeChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMedium),
         decoration: ShapeDecoration(
           color: selected
-              ? AppTheme.accent
+              ? Theme.of(context).colorScheme.accent
               : colorScheme.surfaceContainerHighest,
           shape: RoundedSuperellipseBorder(
             borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
             side: BorderSide(
               color: selected
-                  ? AppTheme.accent
+                  ? Theme.of(context).colorScheme.accent
                   : colorScheme.outline.withValues(alpha: 0.2),
             ),
           ),
@@ -1149,7 +1145,7 @@ class _ModeChip extends StatelessWidget {
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 13,
+            fontSize: TypeScale.label,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
             color: selected ? Colors.white : colorScheme.onSurface,
           ),
@@ -1178,13 +1174,13 @@ class _FilterButton extends StatelessWidget {
         ),
         decoration: ShapeDecoration(
           color: active
-              ? AppTheme.accent.withValues(alpha: 0.12)
+              ? Theme.of(context).colorScheme.accent.withValues(alpha: 0.12)
               : Colors.transparent,
           shape: RoundedSuperellipseBorder(
             borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
             side: BorderSide(
               color: active
-                  ? AppTheme.accent
+                  ? Theme.of(context).colorScheme.accent
                   : colorScheme.outline.withValues(alpha: 0.3),
             ),
           ),
@@ -1195,15 +1191,15 @@ class _FilterButton extends StatelessWidget {
             Icon(
               Icons.tune,
               size: 16,
-              color: active ? AppTheme.accent : colorScheme.onSurface,
+              color: active ? Theme.of(context).colorScheme.accent : colorScheme.onSurface,
             ),
             const SizedBox(width: 4),
             Text(
               active ? '筛选 · $activeCount' : '筛选',
               style: TextStyle(
-                fontSize: 13,
+                fontSize: TypeScale.label,
                 fontWeight: FontWeight.w600,
-                color: active ? AppTheme.accent : colorScheme.onSurface,
+                color: active ? Theme.of(context).colorScheme.accent : colorScheme.onSurface,
               ),
             ),
           ],
@@ -1260,15 +1256,15 @@ class _PickCard extends StatelessWidget {
                       vertical: 4,
                     ),
                     decoration: ShapeDecoration(
-                      color: AppTheme.accent,
+                      color: Theme.of(context).colorScheme.accent,
                       shadows: [
                         BoxShadow(
-                          color: AppTheme.accent.withValues(alpha: 0.28),
+                          color: Theme.of(context).colorScheme.accent.withValues(alpha: 0.28),
                           blurRadius: 8,
                         ),
                       ],
                       shape: RoundedSuperellipseBorder(
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: BorderRadius.circular(Radii.pill),
                         side: BorderSide.none,
                       ),
                     ),
@@ -1295,7 +1291,7 @@ class _PickCard extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 17,
+                      fontSize: TypeScale.title,
                       fontWeight: FontWeight.bold,
                       color: colorScheme.onSurface,
                     ),
@@ -1307,7 +1303,7 @@ class _PickCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: TypeScale.label,
                         color: colorScheme.onSurface.withValues(alpha: 0.6),
                       ),
                     ),
@@ -1375,6 +1371,58 @@ class _PosterOnly extends StatelessWidget {
                 ),
               ),
       ),
+    );
+  }
+}
+
+/// 结果登场：首次构建时从 [begin] 弹簧到 1.0，只播一次。
+class _SpringReveal extends StatefulWidget {
+  const _SpringReveal({required this.child});
+
+  final Widget child;
+
+  /// 起始缩放比例。
+  static const double begin = 0.85;
+
+  @override
+  State<_SpringReveal> createState() => _SpringRevealState();
+}
+
+class _SpringRevealState extends State<_SpringReveal>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController.unbounded(
+    vsync: this,
+    value: _SpringReveal.begin,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _controller.value = 1.0;
+        return;
+      }
+      _controller.animateWith(
+        SpringSimulation(Motion.revealSpring, _SpringReveal.begin, 1.0, 0),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) =>
+          Transform.scale(scale: _controller.value, child: child),
+      child: widget.child,
     );
   }
 }

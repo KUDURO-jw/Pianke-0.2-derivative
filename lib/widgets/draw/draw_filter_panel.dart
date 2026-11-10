@@ -212,7 +212,7 @@ class _DrawFilterPanelState extends State<DrawFilterPanel> {
             label: sliderValue.round() >= _durationMaxMinutes
                 ? '不限'
                 : _formatDuration(sliderValue.round()),
-            activeColor: AppTheme.accent,
+            activeColor: Theme.of(context).colorScheme.accent,
             onChanged: (v) {
               final minutes = v.round();
               setState(() {
@@ -371,7 +371,7 @@ class _DrawFilterPanelState extends State<DrawFilterPanel> {
         max: 10,
         divisions: 20,
         label: (minRating ?? 0).toStringAsFixed(1),
-        activeColor: AppTheme.accent,
+        activeColor: Theme.of(context).colorScheme.accent,
         onChanged: (v) {
           setState(() {
             _draft = v <= 0
@@ -424,7 +424,7 @@ class _DrawFilterPanelState extends State<DrawFilterPanel> {
               child: Text(
                 tag.name,
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: TypeScale.label,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                   color: selected ? Colors.white : tag.color,
                 ),
@@ -521,7 +521,7 @@ class _Section extends StatelessWidget {
             Text(
               title,
               style: TextStyle(
-                fontSize: 15,
+                fontSize: TypeScale.bodyLarge,
                 fontWeight: FontWeight.w600,
                 color: colorScheme.onSurface,
               ),
@@ -531,8 +531,8 @@ class _Section extends StatelessWidget {
               Text(
                 trailing!,
                 style: TextStyle(
-                  fontSize: 13,
-                  color: AppTheme.accent,
+                  fontSize: TypeScale.label,
+                  color: Theme.of(context).colorScheme.accent,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -569,13 +569,13 @@ class _QuickChip extends StatelessWidget {
         ),
         decoration: ShapeDecoration(
           color: selected
-              ? AppTheme.accent
+              ? Theme.of(context).colorScheme.accent
               : colorScheme.surfaceContainerHighest,
           shape: RoundedSuperellipseBorder(
             borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
             side: BorderSide(
               color: selected
-                  ? AppTheme.accent
+                  ? Theme.of(context).colorScheme.accent
                   : colorScheme.outline.withValues(alpha: 0.2),
             ),
           ),
@@ -583,7 +583,7 @@ class _QuickChip extends StatelessWidget {
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 13,
+            fontSize: TypeScale.label,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
             color: selected ? Colors.white : colorScheme.onSurface,
           ),

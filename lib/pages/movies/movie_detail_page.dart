@@ -1,6 +1,7 @@
 // Modified for the personal UI edition, 2026-11-08. Apache-2.0.
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:random_movie/services/local_data_guard.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -330,6 +331,8 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
       builder: (context, _) {
         final index = controller.index;
         return Container(
+          // 页签条的稳定锚点：测试据此断言它钉在头图下方、不遮挡海报。
+          key: const ValueKey('detail-tab-surface'),
           decoration: BoxDecoration(
             color: scheme.pageSurface,
             border: Border(
@@ -505,7 +508,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
                                   Text(
                                     '豆瓣',
                                     style: TextStyle(
-                                      fontSize: 12,
+                                      fontSize: TypeScale.caption,
                                       color: Colors.white.withValues(
                                         alpha: 0.7,
                                       ),
@@ -567,14 +570,14 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
       decoration: ShapeDecoration(
         color: Colors.white.withValues(alpha: 0.2),
         shape: RoundedSuperellipseBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(Radii.lg),
           side: BorderSide.none,
         ),
       ),
       child: Text(
         text,
         style: const TextStyle(
-          fontSize: 13,
+          fontSize: TypeScale.label,
           color: Colors.white,
           fontWeight: FontWeight.w500,
         ),
@@ -730,7 +733,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: ShapeDecoration(
         color: accent
-            ? AppTheme.accent.withValues(alpha: 0.12)
+            ? Theme.of(context).colorScheme.accent.withValues(alpha: 0.12)
             : colorScheme.surfaceContainerHighest,
         shape: RoundedSuperellipseBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
@@ -740,9 +743,9 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
       child: Text(
         text,
         style: TextStyle(
-          fontSize: 13,
+          fontSize: TypeScale.label,
           fontWeight: FontWeight.w600,
-          color: accent ? AppTheme.accent : colorScheme.onSurface,
+          color: accent ? Theme.of(context).colorScheme.accent : colorScheme.onSurface,
         ),
       ),
     );
@@ -761,7 +764,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: TypeScale.label,
                 color: colorScheme.onSurfaceVariant,
               ),
             ),
@@ -771,7 +774,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
             child: Text(
               value,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: TypeScale.body,
                 height: 1.4,
                 fontWeight: FontWeight.w500,
                 color: colorScheme.onSurface,
@@ -845,7 +848,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
                   Text(
                     '共 ${_sessions.length} 次',
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: TypeScale.label,
                       color: colorScheme.onSurface.withValues(alpha: 0.6),
                     ),
                   ),
@@ -865,9 +868,9 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
                 icon: const Icon(Icons.add, size: 18),
                 label: Text(_sessions.isEmpty ? '记录一次观影' : '再记录一次'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: AppTheme.accent,
+                  foregroundColor: Theme.of(context).colorScheme.accent,
                   side: BorderSide(
-                    color: AppTheme.accent.withValues(alpha: 0.5),
+                    color: Theme.of(context).colorScheme.accent.withValues(alpha: 0.5),
                   ),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
@@ -908,7 +911,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
           '还没有观影记录，看完后记录一次吧',
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: 13,
+            fontSize: TypeScale.label,
             color: colorScheme.onSurface.withValues(alpha: 0.55),
           ),
         ),
@@ -987,7 +990,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
       decoration: ShapeDecoration(
         color: colorScheme.surface.withValues(alpha: 0.72),
         shape: RoundedSuperellipseBorder(
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(Radii.pill),
           side: BorderSide.none,
         ),
       ),
@@ -1092,8 +1095,8 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
               icon: const Icon(Icons.playlist_add, size: 18),
               label: const Text('加入合集'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: AppTheme.accent,
-                side: BorderSide(color: AppTheme.accent.withValues(alpha: 0.5)),
+                foregroundColor: Theme.of(context).colorScheme.accent,
+                side: BorderSide(color: Theme.of(context).colorScheme.accent.withValues(alpha: 0.5)),
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppTheme.spacingMedium,
                   vertical: 10,
@@ -1178,7 +1181,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
                               type: MaterialType.transparency,
                               child: CheckboxListTile(
                                 value: selected.contains(collection.id),
-                                activeColor: AppTheme.accent,
+                                activeColor: Theme.of(context).colorScheme.accent,
                                 title: Text(collection.name),
                                 subtitle: Text('${collection.memberCount} 部'),
                                 onChanged: (checked) {
@@ -1285,7 +1288,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
                 Text(
                   '分集',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: TypeScale.body,
                     fontWeight: FontWeight.w600,
                     color: colorScheme.onSurface.withValues(alpha: 0.75),
                   ),
@@ -1295,7 +1298,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
             Text(
               total > 0 ? '已看 $watchedCount/$total' : '未获取到分集列表',
               style: TextStyle(
-                fontSize: 13,
+                fontSize: TypeScale.label,
                 color: colorScheme.onSurface.withValues(alpha: 0.65),
               ),
             ),
@@ -1317,7 +1320,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
             child: Text(
               '分集内容正在准备…',
               style: TextStyle(
-                fontSize: 13,
+                fontSize: TypeScale.label,
                 color: colorScheme.onSurface.withValues(alpha: 0.65),
               ),
             ),
@@ -1354,7 +1357,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
                     ),
                   ),
                   labelStyle: TextStyle(
-                    fontSize: 13,
+                    fontSize: TypeScale.label,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     color: selected ? Colors.white : colorScheme.onSurface,
                   ),
@@ -1644,7 +1647,7 @@ class _SessionTile extends StatelessWidget {
                     child: Text(
                       DateFormat('yyyy 年 M 月 d 日').format(session.watchedAt),
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: TypeScale.label,
                         fontWeight: FontWeight.w600,
                         color: colorScheme.onSurface,
                       ),
@@ -1659,7 +1662,7 @@ class _SessionTile extends StatelessWidget {
                     vertical: 2,
                   ),
                   decoration: ShapeDecoration(
-                    color: AppTheme.accent.withValues(
+                    color: Theme.of(context).colorScheme.accent.withValues(
                       alpha: isDark ? 0.2 : 0.15,
                     ),
                     shape: RoundedSuperellipseBorder(
@@ -1672,7 +1675,7 @@ class _SessionTile extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
-                      color: AppTheme.accent,
+                      color: Theme.of(context).colorScheme.accent,
                     ),
                   ),
                 ),
@@ -1736,7 +1739,7 @@ class _SessionTile extends StatelessWidget {
             Text(
               '"${session.note}"',
               style: TextStyle(
-                fontSize: 13,
+                fontSize: TypeScale.label,
                 fontStyle: FontStyle.italic,
                 color: colorScheme.onSurface.withValues(alpha: 0.75),
               ),
@@ -1820,11 +1823,10 @@ class _StarIcon extends StatefulWidget {
 
 class _StarIconState extends State<_StarIcon>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _scale = AnimationController(
+  // unbounded：弹簧回弹会越过目标值，用有界控制器会把过冲截掉，
+  // 观感变成「弹到顶就卡住」，失去回弹手感。
+  late final AnimationController _scale = AnimationController.unbounded(
     vsync: this,
-    duration: Motion.panel,
-    lowerBound: 0.0,
-    upperBound: 1.25,
     value: 1.0,
   );
 
@@ -1838,9 +1840,12 @@ class _StarIconState extends State<_StarIcon>
     Haptics.selection();
     widget.onTap();
     if (MediaQuery.disableAnimationsOf(context)) return;
-    await _scale.animateTo(1.25, curve: Curves.easeOut);
+    // 先用一条快曲线顶到 1.25 制造「啪」的一下，再用弹簧回到 1.0。
+    await _scale.animateTo(1.25, duration: Motion.panel, curve: Motion.fade);
     if (!mounted) return;
-    await _scale.animateTo(1.0, curve: Curves.easeOutBack);
+    await _scale.animateWith(
+      SpringSimulation(Motion.revealSpring, _scale.value, 1.0, 0),
+    );
   }
 
   @override

@@ -11,6 +11,7 @@ import 'package:random_movie/models/models.dart';
 import 'package:random_movie/providers/providers.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
 import 'package:random_movie/config/design_tokens.dart';
+import 'package:random_movie/widgets/common/spring_press.dart';
 
 /// Inline draw history list used on the draw entry page.
 class DrawHistoryList extends StatefulWidget {
@@ -192,7 +193,7 @@ class _DrawHistoryCardState extends State<_DrawHistoryCard> {
               '删除',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 12,
+                fontSize: TypeScale.caption,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -210,10 +211,9 @@ class _DrawHistoryCardState extends State<_DrawHistoryCard> {
             ? () => setState(() => _pressed = false)
             : null,
         onTap: widget.onTap,
-      child: AnimatedScale(
-        scale: _pressed ? 0.98 : 1.0,
-        duration: Motion.of(context, Motion.fast),
-        curve: Curves.easeInOut,
+      child: SpringPressScale(
+        pressed: _pressed,
+        minScale: 0.98,
         child: Container(
           decoration: ShapeDecoration(
             shadows: [
@@ -307,7 +307,7 @@ class _DrawHistoryCardState extends State<_DrawHistoryCard> {
                                 'yyyy年M月d日 HH:mm',
                               ).format(record.drawnAt),
                               style: TextStyle(
-                                fontSize: 13,
+                                fontSize: TypeScale.label,
                                 color: colorScheme.onSurface.withValues(
                                   alpha: 0.6,
                                 ),
@@ -329,7 +329,7 @@ class _DrawHistoryCardState extends State<_DrawHistoryCard> {
                             Text(
                               '共 ${record.candidateCount} 部参与',
                               style: TextStyle(
-                                fontSize: 13,
+                                fontSize: TypeScale.label,
                                 color: colorScheme.onSurface.withValues(
                                   alpha: 0.6,
                                 ),

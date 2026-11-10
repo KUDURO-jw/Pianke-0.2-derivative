@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:random_movie/config/api_config.dart';
 import 'package:random_movie/config/app_theme.dart';
+import 'package:random_movie/config/design_tokens.dart';
 import 'package:random_movie/models/models.dart';
 import 'package:random_movie/providers/providers.dart';
 import 'package:random_movie/widgets/collection/collection_icon.dart';
@@ -117,7 +118,7 @@ class _CollectionsPageState extends State<CollectionsPage> {
             child: Text(
               subtitle,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: TypeScale.caption,
                 color: colorScheme.onSurface.withValues(alpha: 0.5),
               ),
             ),
@@ -183,8 +184,8 @@ class _CollectionsPageState extends State<CollectionsPage> {
               onTap: () => Navigator.of(ctx).pop('edit'),
             ),
             ListTile(
-              leading: Icon(Icons.delete_outline, color: AppTheme.accent),
-              title: Text('删除合集', style: TextStyle(color: AppTheme.accent)),
+              leading: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.accent),
+              title: Text('删除合集', style: TextStyle(color: Theme.of(context).colorScheme.accent)),
               onTap: () => Navigator.of(ctx).pop('delete'),
             ),
           ],
@@ -263,7 +264,7 @@ class _CollectionCard extends StatelessWidget {
                       decoration: ShapeDecoration(
                         color: Colors.black.withValues(alpha: 0.35),
                         shape: RoundedSuperellipseBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(Radii.sm),
                           side: BorderSide.none,
                         ),
                       ),
@@ -290,7 +291,7 @@ class _CollectionCard extends StatelessWidget {
                         Text(
                           '${collection.memberCount} 部',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: TypeScale.caption,
                             color: Colors.white.withValues(alpha: 0.8),
                           ),
                         ),
@@ -399,17 +400,17 @@ class _CollectionEditorDialogState extends State<_CollectionEditorDialog> {
                     height: 42,
                     decoration: ShapeDecoration(
                       color: _iconKey == key
-                          ? AppTheme.accent
-                          : AppTheme.accent.withValues(alpha: 0.12),
+                          ? Theme.of(context).colorScheme.accent
+                          : Theme.of(context).colorScheme.accent.withValues(alpha: 0.12),
                       shape: RoundedSuperellipseBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(Radii.sm),
                         side: BorderSide.none,
                       ),
                     ),
                     child: Icon(
                       collectionIcon(key),
                       size: 20,
-                      color: _iconKey == key ? Colors.white : AppTheme.accent,
+                      color: _iconKey == key ? Colors.white : Theme.of(context).colorScheme.accent,
                     ),
                   ),
                 ),
@@ -428,7 +429,7 @@ class _CollectionEditorDialogState extends State<_CollectionEditorDialog> {
             if (name.isEmpty) return;
             Navigator.of(context).pop((name: name, iconKey: _iconKey));
           },
-          style: TextButton.styleFrom(foregroundColor: AppTheme.accent),
+          style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.accent),
           child: const Text(
             '保存',
             style: TextStyle(fontWeight: FontWeight.bold),

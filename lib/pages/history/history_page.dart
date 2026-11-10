@@ -13,6 +13,7 @@ import 'package:random_movie/providers/movie_provider.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
 import 'package:random_movie/widgets/movie/quick_viewing_entry.dart';
 import 'package:random_movie/config/design_tokens.dart';
+import 'package:random_movie/widgets/common/spring_press.dart';
 
 /// 观影记录页面
 class HistoryPage extends StatefulWidget {
@@ -459,7 +460,7 @@ class _StatsDashboard extends StatelessWidget {
                 Text(
                   '常看类型',
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: TypeScale.label,
                     fontWeight: FontWeight.w600,
                     color: colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
@@ -476,7 +477,7 @@ class _StatsDashboard extends StatelessWidget {
                             vertical: 3,
                           ),
                           decoration: ShapeDecoration(
-                            color: AppTheme.accent.withValues(alpha: 0.12),
+                            color: Theme.of(context).colorScheme.accent.withValues(alpha: 0.12),
                             shape: RoundedSuperellipseBorder(
                               borderRadius: BorderRadius.circular(6),
                               side: BorderSide.none,
@@ -485,8 +486,8 @@ class _StatsDashboard extends StatelessWidget {
                           child: Text(
                             '${genre.key} ${genre.value}',
                             style: TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.accent,
+                              fontSize: TypeScale.caption,
+                              color: Theme.of(context).colorScheme.accent,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -619,7 +620,7 @@ class _HistoryCalendarView extends StatelessWidget {
                         weekday,
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontSize: 15,
+                          fontSize: TypeScale.bodyLarge,
                           fontWeight: FontWeight.w500,
                           color: Theme.of(
                             context,
@@ -790,7 +791,7 @@ class _HistoryCalendarCell extends StatelessWidget {
       color: hasMovie
           ? Colors.white
           : (isToday ? colorScheme.primary : textColor),
-      fontSize: 15,
+      fontSize: TypeScale.bodyLarge,
       fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
       shadows: hasMovie
           ? const [
@@ -810,7 +811,7 @@ class _HistoryCalendarCell extends StatelessWidget {
         onTap: onTap,
         child: AnimatedContainer(
           duration: Motion.of(context, Motion.fast),
-          curve: Curves.easeOut,
+          curve: Motion.fade,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(cellRadius),
             border: isToday
@@ -898,7 +899,7 @@ class _HistoryCalendarCell extends StatelessWidget {
                     decoration: ShapeDecoration(
                       color: Colors.black.withValues(alpha: 0.55),
                       shape: RoundedSuperellipseBorder(
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: BorderRadius.circular(Radii.pill),
                         side: BorderSide.none,
                       ),
                     ),
@@ -1116,7 +1117,7 @@ class _SessionTimelineCardState extends State<_SessionTimelineCard> {
               '删除',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 12,
+                fontSize: TypeScale.caption,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -1134,10 +1135,9 @@ class _SessionTimelineCardState extends State<_SessionTimelineCard> {
             ? () => setState(() => _pressed = false)
             : null,
         onTap: widget.onTap,
-      child: AnimatedScale(
-        scale: _pressed ? 0.985 : 1.0,
-        duration: Motion.of(context, Motion.fast),
-        curve: Curves.easeOut,
+      child: SpringPressScale(
+        pressed: _pressed,
+        minScale: 0.985,
         child: Container(
           decoration: ShapeDecoration(
             shadows: [
@@ -1219,7 +1219,7 @@ class _SessionTimelineCardState extends State<_SessionTimelineCard> {
                                 vertical: 2,
                               ),
                               decoration: ShapeDecoration(
-                                color: AppTheme.accent.withValues(
+                                color: Theme.of(context).colorScheme.accent.withValues(
                                   alpha: isDark ? 0.2 : 0.15,
                                 ),
                                 shape: RoundedSuperellipseBorder(
@@ -1232,7 +1232,7 @@ class _SessionTimelineCardState extends State<_SessionTimelineCard> {
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
-                                  color: AppTheme.accent,
+                                  color: Theme.of(context).colorScheme.accent,
                                 ),
                               ),
                             ),
@@ -1251,7 +1251,7 @@ class _SessionTimelineCardState extends State<_SessionTimelineCard> {
                           Text(
                             DateFormat('yyyy年M月d日').format(session.watchedAt),
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: TypeScale.label,
                               color: colorScheme.onSurface.withValues(
                                 alpha: 0.6,
                               ),
@@ -1269,7 +1269,7 @@ class _SessionTimelineCardState extends State<_SessionTimelineCard> {
                               Text(
                                 chip,
                                 style: TextStyle(
-                                  fontSize: 12,
+                                  fontSize: TypeScale.caption,
                                   color: colorScheme.onSurface.withValues(
                                     alpha: 0.7,
                                   ),
@@ -1285,7 +1285,7 @@ class _SessionTimelineCardState extends State<_SessionTimelineCard> {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 13,
+                            fontSize: TypeScale.label,
                             fontStyle: FontStyle.italic,
                             color: colorScheme.onSurface.withValues(alpha: 0.6),
                             height: 1.4,
@@ -1410,7 +1410,7 @@ class _TodayDotState extends State<_TodayDot>
 
     return FadeTransition(
       opacity: Tween<double>(begin: 0.4, end: 1.0).animate(
-        CurvedAnimation(parent: controller, curve: Curves.easeInOut),
+        CurvedAnimation(parent: controller, curve: Motion.fade),
       ),
       child: dot,
     );

@@ -112,10 +112,10 @@ class _PrimaryDrawCardState extends State<_PrimaryDrawCard>
             decoration: ShapeDecoration(
               color: scheme.blockSurface,
               shape: RoundedSuperellipseBorder(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(Radii.lg),
               ),
             ),
-            child: Icon(Icons.casino_outlined, size: 30, color: scheme.accent),
+            child: Icon(Icons.casino_outlined, size: 30, color: Theme.of(context).colorScheme.accent),
           ),
           const SizedBox(height: Spacing.xxl),
           Text('今晚看什么？', style: Theme.of(context).textTheme.headlineMedium),
@@ -131,7 +131,7 @@ class _PrimaryDrawCardState extends State<_PrimaryDrawCard>
             width: double.infinity,
             child: FadeTransition(
               opacity: Tween<double>(begin: 1.0, end: 0.85).animate(
-                CurvedAnimation(parent: _breath, curve: Curves.easeInOut),
+                CurvedAnimation(parent: _breath, curve: Motion.fade),
               ),
               child: FilledButton.icon(
                 onPressed: widget.onTap,

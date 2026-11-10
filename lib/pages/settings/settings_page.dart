@@ -397,7 +397,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
-                style: TextButton.styleFrom(foregroundColor: AppTheme.accent),
+                style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.accent),
                 child: const Text(
                   '确认合并',
                   style: TextStyle(fontWeight: FontWeight.bold),
@@ -425,7 +425,7 @@ class _SectionHeader extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          fontSize: 13,
+          fontSize: TypeScale.label,
           fontWeight: FontWeight.w600,
           color: Theme.of(
             context,
@@ -506,7 +506,7 @@ class _SettingsTile extends StatelessWidget {
               decoration: ShapeDecoration(
                 color: iconColor.withValues(alpha: isDark ? 0.2 : 0.12),
                 shape: RoundedSuperellipseBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(Radii.xs),
                   side: BorderSide.none,
                 ),
               ),
@@ -520,7 +520,7 @@ class _SettingsTile extends StatelessWidget {
                   Text(
                     title,
                     style: TextStyle(
-                      fontSize: 15,
+                      fontSize: TypeScale.bodyLarge,
                       fontWeight: FontWeight.w500,
                       color: colorScheme.onSurface,
                     ),

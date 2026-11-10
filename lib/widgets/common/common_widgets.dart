@@ -61,7 +61,7 @@ class AppToast {
                   message,
                   style: TextStyle(
                     color: textColor,
-                    fontSize: 14,
+                    fontSize: TypeScale.body,
                     fontWeight: FontWeight.w500,
                   ),
                 ),

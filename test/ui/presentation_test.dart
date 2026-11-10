@@ -171,36 +171,28 @@ void main() {
         tester.widget<MoviePoster>(find.byType(MoviePoster)),
         same(poster),
       );
-      expect(
-        tester
-            .widget<ScaleTransition>(
+      // 按压反馈现在由 SpringPressScale 提供（内部是 Transform.scale + 弹簧）。
+      // 注意不能用 Transform 的 matrix.getMaxScaleOnAxis() 判断缩放：
+      // 那个方法取的是整列范数，z 轴恒为 1.0，xy 缩小也只会返回 1.0。
+      // 直接看渲染出来的矩形宽度最可靠。
+      double cardScale() {
+        final width = tester
+            .getRect(
               find
                   .descendant(
                     of: find.byType(MovieCard),
-                    matching: find.byType(ScaleTransition),
+                    matching: find.byType(Column),
                   )
                   .first,
             )
-            .scale
-            .value,
-        lessThan(1),
-      );
+            .width;
+        return width / 140; // 外层 SizedBox 固定 140 宽
+      }
+
+      expect(cardScale(), lessThan(1));
       await gesture.cancel();
       await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<ScaleTransition>(
-              find
-                  .descendant(
-                    of: find.byType(MovieCard),
-                    matching: find.byType(ScaleTransition),
-                  )
-                  .first,
-            )
-            .scale
-            .value,
-        1,
-      );
+      expect(cardScale(), closeTo(1, 0.01));
       expect(tester.takeException(), isNull);
     },
   );
@@ -431,7 +423,12 @@ void main() {
       expect(find.byType(MovieDetailPage), findsOneWidget);
       expect(movies.detailReads, 0);
       expect(movies.sessionReads, 0);
-      expect(find.byType(CupertinoPageTransition), findsOneWidget);
+      // 详情页转场是本项目自实现的 SlideTransition（右侧滑入），
+      // 刻意不用 Cupertino 内置的 CupertinoPageTransition ——
+      // 后者会带一层整页边缘阴影，进出详情页时每帧重绘开销明显更高。
+      // 因此这里断言实际实现，而不是断言某个框架内置类型的名字。
+      expect(find.byType(CupertinoPageTransition), findsNothing);
+      expect(find.byType(SlideTransition), findsWidgets);
       final heroes = tester.widgetList<Hero>(
         find.byType(Hero, skipOffstage: false),
       );

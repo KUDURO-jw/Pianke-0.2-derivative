@@ -81,7 +81,7 @@ class _FloatingNavBarState extends State<FloatingNavBar>
 
   void _pressStart() {
     if (MediaQuery.disableAnimationsOf(context)) return;
-    _swell.animateTo(1.0, curve: Curves.easeOut);
+    _swell.animateTo(1.0, curve: Motion.fade);
   }
 
   void _pressEnd() {
@@ -412,7 +412,7 @@ class _DockTrackState extends State<_DockTrack> with TickerProviderStateMixin {
                   0.0,
                   (widget.items.length - 1).toDouble(),
                 );
-                final lift = Curves.easeOutCubic.transform(_press.value);
+                final lift = Motion.fadeIn.transform(_press.value);
                 final preview = _dragging
                     ? location.round()
                     : widget.currentIndex;

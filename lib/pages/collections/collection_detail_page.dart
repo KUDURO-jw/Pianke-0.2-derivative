@@ -216,7 +216,7 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
               Text(
                 '共 ${_movies.length} 部',
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: TypeScale.label,
                   color: colorScheme.onSurface.withValues(alpha: 0.55),
                 ),
               ),
@@ -225,7 +225,7 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
                 Text(
                   '长按可移出合集',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: TypeScale.caption,
                     color: colorScheme.onSurface.withValues(alpha: 0.4),
                   ),
                 ),
@@ -298,13 +298,13 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
               width: 42,
               height: 42,
               decoration: ShapeDecoration(
-                color: AppTheme.accent.withValues(alpha: 0.14),
+                color: Theme.of(context).colorScheme.accent.withValues(alpha: 0.14),
                 shape: RoundedSuperellipseBorder(
                   borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                   side: BorderSide.none,
                 ),
               ),
-              child: const Icon(Icons.casino_rounded, color: AppTheme.accent),
+              child: Icon(Icons.casino_rounded, color: Theme.of(context).colorScheme.accent),
             ),
             const SizedBox(width: AppTheme.spacingMedium),
             Expanded(
@@ -321,7 +321,7 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
                   Text(
                     '${_movies.length} 部候选，适合按场景快速决定今晚看什么',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: TypeScale.caption,
                       color: colorScheme.onSurface.withValues(alpha: 0.58),
                     ),
                   ),
@@ -356,7 +356,7 @@ class _CollectionDetailPageState extends State<CollectionDetailPage> {
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: TextButton.styleFrom(foregroundColor: AppTheme.accent),
+            style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.accent),
             child: const Text(
               '移出',
               style: TextStyle(fontWeight: FontWeight.bold),
@@ -545,7 +545,7 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
                   const SizedBox(width: AppTheme.spacingSmall),
                   Text(
                     '已选 ${_selected.length}',
-                    style: TextStyle(fontSize: 13, color: AppTheme.accent),
+                    style: TextStyle(fontSize: TypeScale.label, color: Theme.of(context).colorScheme.accent),
                   ),
                   const Spacer(),
                   IconButton(

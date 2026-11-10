@@ -577,11 +577,11 @@ class _AddMoviePageState extends State<AddMoviePage>
                             width: 52,
                             height: 52,
                             decoration: BoxDecoration(
-                              color: AppTheme.accent.withValues(alpha: 0.9),
+                              color: Theme.of(context).colorScheme.accent.withValues(alpha: 0.9),
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppTheme.accent.withValues(alpha: 0.4),
+                                  color: Theme.of(context).colorScheme.accent.withValues(alpha: 0.4),
                                   blurRadius: 12,
                                   spreadRadius: 2,
                                 ),
@@ -744,7 +744,7 @@ class _AddMoviePageState extends State<AddMoviePage>
               ),
               const SizedBox(height: 10),
               ClipRSuperellipse(
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(Radii.pill),
                 child: LinearProgressIndicator(
                   value: null,
                   minHeight: 6,
@@ -773,7 +773,7 @@ class _AddMoviePageState extends State<AddMoviePage>
         decoration: ShapeDecoration(
           color: color,
           shape: RoundedSuperellipseBorder(
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(Radii.pill),
             side: BorderSide.none,
           ),
         ),
@@ -928,7 +928,7 @@ class _AddMoviePageState extends State<AddMoviePage>
           ),
           const SizedBox(height: AppTheme.spacingMedium),
           ClipRSuperellipse(
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(Radii.pill),
             child: LinearProgressIndicator(
               value: progressValue,
               minHeight: 8,
