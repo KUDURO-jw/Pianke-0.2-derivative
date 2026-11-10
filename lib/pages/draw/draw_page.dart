@@ -726,8 +726,11 @@ class _DrawPageState extends State<DrawPage>
 
     if (MediaQuery.disableAnimationsOf(context)) {
       // 减少动效：不转，直接定格到结果。
-      _displayIndex = state.resultIndex;
-      _revealStarted = true;
+      // 必须 setState：这里改的是驱动渲染的字段，不刷新会停在上一张卡。
+      setState(() {
+        _displayIndex = state.resultIndex;
+        _revealStarted = true;
+      });
       Haptics.success();
       Future.delayed(Motion.resultHold, _onAnimationComplete);
       return;
@@ -738,6 +741,14 @@ class _DrawPageState extends State<DrawPage>
       resultIndex: state.resultIndex,
     );
     _hapticGate.reset();
+
+    // 上一轮的控制器必须先回收，否则每次「跳过，再抽一次」都漏一个 Ticker。
+    _spinController?.dispose();
+
+    // 新一轮开奖从「未揭晓」起手，这样 trigger 的 false→true 边沿才会触发
+    // _RevealPop。不在这里复位的话，第二次抽片时 trigger 一直是 true，
+    // didUpdateWidget 判定「没有变化」，弹性放大不会播放。
+    _revealStarted = false;
 
     final controller = AnimationController(
       vsync: this,
@@ -879,15 +890,14 @@ class _DrawPageState extends State<DrawPage>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          AnimatedSwitcher(
-            duration: Motion.of(context, Motion.fast),
-            child: _RevealPop(
-              key: ValueKey('reveal-$_revealStarted'),
-              trigger: _revealStarted,
-              child: DrawShuffleCard(
-                movie: currentMovie,
-                shuffleCount: _shuffleCount,
-              ),
+          // 去掉原来的 AnimatedSwitcher 与随 trigger 变化的 ValueKey：
+          // 开奖的弹性反馈由 _RevealPop 自己负责，外面再套一层会让它在
+          // trigger 翻转的瞬间被销毁重建，弹簧根本没机会跑。
+          _RevealPop(
+            trigger: _revealStarted,
+            child: DrawShuffleCard(
+              movie: currentMovie,
+              shuffleCount: _shuffleCount,
             ),
           ),
           const SizedBox(height: AppTheme.spacingLarge),
@@ -1057,6 +1067,11 @@ class _DrawPageState extends State<DrawPage>
   }
 
   void _retry() {
+    // 重抽前先停掉可能还在跑的转盘，并复位揭晓标记；
+    // 否则 _RevealPop 拿到的 trigger 仍是 true，下一轮开奖不会再弹。
+    _spinController?.stop();
+    _spinController?.dispose();
+    _spinController = null;
     setState(() {
       _state = const DrawSelecting();
       _result = null;
@@ -1064,6 +1079,7 @@ class _DrawPageState extends State<DrawPage>
       _recordId = null;
       _shuffleCount = 0;
       _displayIndex = 0;
+      _revealStarted = false;
     });
   }
 
@@ -1367,9 +1383,16 @@ class _PosterOnly extends StatelessWidget {
 ///
 /// 对齐 FlClash 底部导航的按压反馈：整个元素用弹簧物理放大，
 /// 固定像素增量（而非固定百分比），带轻微过冲回弹。
+///
+/// 两个曾经的致命疏漏（导致这个动效完全没生效）：
+/// 1. 调用点曾给本组件挂 `key: ValueKey('reveal-$trigger')`。`trigger`
+///    从 false 变 true 时 key 跟着变，Flutter 视为**不同 Widget**，
+///    销毁旧 State 重建新的 —— 新 State 走 `initState`，
+///    `didUpdateWidget` 永远不触发，`_pop()` 一次都没跑到。
+/// 2. `AnimationController` 没设 `upperBound`（默认 1.0），而放大目标是 1.05，
+///    `_tick` 里的 clamp 会把它夹回 1.0，即使跑起来也是全程无变化。
 class _RevealPop extends StatefulWidget {
   const _RevealPop({
-    super.key,
     required this.trigger,
     required this.child,
   });
@@ -1384,21 +1407,15 @@ class _RevealPop extends StatefulWidget {
 
 class _RevealPopState extends State<_RevealPop>
     with SingleTickerProviderStateMixin {
-  // FlClash ElasticPress 的按压弹簧参数（damping ratio 0.593，轻微过冲）。
-  static final SpringDescription _spring =
-      SpringDescription.withDampingRatio(
-        mass: 1,
-        stiffness: 311,
-        ratio: 0.593,
-      );
-
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: Motion.reveal,
+    // 必须高于放大目标，否则目标会被夹到 1.0，放大肉眼不可见。
+    upperBound: 1.25,
   );
 
   // 目标放大比例：DrawShuffleCard 最长边 320dp，固定增量 16dp → 1.05。
-  double get _growth => 1.05;
+  static const double _growth = 1.05;
 
   @override
   void initState() {
@@ -1416,11 +1433,11 @@ class _RevealPopState extends State<_RevealPop>
 
   Future<void> _pop() async {
     if (MediaQuery.disableAnimationsOf(context)) return;
-    // 放大阶段：快速弹到目标（easeOut），松开回位走弹簧物理，带轻微过冲。
-    await _controller.animateTo(_growth, curve: Curves.easeOut);
+    // 放大阶段：快速弹到目标（fade 曲线），松开回位走弹簧物理，带轻微过冲。
+    await _controller.animateTo(_growth, curve: Motion.fade);
     if (!mounted) return;
     await _controller.animateWith(
-      SpringSimulation(_spring, _growth, 1.0, 0),
+      SpringSimulation(Motion.pressSpring, _growth, 1.0, 0),
     );
   }
 

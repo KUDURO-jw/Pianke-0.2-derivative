@@ -307,20 +307,62 @@ class Motion {
   /// 抽片洗牌的单步间隔。
   static const Duration shuffleTick = Duration(milliseconds: 100);
 
-  /// 抽片转盘的完整时长（一个控制器跑完）。
-  static const Duration drawSpin = Duration(milliseconds: 2600);
 
-  /// 抽片转盘曲线：前期快、末尾明显减速，观感「转不动了才停」。
-  static const Curve spinCurve = Curves.easeOutQuart;
+  /// 抽片转盘的完整时长（一个控制器跑完）。
+  ///
+  /// 从 2600ms 压到 1600ms：2600ms 加上揭晓停留，用户要纯等 3 秒以上，
+  /// 而抽片是一个「快速给出答案」的动作，不该拖成仪式。
+  static const Duration drawSpin = Duration(milliseconds: 1600);
+
+  /// 抽片转盘曲线。
+  ///
+  /// 不用 `easeOutQuart`：它在 t=0 的导数为 4，配合 96~144 的总步数，
+  /// 起步瞬间约 147 步/秒 —— 每帧都在换卡，洗牌退化成了「闪烁」。
+  /// 这条曲线前段接近线性（能看清方向），末端强减速（明确「转不动了」）。
+  static const Curve spinCurve = Cubic(0.12, 0.62, 0.10, 1.0);
 
   /// 抽片揭晓后停留多久再进入结果页。
-  static const Duration resultHold = Duration(milliseconds: 500);
+  static const Duration resultHold = Duration(milliseconds: 400);
 
   /// 输入防抖：停止输入多久后才真正查询。
   static const Duration debounce = Duration(milliseconds: 250);
 
   static const Curve standard = Curves.easeOutCubic;
   static const Curve emphasized = Cubic(0.2, 0.0, 0.0, 1.0);
+
+  // ── 物理语言：位移与缩放走弹簧，透明度与颜色走曲线 ──
+  //
+  // 一条规则能消掉现在的手感割裂：底栏用弹簧、抽片用补间，同一个应用两套语言。
+  // `Transform` 相关的动画优先用下面的 SpringDescription——弹簧能接收初速度，
+  // 曲线不能，所以拖动 / 甩动 / 按压这类交互必须走弹簧才跟手。
+
+  /// 按压回弹：按下放大、松开回位。参数沿用悬浮底栏，轻微过冲。
+  static final SpringDescription pressSpring =
+      SpringDescription.withDampingRatio(mass: 1, stiffness: 311, ratio: 0.593);
+
+  /// 吸附归位：位置对齐到整数格，不过冲。用于底栏选中块、分页吸附。
+  static final SpringDescription settleSpring = SpringDescription(
+    mass: 1,
+    stiffness: 350,
+    damping: 30,
+  );
+
+  /// 开奖弹起：抽片定格、结果登场。回弹明显但收得住。
+  static final SpringDescription revealSpring =
+      SpringDescription.withDampingRatio(mass: 1, stiffness: 180, ratio: 0.72);
+
+  /// 快切：几乎无过冲，用于同一元素的状态切换。
+  static final SpringDescription snapSpring =
+      SpringDescription.withDampingRatio(mass: 1, stiffness: 500, ratio: 0.9);
+
+  /// 纯淡入淡出（没有位移语义）。
+  static const Curve fade = Curves.easeOut;
+
+  /// 带位移的淡入。
+  static const Curve fadeIn = Curves.easeOutCubic;
+
+  /// 页面间共享元素。底栏以外的位置切换用这条。
+  static const Curve shared = Curves.easeInOutCubic;
 
   /// 回弹规格，参数取自悬浮底栏现有配置。
   static const SpringDescription spring = SpringDescription(

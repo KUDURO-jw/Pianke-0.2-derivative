@@ -1350,39 +1350,69 @@ class _TodayDot extends StatefulWidget {
 
 class _TodayDotState extends State<_TodayDot>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: Motion.breath,
-  )..repeat(reverse: true);
+  AnimationController? _controller;
+
+  /// 是否已经按当前的「减少动效」设置初始化过控制器。
+  ///
+  /// 不能只比对布尔值：它初值就是 false，与默认的「不减少动效」相同，
+  /// `didChangeDependencies` 会误判为「没有变化」而直接返回，
+  /// 于是控制器永远不会被创建（或永远不会被销毁）。
+  bool _initialized = false;
+  bool _reduceMotion = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduce = MediaQuery.disableAnimationsOf(context);
+    if (_initialized && reduce == _reduceMotion) return;
+    _initialized = true;
+    _reduceMotion = reduce;
+
+    if (reduce) {
+      // 「今天」这个小圆点是全仓唯一常驻无限循环的动画。
+      // 用户开了「移除动画」就不该继续脉动，直接停掉并保持常量亮度。
+      _controller?.dispose();
+      _controller = null;
+    } else {
+      _controller?.dispose();
+      _controller = AnimationController(vsync: this, duration: Motion.breath)
+        ..repeat(reverse: true);
+    }
+  }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final dot = Container(
+      width: 7,
+      height: 7,
+      decoration: ShapeDecoration(
+        color: colorScheme.primary,
+        shape: const CircleBorder(),
+        shadows: [
+          BoxShadow(
+            color: colorScheme.primary.withValues(alpha: 0.5),
+            blurRadius: 4,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+    );
+
+    final controller = _controller;
+    if (controller == null) return dot;
+
     return FadeTransition(
       opacity: Tween<double>(begin: 0.4, end: 1.0).animate(
-        CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+        CurvedAnimation(parent: controller, curve: Curves.easeInOut),
       ),
-      child: Container(
-        width: 7,
-        height: 7,
-        decoration: ShapeDecoration(
-          color: colorScheme.primary,
-          shape: const CircleBorder(),
-          shadows: [
-            BoxShadow(
-              color: colorScheme.primary.withValues(alpha: 0.5),
-              blurRadius: 4,
-              spreadRadius: 1,
-            ),
-          ],
-        ),
-      ),
+      child: dot,
     );
   }
 }

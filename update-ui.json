@@ -1,17 +1,18 @@
 {
-  "versionName": "0.2.20",
-  "versionCode": 26,
-  "title": "片刻·焕新版 0.2.20",
+  "versionName": "0.2.21",
+  "versionCode": 27,
+  "title": "片刻·焕新版 0.2.21",
   "changelog": [
-    "片库加载改为骨架屏，不再转圈，加载完成页面不跳动",
-    "海报渐显出现，占位色取自海报主色",
-    "删除影片后 5 秒内可撤销",
-    "设置页新增触觉反馈开关",
-    "换时区后观影日历不再错位一天",
-    "防止老版本设备覆盖云端新数据",
-    "云同步覆盖前先校验，避免误删本地刚存的内容"
+    "修复抽片定格时的弹性反馈完全失效，开奖放大与回弹现在会真正播放",
+    "转盘从 2.6 秒压到 1.6 秒，曲线改为前段可辨方向、末端强减速，不再每帧闪一张",
+    "洗牌时每张卡带轻微纵向位移，换卡看起来是从一个方向流过去",
+    "新增一套物理语言：位移与缩放走弹簧，透明度与颜色走曲线，全应用统一取值",
+    "修复「跳过，再抽一次」每轮泄漏一个动画控制器",
+    "修复开启「移除动画」后抽片可能停在上一张卡",
+    "修复第二次抽片时开奖弹性不再播放",
+    "「今天」呼吸圆点改为遵守「移除动画」开关"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.20-ui.2/Pianke-UI-arm64-release.apk",
-  "sha256": "631b5d100180a8ce90276112a42bf16eb7e51997fbc0dbfb782cc43b4a7a4613",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.21-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "573fc786543297e5cf8e83ca26aa8f35752bcd148690c12b1a42e0b3d181327e",
   "forceUpdate": false
 }
