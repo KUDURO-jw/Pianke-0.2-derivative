@@ -56,7 +56,7 @@ class DoubanSearchResult {
 /// 影片爬取服务
 class MovieScraperService {
   final Dio _dio;
-  final _CookieJarLite _doubanCookieJar = _CookieJarLite();
+  final DoubanCookieJar _doubanCookieJar = DoubanCookieJar();
 
   static const String _cookiePrefsKey = 'movie_app_douban_cookies';
   bool _cookieLoaded = false;
@@ -467,11 +467,31 @@ class MovieScraperService {
   Future<_FetchedMoviePage> _fetchMoviePage(String targetUrl) async {
     final cookieJar = _doubanCookieJar;
     final headers = _buildMovieHeaders(targetUrl);
-    final firstResponse = await _getPlainHtml(
-      targetUrl,
-      headers: headers,
-      cookieJar: cookieJar,
-    );
+
+    // 第一次尝试可能带着一份失效的挑战凭证（dbsawcv1 只有 120 秒）。
+    // 豆瓣对过期凭证的回应不稳定：有时 403，有时直接再弹挑战页。
+    // 带 cookie 失败时，先清空本地 cookie 再重试一次——挑战流程本身
+    // 不需要任何既有 cookie，重来一遍通常就能拿到新凭证。
+    Response<String>? firstResponse;
+    try {
+      firstResponse = await _getPlainHtml(
+        targetUrl,
+        headers: headers,
+        cookieJar: cookieJar,
+      );
+    } on ScraperException catch (error) {
+      if (!error.message.contains('403')) rethrow;
+      // 清掉可能已失效的凭证后重试一次。
+      cookieJar.clear();
+      _cookieDirty = true;
+      unawaited(_persistCookie());
+      firstResponse = await _getPlainHtml(
+        targetUrl,
+        headers: headers,
+        cookieJar: cookieJar,
+      );
+    }
+
     final firstHtml = firstResponse.data ?? '';
 
     if (firstHtml.isEmpty) {
@@ -566,7 +586,7 @@ class MovieScraperService {
   Future<Response<String>> _getPlainHtml(
     String url, {
     required Map<String, String> headers,
-    _CookieJarLite? cookieJar,
+    DoubanCookieJar? cookieJar,
   }) async {
     await _ensureCookieLoaded();
     final requestHeaders = Map<String, String>.from(headers);
@@ -984,25 +1004,47 @@ class ScraperException implements Exception {
   String toString() => message;
 }
 
-class _CookieJarLite {
+class DoubanCookieJar {
   final Map<String, String> _cookies = {};
+
+  /// 每个 cookie 的过期时间（绝对时间）。没有条目表示会话级 cookie。
+  ///
+  /// 豆瓣的挑战凭证 `dbsawcv1` 只有 **120 秒** 有效期（响应头 `Max-Age=120`）。
+  /// 原实现完全不解析过期时间，把 cookie 永久存进 SharedPreferences，
+  /// 之后每次请求都带上这份早已失效的凭证——豆瓣看到过期凭证会直接
+  /// 返回 403 或重新弹挑战页，表现就是「一直 403，怎么重试都没用」。
+  final Map<String, DateTime> _expiry = {};
 
   bool get hasCookies => _cookies.isNotEmpty;
 
+  /// 清空所有 cookie。挑战凭证过期后重试前调用。
+  void clear() {
+    _cookies.clear();
+    _expiry.clear();
+  }
+
   String buildHeader() {
+    _purgeExpired();
     return _cookies.entries
         .map((entry) => '${entry.key}=${entry.value}')
         .join('; ');
   }
 
   /// 序列化为可持久化的字符串（`k=v; k2=v2`）。
+  ///
+  /// 只写仍然有效的 cookie：过期的没有保存价值，带过去反而有害。
   String serialize() {
+    _purgeExpired();
     return _cookies.entries
         .map((entry) => '${entry.key}=${entry.value}')
         .join('; ');
   }
 
   /// 从持久化字符串恢复。
+  ///
+  /// 恢复出来的 cookie 没有过期信息，按「会话级」处理：本次启动可用，
+  /// 但会在下一次 `absorb` 拿到带 `Max-Age` 的新值时被覆盖。
+  /// 这样即使旧版本把过期 cookie 写进了 prefs，升级后也不会永远卡住。
   void restore(String? raw) {
     if (raw == null || raw.trim().isEmpty) return;
     for (final part in raw.split(';')) {
@@ -1017,12 +1059,33 @@ class _CookieJarLite {
     }
   }
 
+  /// 移除已过期的 cookie。每次构建请求头前调用。
+  ///
+  /// 判定用 `!isAfter(now)` 而不是 `isBefore(now)`：
+  /// `Max-Age=0` 算出来的过期时间恰好等于 `now`，用 `isBefore` 会漏掉
+  /// 这种「立即失效」的凭证——而豆瓣删除 cookie 正是用 `Max-Age=0`。
+  void _purgeExpired() {
+    if (_expiry.isEmpty) return;
+    // 统一用 UTC 比较：Expires 解析出来是 UTC，Max-Age 是相对当前时刻，
+    // 混着本地时间比较会在跨时区时判错（比如 UTC+8 会多算 8 小时）。
+    final now = DateTime.now().toUtc();
+    final dead = _expiry.entries
+        .where((entry) => !entry.value.toUtc().isAfter(now))
+        .map((entry) => entry.key)
+        .toList(growable: false);
+    for (final name in dead) {
+      _cookies.remove(name);
+      _expiry.remove(name);
+    }
+  }
+
   void absorb(Headers headers) {
     final values = headers.map['set-cookie'];
     if (values == null || values.isEmpty) return;
 
     for (final item in values) {
-      final firstPart = item.split(';').first.trim();
+      final segments = item.split(';');
+      final firstPart = segments.first.trim();
       if (firstPart.isEmpty) continue;
 
       final equalsIndex = firstPart.indexOf('=');
@@ -1032,7 +1095,86 @@ class _CookieJarLite {
       final value = firstPart.substring(equalsIndex + 1).trim();
       if (name.isEmpty) continue;
 
+      // 服务端删除 cookie 的约定：值为空且带过期时间。
+      if (value.isEmpty) {
+        _cookies.remove(name);
+        _expiry.remove(name);
+        continue;
+      }
+
       _cookies[name] = value;
+
+      // 解析有效期，决定这颗 cookie 能活多久。
+      final expiry = _parseExpiry(segments.skip(1));
+      if (expiry == null) {
+        // 没有有效期声明 = 会话级，本次运行内有效。
+        _expiry.remove(name);
+      } else {
+        _expiry[name] = expiry;
+      }
+    }
+  }
+
+  /// 从 `Set-Cookie` 的属性段里读 `Max-Age` / `Expires`。
+  ///
+  /// `Max-Age` 优先（RFC 6265）。返回 null 表示会话级 cookie。
+  static DateTime? _parseExpiry(Iterable<String> attributes) {
+    int? maxAge;
+    DateTime? expires;
+
+    for (final attr in attributes) {
+      final text = attr.trim();
+      final lower = text.toLowerCase();
+      if (lower.startsWith('max-age=')) {
+        maxAge = int.tryParse(text.substring(8).trim());
+      } else if (lower.startsWith('expires=')) {
+        // 形如 "Wed, 11 Nov 2026 00:42:31 GMT"
+        //
+        // 注意：DateTime.parse 对 RFC 1123 的 "GMT" 后缀不认作 UTC 标记，
+        // 会把结果当成本地时间。这里显式按 UTC 解析，否则在 UTC+8 上
+        // 会多算 8 小时，过期的 cookie 被误判为仍有效。
+        final raw = text.substring(8).trim();
+        expires = _parseHttpDate(raw);
+      }
+    }
+
+    // Max-Age <= 0 表示立即失效。
+    if (maxAge != null) {
+      return DateTime.now().add(Duration(seconds: maxAge));
+    }
+    return expires;
+  }
+
+  /// 解析 HTTP 日期（RFC 1123 / RFC 850 / asctime 三种格式）。
+  ///
+  /// 返回 UTC 时间；解析不了返回 null（按会话级处理）。
+  static DateTime? _parseHttpDate(String raw) {
+    // 常见格式："Wed, 11 Nov 2026 00:42:31 GMT"
+    const months = {
+      'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+      'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+    };
+    // 去掉星期前缀，剩下的按空白切分。
+    final cleaned = raw.replaceFirst(RegExp(r'^[A-Za-z]+,\s*'), '').trim();
+    final parts = cleaned.split(RegExp(r'\s+'));
+    if (parts.length < 4) return null;
+
+    final day = int.tryParse(parts[0]);
+    final month = months[parts[1].toLowerCase()];
+    final year = int.tryParse(parts[2]);
+    if (day == null || month == null || year == null) return null;
+
+    final timeParts = parts[3].split(':');
+    if (timeParts.length < 3) return null;
+    final hour = int.tryParse(timeParts[0]);
+    final minute = int.tryParse(timeParts[1]);
+    final second = int.tryParse(timeParts[2]);
+    if (hour == null || minute == null || second == null) return null;
+
+    try {
+      return DateTime.utc(year, month, day, hour, minute, second);
+    } catch (_) {
+      return null;
     }
   }
 }

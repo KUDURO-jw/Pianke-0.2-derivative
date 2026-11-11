@@ -1,17 +1,14 @@
 {
-  "versionName": "0.2.23",
-  "versionCode": 29,
-  "title": "片刻·焕新版 0.2.23",
+  "versionName": "0.2.24",
+  "versionCode": 30,
+  "title": "片刻·焕新版 0.2.24",
   "changelog": [
-    "片库网格改用固定行高，滚动更快（实测快约 28%）",
-    "片库滚动不再每帧复制整份已展示 ID 集合",
-    "数据库开启 WAL 模式，后台同步时界面不再被写锁挡住",
-    "移除未使用的依赖，安装包更小、构建更快",
-    "片单批量导入加入批次间隔，降低触发豆瓣风控导致整单失败的概率",
-    "新增全局错误边界，异常不再只表现为「点了一下没反应」",
-    "设置页新增「导出诊断日志」，可导出最近的错误记录"
+    "修复豆瓣抓取一直 403：挑战凭证只有 120 秒有效期，旧版不解析过期时间，把失效凭证永久保存并反复发送",
+    "现在会解析 cookie 的过期时间，过期凭证不再发送也不再写入本地",
+    "遇到 403 时自动清空本地 cookie 重试一次，通常能直接拿到新凭证",
+    "修正 Expires 的时区处理，避免在 UTC+8 上把过期 cookie 误判为有效"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.23-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "371fe7534b02746b8b876e49091dadb52bfa50a64898d6a7d387bdf2f1b3bfc5",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.24-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "e15ff65985e306ec0158255ff9ba184b9b2d0d3898f15a1de9eb636bedada951",
   "forceUpdate": false
 }
