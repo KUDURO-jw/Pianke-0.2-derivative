@@ -1,15 +1,15 @@
 {
-  "versionName": "0.2.34",
-  "versionCode": 40,
-  "title": "片刻·焕新版 0.2.34",
+  "versionName": "0.2.35",
+  "versionCode": 41,
+  "title": "片刻·焕新版 0.2.35",
   "changelog": [
-    "修复连续删除多部影片时撤销提示条会叠加、造成卡顿和闪屏",
-    "现在只保留一条提示，出现新提示时旧的立即关闭",
-    "修复删除后剩余卡片补位没有动画、直接跳位的问题",
-    "删除时卡片缩小淡出，后面的卡片平滑滑动补位",
-    "撤销恢复时卡片带入场动画滑回原位"
+    "紧急修复：0.2.34 导致片库整页空白，看不到任何影片",
+    "根因是网格换成了 SliverAnimatedGrid，它的 initialItemCount 只在首帧生效，而片库数据是异步加载的",
+    "已改回普通网格，片库恢复正常显示",
+    "补位动画改用另一种实现：删除前后各测一次卡片位置，把位移注入卡片",
+    "撤销提示条单例（0.2.34 已修）保持不变"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.34-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "4304d74fcbc72dce823beb93d2dad787b01bed99048d04ec1ff0f45c62b54359",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.35-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "97c6c2a1cb468b5f39927eec96d87edeac13d0f11d2f802286248ddaa686f189",
   "forceUpdate": false
 }
