@@ -2639,8 +2639,23 @@ class StorageService {
   Future<BackupBundle> readBackupBundle() async {
     _ensureInitialized();
     return _db.transaction((txn) async {
+      // 必须过滤墓碑行（deleted_at IS NOT NULL）。
+      //
+      // 删除是软删除：只给 deleted_at 打时间戳，行还留在表里。
+      // 如果这里不过滤，用户删掉的影片会原封不动进备份——
+      // 表现就是「片库显示 94 部，备份却说 116 部」，
+      // 而且上传云端后，那些本该消失的条目会跟着同步到别的设备。
+      //
+      // 视图 v_movie_state 也做同样的过滤，但它是 view 不是 table，
+      // 这里直接查表所以要自己带条件。
+      //
+      // 注意：draw_records 表没有 deleted_at 列（抽片记录不做软删除），
+      // 因此它不加这个条件。其余可同步表都有。
+      const alive = 'deleted_at IS NULL';
+
       final movieRows = await txn.query(
         _moviesTable,
+        where: alive,
         orderBy: 'created_at ASC',
       );
       final drawRows = await txn.query(
@@ -2649,13 +2664,26 @@ class StorageService {
       );
       final sessionRows = await txn.query(
         _viewingSessionsTable,
+        where: alive,
         orderBy: 'COALESCE(watched_at_utc, -1) ASC, watched_at ASC',
       );
       final collectionsAndTags = <String, List<Map<String, Object?>>>{
-        'collections': await txn.query(_collectionsTable),
-        'collectionMembers': await txn.query(_collectionMembersTable),
-        'tags': await txn.query(_tagsTable),
-        'movieTags': await txn.query(_movieTagsTable),
+        'collections': await txn.query(_collectionsTable, where: alive),
+        'collectionMembers': await txn.query(
+          _collectionMembersTable,
+          where: alive,
+        ),
+        'tags': await txn.query(_tagsTable, where: alive),
+        // 关联表也有 deleted_at，直接用它过滤。
+        // 另外再排除指向已删除影片/标签的行，避免导出「归属对象已不存在」
+        // 的孤儿关联——那类行导入后会被外键检查拦下。
+        'movieTags': await txn.query(
+          _movieTagsTable,
+          where:
+              '$alive '
+              'AND movie_id IN (SELECT id FROM $_moviesTable WHERE $alive) '
+              'AND tag_id IN (SELECT id FROM $_tagsTable WHERE $alive)',
+        ),
       };
       return BackupBundle(
         movies: movieRows.map(_movieFromDbMap).toList(growable: false),
