@@ -1,14 +1,14 @@
 {
-  "versionName": "0.2.24",
-  "versionCode": 30,
-  "title": "片刻·焕新版 0.2.24",
+  "versionName": "0.2.25",
+  "versionCode": 31,
+  "title": "片刻·焕新版 0.2.25",
   "changelog": [
-    "修复豆瓣抓取一直 403：挑战凭证只有 120 秒有效期，旧版不解析过期时间，把失效凭证永久保存并反复发送",
-    "现在会解析 cookie 的过期时间，过期凭证不再发送也不再写入本地",
-    "遇到 403 时自动清空本地 cookie 重试一次，通常能直接拿到新凭证",
-    "修正 Expires 的时区处理，避免在 UTC+8 上把过期 cookie 误判为有效"
+    "修复片库页崩溃：0.2.23 改用固定行高后，骨架屏在无界高度父级下会抛 Infinity or NaN toInt",
+    "骨架网格加 shrinkWrap，按内容高度布局",
+    "行高增加有限性校验，非法值回退到默认值",
+    "新增 5 项回归测试覆盖骨架屏在各种父级约束下的行为"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.24-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "e15ff65985e306ec0158255ff9ba184b9b2d0d3898f15a1de9eb636bedada951",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.25-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "066df5c06cbfafeb18bdb9557d26d412ea7d06d4570f63c580eca4c3d89069a6",
   "forceUpdate": false
 }

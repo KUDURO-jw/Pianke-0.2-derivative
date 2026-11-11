@@ -210,6 +210,15 @@ class LibrarySkeletonGrid extends StatelessWidget {
     final textScaler = MediaQuery.textScalerOf(context);
     return ShimmerScope(
       child: GridView.builder(
+        // 骨架屏在片库页是被 SliverToBoxAdapter 包着的，父级给的是
+        // 「高度无界」约束（0 <= h <= Infinity）。GridView 默认要撑满
+        // 父级高度，在无界约束下会算出行步长为 Infinity，
+        // 随后 scrollOffset / rowStride 变成 Infinity，
+        // 在 getMinChildIndexForScrollOffset 里 toInt() 直接抛
+        // 「Unsupported operation: Infinity or NaN toInt」。
+        //
+        // 必须 shrinkWrap：让网格按内容高度布局，而不是去撑满无界父级。
+        shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         padding: padding,
         gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(

@@ -54,10 +54,17 @@ class _MoviesPageState extends State<MoviesPage> {
   /// 与宽度成比例，因此按基准宽度 174 测出的高度再等比换算。
   ///
   /// 基准实测：常规字号 300，2 倍字号 362.5（标题换两行 + 进度条）。
+  ///
+  /// 必须返回**有限正数**：`mainAxisExtent` 会参与
+  /// `scrollOffset / (extent + spacing)` 的行索引计算，
+  /// 一旦是 0、NaN 或 Infinity，SliverGrid 会在
+  /// `getMinChildIndexForScrollOffset` 里抛
+  /// 「Unsupported operation: Infinity or NaN toInt」。
   static double _libraryCardExtent(BuildContext context) {
     final largeText = MediaQuery.textScalerOf(context).scale(14) > 19;
-    final base = largeText ? 362.5 : 300.0;
-    return base;
+    final extent = largeText ? 362.5 : 300.0;
+    // 双保险：即使将来改成按宽度换算算错了，也不让非法值流进布局。
+    return extent.isFinite && extent > 0 ? extent : 300.0;
   }
 
   void _rememberShown(Iterable<String> ids, LibraryFilter filter) {
