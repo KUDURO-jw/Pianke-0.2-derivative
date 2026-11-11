@@ -337,6 +337,15 @@ class Motion {
   /// 400ms 是「明显降低风控概率」与「用户还愿意等」之间的折中。
   static const Duration scraperBatchGap = Duration(milliseconds: 400);
 
+  /// 抓取遇到限流（403 / 429）时，第 n 次重试前等待 n × 这个基数。
+  ///
+  /// 豆瓣的限流是短窗口：刚进应用或连续请求后会被拦，几秒后自动恢复。
+  /// 用户看到的是「刚进去报错，过几秒又好了」。
+  /// 与其把这个窗口暴露给用户，不如内部退避重试。
+  ///
+  /// 1s / 2s 两档，最多 3 次尝试，总等待上限约 3 秒。
+  static const Duration scraperRetryBase = Duration(seconds: 1);
+
   static const Curve standard = Curves.easeOutCubic;
   static const Curve emphasized = Cubic(0.2, 0.0, 0.0, 1.0);
 

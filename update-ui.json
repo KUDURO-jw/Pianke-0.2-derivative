@@ -1,15 +1,14 @@
 {
-  "versionName": "0.2.26",
-  "versionCode": 32,
-  "title": "片刻·焕新版 0.2.26",
+  "versionName": "0.2.27",
+  "versionCode": 33,
+  "title": "片刻·焕新版 0.2.27",
   "changelog": [
-    "修复删除过的影片无法重新添加：软删除后主键仍被占用，查重看不见墓碑行，插入时报 UNIQUE constraint failed",
-    "现在会复活墓碑行而不是插入新行，删了还能再加回来",
-    "修复导出诊断日志显示为空：原错误边界只抓未捕获异常，被界面接住的业务错误收不到",
-    "添加、更新、删除影片与批量添加失败现在都会记入诊断日志，附带 id 与标题",
-    "批量添加原先完全吞掉异常，现在会记录失败原因"
+    "抓取遇到限流时自动退避重试，不用再手动反复点",
+    "搜索与详情统一走退避逻辑：清掉失效凭证后等待 1 秒、2 秒再试，最多 3 次",
+    "非限流错误（500/404）不重试，立即提示，不浪费等待时间",
+    "解决刚进入应用添加影片报错、过几秒才正常的问题"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.26-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "260ba0636218e3b88b206d8c95e855e6030d2e518113971151a0e5fbda76adfa",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.27-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "fdbd757bdacfdb9fb9add639ec5a5f8d1db56b009afbc7c145c46050e0a019d4",
   "forceUpdate": false
 }

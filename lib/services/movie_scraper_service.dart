@@ -135,7 +135,7 @@ class MovieScraperService {
         '?search_text=${Uri.encodeQueryComponent(trimmed)}&cat=1002&start=$start';
 
     try {
-      final response = await _getPlainHtml(
+      final response = await _getWithBackoff(
         url,
         headers: _buildMovieHeaders('https://search.douban.com/'),
       );
@@ -148,6 +148,45 @@ class MovieScraperService {
       rethrow;
     } catch (_) {
       throw ScraperException('搜索结果解析失败，请重试或使用豆瓣链接添加');
+    }
+  }
+
+  /// 带退避的请求：遇到限流（403 / 429）时短暂等待后重试。
+  ///
+  /// 豆瓣的限流是**短窗口**的：刚进入应用、或连续几次请求之后，
+  /// 服务端会返回 403 或直接给挑战页，等几秒再请求就恢复正常。
+  /// 用户在界面上看到的就是「刚进去报错，过几秒又好了」。
+  ///
+  /// 与其把这个窗口暴露给用户，不如在内部等一等再试：
+  /// 退避 1s / 2s，最多 3 次尝试。总耗时上限约 3 秒，
+  /// 比让用户手动重试再失败一次体验好得多。
+  Future<Response<String>> _getWithBackoff(
+    String url, {
+    required Map<String, String> headers,
+    DoubanCookieJar? cookieJar,
+    int maxAttempts = 3,
+  }) async {
+    var attempt = 0;
+    while (true) {
+      attempt++;
+      try {
+        return await _getPlainHtml(
+          url,
+          headers: headers,
+          cookieJar: cookieJar,
+        );
+      } on ScraperException catch (error) {
+        final isRateLimited = error.message.contains('403') ||
+            error.message.contains('429');
+        if (!isRateLimited || attempt >= maxAttempts) rethrow;
+        // 清掉可能已失效的挑战凭证，退避后重来。
+        cookieJar?.clear();
+        if (cookieJar != null) {
+          _cookieDirty = true;
+          unawaited(_persistCookie());
+        }
+        await Future<void>.delayed(Motion.scraperRetryBase * attempt);
+      }
     }
   }
 
@@ -468,29 +507,14 @@ class MovieScraperService {
     final cookieJar = _doubanCookieJar;
     final headers = _buildMovieHeaders(targetUrl);
 
-    // 第一次尝试可能带着一份失效的挑战凭证（dbsawcv1 只有 120 秒）。
-    // 豆瓣对过期凭证的回应不稳定：有时 403，有时直接再弹挑战页。
-    // 带 cookie 失败时，先清空本地 cookie 再重试一次——挑战流程本身
-    // 不需要任何既有 cookie，重来一遍通常就能拿到新凭证。
-    Response<String>? firstResponse;
-    try {
-      firstResponse = await _getPlainHtml(
-        targetUrl,
-        headers: headers,
-        cookieJar: cookieJar,
-      );
-    } on ScraperException catch (error) {
-      if (!error.message.contains('403')) rethrow;
-      // 清掉可能已失效的凭证后重试一次。
-      cookieJar.clear();
-      _cookieDirty = true;
-      unawaited(_persistCookie());
-      firstResponse = await _getPlainHtml(
-        targetUrl,
-        headers: headers,
-        cookieJar: cookieJar,
-      );
-    }
+    // 首次请求可能撞上豆瓣的短时限流窗口，也可能带着一份已失效的
+    // 挑战凭证（dbsawcv1 只有 120 秒）。两种情况都在这里统一处理：
+    // 清掉旧凭证 + 退避重试，最多 3 次。
+    final firstResponse = await _getWithBackoff(
+      targetUrl,
+      headers: headers,
+      cookieJar: cookieJar,
+    );
 
     final firstHtml = firstResponse.data ?? '';
 
