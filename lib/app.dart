@@ -272,6 +272,17 @@ class _AppLifecycleShellState extends State<_AppLifecycleShell>
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
         themeMode: themeProvider.themeMode,
+        // 关闭主题切换的逐帧颜色插值。
+        //
+        // MaterialApp 默认会在 kThemeAnimationDuration（200ms）内，
+        // 用 Curves.linear 把整套颜色从浅色插值到深色。中途会经过大量
+        // 不自然的灰调——浅底卡片、深色文字这类组合在中间态会同时变灰，
+        // 观感就是「切深色时整屏闪一下」。
+        //
+        // 本项目大量使用固定的中性色（SurfaceLevel 的四层表面色刻意不随
+        // seed 染色），这些颜色在插值过程中并不协调，插值反而暴露问题。
+        // 设为零后主题立即切换，没有中间态，也就没有闪烁。
+        themeAnimationDuration: Duration.zero,
         routerConfig: appRouter,
         builder: (context, child) {
           final brightness = Theme.of(context).brightness;

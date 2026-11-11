@@ -56,7 +56,18 @@ Future<void> deleteWithUndo(
   SnackBarClosedReason? reason;
   if (messenger != null) {
     try {
-      messenger.hideCurrentSnackBar();
+      // 直接 showSnackBar，不先 removeCurrentSnackBar。
+      //
+      // 为什么去掉 remove：`removeCurrentSnackBar()` 内部会把
+      // `_snackBarController.value = 0.0`，这个赋值触发的是**动画状态回调**，
+      // 要到下一帧才把旧条从队列移除。而紧接着的 `showSnackBar` 检查
+      // `_snackBars.isEmpty` 决定要不要 `forward()` —— 此刻旧条还在队列里，
+      // 于是新条**不会 forward**，`isCompleted` 永远为 false，
+      // ScaffoldMessenger 的倒计时 Timer 永远不启动。
+      // 结果就是提示条不自动消失、`closed` 永不完成、`commit()` 永不执行。
+      //
+      // 直接 show 时，若队列里已有旧条，ScaffoldMessenger 会把它排在后面，
+      // 旧条走完自己的流程后自动 forward 新条，计时正常。
       final controller = messenger.showSnackBar(
         SnackBar(
           content: Text(label),

@@ -364,16 +364,21 @@ class _BranchTransitionState extends State<_BranchTransition>
                     final progress = MediaQuery.disableAnimationsOf(context)
                         ? 1.0
                         : Motion.shared.transform(_controller.value);
+                    // 新分支淡入时，先把透明度压在 0.35 以上再补到 1。
+                    //
+                    // 原来是从 0 开始淡入：那几帧里新页面几乎全透明，
+                    // 叠在旧页面上会透出旧页内容，观感是「切页时画面抖一下」。
+                    // 抬高起点后，画面从一开始就是实的，只有轻微明暗过渡。
+                    final opacity = active
+                        ? 0.35 + 0.65 * progress
+                        : 1.0;
                     return FractionalTranslation(
                       translation: Offset(
                         direction *
                             (active ? (1 - progress) * 0.08 : -progress * 0.04),
                         0,
                       ),
-                      child: Opacity(
-                        opacity: active ? progress : 1,
-                        child: child,
-                      ),
+                      child: Opacity(opacity: opacity, child: child),
                     );
                   },
                 ),

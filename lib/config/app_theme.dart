@@ -621,14 +621,20 @@ class AppPageTransitionsBuilder extends PageTransitionsBuilder {
     final direction = Directionality.of(context) == TextDirection.rtl
         ? -1.0
         : 1.0;
-    return FadeTransition(
-      opacity: curved,
-      child: SlideTransition(
-        position: curved.drive(
-          Tween(begin: Offset(0.035 * direction, 0), end: Offset.zero),
-        ),
-        child: child,
+    // 只做位移，不做淡入。
+    //
+    // 原来这里是 FadeTransition（opacity 从 0 到 1）。问题是淡入期间
+    // 新页面整层还是透明的，底下什么都看不到——如果此时底层没有不透明的
+    // 背景兜着（详情页是独立路由，底下就是空的），就会露出白/黑底，
+    // 观感是「进出页面闪一下」。
+    //
+    // 位移已经足够表达「从右侧进来」，且从头到尾画面都是不透明的，
+    // 不会露出背景。位移幅度保持 0.035（约屏宽 3.5%），够轻。
+    return SlideTransition(
+      position: curved.drive(
+        Tween(begin: Offset(0.035 * direction, 0), end: Offset.zero),
       ),
+      child: child,
     );
   }
 }
