@@ -306,9 +306,19 @@ class _BranchTransitionState extends State<_BranchTransition>
   double _direction = 1;
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: Motion.slow,
+    // 四页切换的位移+淡入。原来用 Motion.slow（320ms），
+    // 多次连点会有「追不上手」的滞后感。220ms 是 Material 底部导航
+    // 切换的通行节奏，跟手又不显得仓促。
+    duration: Motion.normal,
     value: 1,
   )..addStatusListener(_onStatus);
+
+  /// 缓动曲线单独拿出来，供 FadeTransition / SlideTransition 共用，
+  /// 避免在 builder 里每帧重新 transform 数值。
+  late final Animation<double> _curved = CurvedAnimation(
+    parent: _controller,
+    curve: Motion.shared,
+  );
 
   void _onStatus(AnimationStatus status) {
     if (status == AnimationStatus.completed && mounted && _outgoing != null) {
@@ -342,9 +352,53 @@ class _BranchTransitionState extends State<_BranchTransition>
     final direction = Directionality.of(context) == TextDirection.rtl
         ? -_direction
         : _direction;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+
     Widget branch(int index) {
       final active = index == widget.index;
       final visible = active || index == _outgoing;
+
+      // 过渡层：用 FadeTransition + SlideTransition 而不是手写
+      // Opacity + Transform。
+      //
+      // 手写版本每帧在 builder 里算 opacity 数值并包一层 Opacity，
+      // 会持续触发离屏合成（saveLayer），四个分支同时在场时开销翻倍。
+      // FadeTransition 内部走 RenderAnimatedOpacity，同样要合成，
+      // 但它能复用动画对象，且子树预先构造好传进去、不参与重建。
+      //
+      // RepaintBoundary 放在最内层：切页时只有位移/透明度在变，
+      // 页面内容本身不重绘。
+      Widget content = RepaintBoundary(child: widget.children[index]);
+
+      if (!reduceMotion && visible) {
+        // 新页：从侧向轻微滑入 + 淡入。
+        // 旧页：反向微移 + 保持不透明（作为背景，避免透出底下的空）。
+        final slide = active
+            ? Tween<Offset>(
+                begin: Offset(0.055 * direction, 0),
+                end: Offset.zero,
+              ).animate(_curved)
+            : Tween<Offset>(
+                begin: Offset.zero,
+                end: Offset(-0.02 * direction, 0),
+              ).animate(_curved);
+
+        content = SlideTransition(
+          position: slide,
+          child: active
+              // 新页淡入起点不用 0：完全透明的头几帧会让人觉得「卡住」，
+              // 0.62 起步立刻有实体感，只做轻量的明暗收尾。
+              ? FadeTransition(
+                  opacity: Tween<double>(begin: 0.62, end: 1.0).animate(_curved),
+                  child: content,
+                )
+              // 旧页保持不透明，只做位移，不做淡出——
+              // 它退到背景里，淡出会露出 Stack 底部（空），
+              // 那正是之前「切页闪一下」的来源。
+              : content,
+        );
+      }
+
       return Offstage(
         key: ValueKey('branch-$index'),
         offstage: !visible,
@@ -354,35 +408,7 @@ class _BranchTransitionState extends State<_BranchTransition>
             ignoring: !active,
             child: ExcludeSemantics(
               excluding: !active,
-              child: ExcludeFocus(
-                excluding: !active,
-                child: AnimatedBuilder(
-                  animation: _controller,
-                  // The Navigator subtree is stable throughout the animation.
-                  child: RepaintBoundary(child: widget.children[index]),
-                  builder: (context, child) {
-                    final progress = MediaQuery.disableAnimationsOf(context)
-                        ? 1.0
-                        : Motion.shared.transform(_controller.value);
-                    // 新分支淡入时，先把透明度压在 0.35 以上再补到 1。
-                    //
-                    // 原来是从 0 开始淡入：那几帧里新页面几乎全透明，
-                    // 叠在旧页面上会透出旧页内容，观感是「切页时画面抖一下」。
-                    // 抬高起点后，画面从一开始就是实的，只有轻微明暗过渡。
-                    final opacity = active
-                        ? 0.35 + 0.65 * progress
-                        : 1.0;
-                    return FractionalTranslation(
-                      translation: Offset(
-                        direction *
-                            (active ? (1 - progress) * 0.08 : -progress * 0.04),
-                        0,
-                      ),
-                      child: Opacity(opacity: opacity, child: child),
-                    );
-                  },
-                ),
-              ),
+              child: ExcludeFocus(excluding: !active, child: content),
             ),
           ),
         ),

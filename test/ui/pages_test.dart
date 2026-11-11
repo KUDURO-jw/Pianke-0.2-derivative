@@ -331,13 +331,19 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.byType(MoviesPage), findsOneWidget);
     expect(find.byType(DrawHubPage), findsOneWidget);
+    // 新页处于过渡中间态：转场现在用 FadeTransition（复用动画对象、
+    // 不重建子树），而不是手写 Opacity。断言 FadeTransition 的
+    // opacity 处于 (0, 1) 之间即可确认「正在过渡」。
     final incoming = find.ancestor(
       of: find.byType(DrawHubPage),
-      matching: find.byType(Opacity),
+      matching: find.byType(FadeTransition),
     );
+    expect(incoming, findsWidgets, reason: '新页应包在 FadeTransition 里做淡入');
+    final fade = tester.widget<FadeTransition>(incoming.first);
     expect(
-      tester.widget<Opacity>(incoming.first).opacity,
+      fade.opacity.value,
       inExclusiveRange(0, 1),
+      reason: '过渡中间态透明度应在 0 与 1 之间',
     );
     await tester.pumpAndSettle();
     expect(find.byType(MoviesPage), findsNothing);

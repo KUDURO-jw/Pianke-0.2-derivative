@@ -1,14 +1,15 @@
 {
-  "versionName": "0.2.31",
-  "versionCode": 37,
-  "title": "片刻·焕新版 0.2.31",
+  "versionName": "0.2.32",
+  "versionCode": 38,
+  "title": "片刻·焕新版 0.2.32",
   "changelog": [
-    "修复撤销提示条下滑关闭时最后还闪一下",
-    "退场时提示条继续朝下滑出，不再停在原地变透明",
-    "缩短退场时长：从约 416ms 降到约 240ms",
-    "退场位移全程单调朝下，不会先弹回再落下"
+    "修复底部四页切换不流畅、动画衔接生硬",
+    "切换时长从 320ms 缩短到 220ms，连点更跟手",
+    "新页淡入起点从 0.35 提高到 0.62，不再先变灰再变亮",
+    "转场改用 FadeTransition + SlideTransition，减少每帧离屏合成",
+    "切页时页面内容不再跟随重绘"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.31-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "c5fd43e16b10c8ca78ad0a39bd90d4e08096e32fd322521758579ead93c27bb0",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.32-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "5a5a6e1af1a17f2513970dff87fcaf256b33ed00255644bb0b5d9e1cf416df12",
   "forceUpdate": false
 }
