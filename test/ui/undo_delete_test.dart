@@ -23,13 +23,6 @@ Widget _hostWithScaffold() => MaterialApp(
   ),
 );
 
-/// 完全没有 Scaffold 的宿主：用于验证「提示条显示不出来」的兜底分支。
-Widget _hostWithoutScaffold() => MaterialApp(
-  home: Builder(
-    builder: (context) => const Center(child: Text('bare')),
-  ),
-);
-
 void main() {
   group('T13 Haptics 开关', () {
     setUp(() {
@@ -72,14 +65,13 @@ void main() {
   group('T13 可撤销删除', () {
     test('只有明确「点了撤销」才不删库', () {
       // 这是整个可撤销删除的核心判断，直接测纯函数最可靠。
-      expect(shouldCommitDeleteAfter(SnackBarClosedReason.action), isFalse);
+      expect(shouldCommitDeleteAfter(UndoDismissReason.undo), isFalse);
 
       for (final reason in [
-        SnackBarClosedReason.timeout,
-        SnackBarClosedReason.hide,
-        SnackBarClosedReason.dismiss,
-        SnackBarClosedReason.swipe,
-        SnackBarClosedReason.remove,
+        UndoDismissReason.timeout,
+        UndoDismissReason.swipe,
+        UndoDismissReason.replaced,
+        UndoDismissReason.disposed,
         null, // 提示条压根没能显示
       ]) {
         expect(
@@ -121,11 +113,21 @@ void main() {
       unawaited(future);
     });
 
-    testWidgets('提示条显示不出来时直接提交，不留幽灵条目', (tester) async {
+    testWidgets('没有 Overlay 时直接提交，不留幽灵条目', (tester) async {
       var committed = false;
       var hidden = false;
 
-      await tester.pumpWidget(_hostWithoutScaffold());
+      // 自绘提示条挂在 Overlay 上。没有 Overlay（例如在纯 widget 树里
+      // 直接调用）时必须退回「直接提交」，绝不能留下「隐藏了却没删」。
+      // 注意不能用 MaterialApp 包：它自带 Overlay，测不到这个分支。
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Builder(
+            builder: (context) => const Center(child: Text('bare')),
+          ),
+        ),
+      );
       final context = tester.element(find.text('bare'));
 
       await deleteWithUndo(

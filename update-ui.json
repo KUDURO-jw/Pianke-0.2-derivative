@@ -1,14 +1,15 @@
 {
-  "versionName": "0.2.28",
-  "versionCode": 34,
-  "title": "片刻·焕新版 0.2.28",
+  "versionName": "0.2.29",
+  "versionCode": 35,
+  "title": "片刻·焕新版 0.2.29",
   "changelog": [
-    "修复切换深色时整屏闪一下：关闭主题切换的逐帧颜色插值，主题立即生效",
-    "修复进出页面时闪一下：转场只保留位移，不再从全透明淡入",
-    "修复底部导航切页时透出旧页内容：抬高新页透明度起点",
-    "已知问题：删除后的撤销提示条不会自动消失，本版未解决"
+    "修复删除后的撤销提示条不会自动消失，必须手动下滑",
+    "修复因提示条不关闭导致删除没有真正写进数据库、重启后影片又回来的问题",
+    "修复下滑取消撤销时屏幕闪一下",
+    "撤销提示条改为自绘，视觉与项目风格一致：深色胶囊、连续圆角、主题强调色",
+    "下滑关闭保留，向下快速拖动即可取消"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.28-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "7fcc174beb0aafef2ad00358d29cce39c6ba4f20e2878013d49896f86c8d2455",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.29-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "9d4edf395e1512d927412ee78e8cc7a44e44801befab9c5a1aed1d4f7c8935fc",
   "forceUpdate": false
 }

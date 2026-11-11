@@ -1,7 +1,10 @@
 // Modified for the personal UI edition, 2026-11-08. Apache-2.0.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:random_movie/config/design_tokens.dart';
 import 'package:random_movie/services/haptics.dart';
+import 'package:random_movie/widgets/common/continuous_rrect.dart';
 
 /// 撤销提示停留时长。
 ///
@@ -16,8 +19,26 @@ const Duration kUndoWindow = Duration(seconds: 5);
 /// 只有用户**明确点了「撤销」**才不删。其余情况——超时、被新提示顶掉、
 /// 下滑关闭、甚至提示条压根没能显示（[reason] 为 null）——都必须提交，
 /// 否则界面已经隐藏了条目，数据库却永远留着它，形成幽灵数据。
-bool shouldCommitDeleteAfter(SnackBarClosedReason? reason) =>
-    reason != SnackBarClosedReason.action;
+bool shouldCommitDeleteAfter(UndoDismissReason? reason) =>
+    reason != UndoDismissReason.undo;
+
+/// 提示条消失的原因。
+enum UndoDismissReason {
+  /// 到时自动消失 → 确认删除
+  timeout,
+
+  /// 用户点了「撤销」→ 不删
+  undo,
+
+  /// 用户下滑关闭 → 确认删除
+  swipe,
+
+  /// 被新的提示顶掉 → 确认删除
+  replaced,
+
+  /// 宿主销毁 → 确认删除
+  disposed,
+}
 
 /// 可撤销删除。
 ///
@@ -28,8 +49,20 @@ bool shouldCommitDeleteAfter(SnackBarClosedReason? reason) =>
 ///
 /// 这样**不存在回滚**：撤销只是「什么都没发生」，比对数据库做反向操作可靠得多。
 ///
-/// 一个已知的边界：这 5 秒内进程被杀，条目仍是「未删除」状态。
-/// 这是安全的方向（宁可留着也别误删），下次进入仍然能看到它。
+/// ## 为什么不用 ScaffoldMessenger / SnackBar
+///
+/// 项目原先用 `ScaffoldMessenger.showSnackBar` 实现，出现两个问题：
+///
+/// 1. **提示条不自动消失**。`ScaffoldMessengerState.build` 里启动倒计时
+///    有一个前置条件 `_snackBarController.isCompleted`，而 controller 只在
+///    `_snackBars.isEmpty` 时才会 `forward()`。本项目的调用时序
+///    （对话框 `pop()` 之后立刻调用）会让这个条件永远不满足，
+///    于是 `Timer` 从不创建 → 提示条不消失 → `controller.closed` 永不完成
+///    → `commit()` 不执行 → 界面显示已删除但数据库还留着。
+/// 2. **下滑关闭时闪屏**。SnackBar 的退场走 Material 内置动画，
+///    与本项目「页面转场不用淡入」的取向冲突，滑走那一下会露出背景。
+///
+/// 自绘提示条完全可控：定时器自己持有、退场动画自己写、视觉与项目一致。
 Future<void> deleteWithUndo(
   BuildContext context, {
   required String label,
@@ -37,69 +70,281 @@ Future<void> deleteWithUndo(
   required VoidCallback hide,
   required VoidCallback restore,
 
-  /// 撤销窗口时长。默认 [kUndoWindow]；测试可传更短的值，
-  /// 避免依赖提示条的动画计时。
+  /// 撤销窗口时长。默认 [kUndoWindow]；测试可传更短的值。
   Duration undoWindow = kUndoWindow,
 }) async {
   // 取值必须在同步阶段完成：调用方可能在这之后被 dispose。
-  final messenger = ScaffoldMessenger.maybeOf(context);
+  final overlay = Overlay.maybeOf(context, rootOverlay: true);
   final scheme = Theme.of(context).colorScheme;
-  final dockInset = _bottomInsetOf(context);
+  final reduceMotion = MediaQuery.disableAnimationsOf(context);
 
   hide();
   Haptics.warning();
 
-  // 注意不能只看 `ScaffoldMessenger.maybeOf` 是否为 null：
-  // 存在 messenger 但当前没有挂载任何 Scaffold 时，showSnackBar 会直接断言失败。
-  // 所以这里必须同时确认「有 messenger」且「至少能显示」——用 try 兜住断言，
-  // 显示不出来就退回直接提交，绝不留下「隐藏了却没删」的幽灵条目。
-  SnackBarClosedReason? reason;
-  if (messenger != null) {
-    try {
-      // 直接 showSnackBar，不先 removeCurrentSnackBar。
-      //
-      // 为什么去掉 remove：`removeCurrentSnackBar()` 内部会把
-      // `_snackBarController.value = 0.0`，这个赋值触发的是**动画状态回调**，
-      // 要到下一帧才把旧条从队列移除。而紧接着的 `showSnackBar` 检查
-      // `_snackBars.isEmpty` 决定要不要 `forward()` —— 此刻旧条还在队列里，
-      // 于是新条**不会 forward**，`isCompleted` 永远为 false，
-      // ScaffoldMessenger 的倒计时 Timer 永远不启动。
-      // 结果就是提示条不自动消失、`closed` 永不完成、`commit()` 永不执行。
-      //
-      // 直接 show 时，若队列里已有旧条，ScaffoldMessenger 会把它排在后面，
-      // 旧条走完自己的流程后自动 forward 新条，计时正常。
-      final controller = messenger.showSnackBar(
-        SnackBar(
-          content: Text(label),
-          duration: undoWindow,
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: scheme.inverseSurface,
-          margin: EdgeInsets.fromLTRB(Spacing.lg, 0, Spacing.lg, dockInset),
-          action: SnackBarAction(
-            label: '撤销',
-            textColor: scheme.inversePrimary,
-            onPressed: () {
-              Haptics.selection();
-              restore();
-            },
-          ),
-        ),
-      );
-      reason = await controller.closed;
-    } catch (_) {
-      // 没有可用 Scaffold 等：走下面的直接提交分支。
-      reason = null;
-    }
+  if (overlay == null) {
+    // 没有 Overlay（极端情况）：提示条显示不出来，按「确认删除」处理，
+    // 绝不留下「隐藏了却没删」的幽灵条目。
+    await commit();
+    return;
   }
+
+  final reason = await _showUndoBanner(
+    overlay: overlay,
+    scheme: scheme,
+    label: label,
+    undoWindow: undoWindow,
+    reduceMotion: reduceMotion,
+    onUndo: () {
+      Haptics.selection();
+      restore();
+    },
+  );
 
   if (!shouldCommitDeleteAfter(reason)) return;
   await commit();
 }
 
-/// 提示条要浮在悬浮底栏上方，避开它，避免被遮住。
-double _bottomInsetOf(BuildContext context) {
-  final padding = MediaQuery.paddingOf(context).bottom;
-  // DockMetrics 在 floating_nav_bar.dart 里，这里不引入整个组件文件，
-  // 只用安全区 + 一点余量：底栏本身已按安全区自适配。
-  return padding + Spacing.xxl;
+/// 在 Overlay 上挂一条自绘提示条，返回它消失的原因。
+Future<UndoDismissReason> _showUndoBanner({
+  required OverlayState overlay,
+  required ColorScheme scheme,
+  required String label,
+  required Duration undoWindow,
+  required bool reduceMotion,
+  required VoidCallback onUndo,
+}) {
+  final completer = Completer<UndoDismissReason>();
+  late OverlayEntry entry;
+
+  void finish(UndoDismissReason reason) {
+    if (completer.isCompleted) return;
+    completer.complete(reason);
+    // 等退场动画播完再移除 entry，避免硬切造成闪烁。
+    Future<void>.delayed(reduceMotion ? Duration.zero : Motion.panel, () {
+      if (entry.mounted) entry.remove();
+    });
+  }
+
+  entry = OverlayEntry(
+    builder: (context) => _UndoBannerHost(
+      scheme: scheme,
+      label: label,
+      undoWindow: undoWindow,
+      reduceMotion: reduceMotion,
+      onDismiss: finish,
+      onUndo: onUndo,
+    ),
+  );
+
+  overlay.insert(entry);
+  return completer.future;
+}
+
+/// 提示条本体：负责入场动画、倒计时、下滑关闭。
+class _UndoBannerHost extends StatefulWidget {
+  const _UndoBannerHost({
+    required this.scheme,
+    required this.label,
+    required this.undoWindow,
+    required this.reduceMotion,
+    required this.onDismiss,
+    required this.onUndo,
+  });
+
+  final ColorScheme scheme;
+  final String label;
+  final Duration undoWindow;
+  final bool reduceMotion;
+  final void Function(UndoDismissReason) onDismiss;
+  final VoidCallback onUndo;
+
+  @override
+  State<_UndoBannerHost> createState() => _UndoBannerHostState();
+}
+
+class _UndoBannerHostState extends State<_UndoBannerHost>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: widget.reduceMotion ? Duration.zero : Motion.panel,
+  );
+
+  Timer? _timer;
+
+  /// 已处理过关闭，防止「点撤销」和「超时」重复提交。
+  bool _settled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.forward();
+    // 倒计时自己持有，不依赖任何框架的 SnackBar 状态机。
+    _timer = Timer(widget.undoWindow, () => _settle(UndoDismissReason.timeout));
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    // 宿主在提示条还在时被销毁：按「确认删除」处理，避免幽灵条目。
+    if (!_settled) {
+      _settled = true;
+      widget.onDismiss(UndoDismissReason.disposed);
+    }
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// 结束提示条：停计时、播退场、上报原因。
+  void _settle(UndoDismissReason reason) {
+    if (_settled) return;
+    _settled = true;
+    _timer?.cancel();
+    _controller.reverse();
+    widget.onDismiss(reason);
+  }
+
+  void _handleUndo() {
+    if (_settled) return;
+    _settled = true;
+    _timer?.cancel();
+    widget.onUndo();
+    _controller.reverse();
+    widget.onDismiss(UndoDismissReason.undo);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = widget.scheme;
+    final media = MediaQuery.of(context);
+    // 浮在悬浮底栏上方，与 AppToast 保持同一套避让规则。
+    final bottomInset = media.padding.bottom + Spacing.xxl +
+        (media.viewInsets.bottom > 0 ? 0 : 44);
+
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: bottomInset,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          final t = Motion.fade.transform(_controller.value.clamp(0.0, 1.0));
+          return Opacity(
+            opacity: t,
+            // 入场从下方轻微上浮，退场回落；不做整层淡入淡出，
+            // 避免滑走时露出背景造成闪烁。
+            child: Transform.translate(
+              offset: Offset(0, (1 - t) * 12),
+              child: child,
+            ),
+          );
+        },
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Spacing.lg),
+            child: _UndoBannerSurface(
+              scheme: scheme,
+              label: widget.label,
+              onUndo: _handleUndo,
+              onSwipeDismiss: () => _settle(UndoDismissReason.swipe),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 提示条的可视部分：连续圆角深色胶囊 + 文字 + 撤销按钮。
+///
+/// 视觉参数对齐项目既有规范：
+/// - 深色胶囊用 `#2A2A2E`（与全局 snackBarTheme 一致）
+/// - 连续圆角 `Radii.md`
+/// - 文字 `TypeScale.body` / w500
+/// - 撤销按钮用主题强调色
+class _UndoBannerSurface extends StatelessWidget {
+  const _UndoBannerSurface({
+    required this.scheme,
+    required this.label,
+    required this.onUndo,
+    required this.onSwipeDismiss,
+  });
+
+  final ColorScheme scheme;
+  final String label;
+  final VoidCallback onUndo;
+  final VoidCallback onSwipeDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    const surface = Color(0xFF2A2A2E);
+    final shape = ContinuousRRect(radius: Radii.md, smoothing: 0.6);
+
+    return GestureDetector(
+      // 下滑关闭：与系统提示条一致的手势习惯。
+      onVerticalDragEnd: (details) {
+        if ((details.primaryVelocity ?? 0) > 0) onSwipeDismiss();
+      },
+      child: DecoratedBox(
+        decoration: ShapeDecoration(
+          shape: shape,
+          shadows: Shadows.floating(scheme),
+        ),
+        child: Material(
+          color: surface,
+          shape: shape,
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              Spacing.lg,
+              Spacing.sm + 2,
+              Spacing.sm,
+              Spacing.sm + 2,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: TypeScale.body,
+                      fontWeight: FontWeight.w500,
+                      height: TypeScale.lineHeight,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: Spacing.sm),
+                TextButton(
+                  onPressed: onUndo,
+                  style: TextButton.styleFrom(
+                    foregroundColor: scheme.accent,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: Spacing.md,
+                      vertical: Spacing.xs,
+                    ),
+                    minimumSize: const Size(0, 36),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: ContinuousRRect(
+                      radius: Radii.pill,
+                      smoothing: 0.6,
+                    ),
+                  ),
+                  child: const Text(
+                    '撤销',
+                    style: TextStyle(
+                      fontSize: TypeScale.label,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
