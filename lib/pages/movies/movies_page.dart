@@ -13,7 +13,6 @@ import 'package:random_movie/providers/movie_provider.dart';
 import 'package:random_movie/widgets/collection/collection_icon.dart';
 import 'package:random_movie/widgets/common/app_components.dart';
 import 'package:random_movie/widgets/common/common_widgets.dart';
-import 'package:random_movie/widgets/common/animated_entrance.dart';
 import 'package:random_movie/services/storage_service.dart';
 import 'package:random_movie/services/table_change_notifier.dart';
 import 'package:random_movie/widgets/common/skeleton.dart';
@@ -37,15 +36,16 @@ class _MoviesPageState extends State<MoviesPage> {
   bool _requestedCollections = false;
   LibraryScrollRequest? _scrollRequest;
 
-  /// 已经在屏幕上出现过的影片 id。
-  ///
-  /// 用来区分「本批新增」和「一直在屏上的」：只有前者播放渐入，
-  /// 否则每次筛选/滚动都会让整屏卡片重新淡入，看起来像在闪。
-  final Set<String> _shownMovieIds = {};
+  /// 网格 State 的引用：删除/恢复时用它播补位动画。
+  final GlobalKey<SliverAnimatedGridState> _gridKey =
+      GlobalKey<SliverAnimatedGridState>();
 
-  /// 记住这一帧要展示的 id，供下一次构建判断哪些是新增的。
-  Set<String> _previouslyShown = const {};
-  LibraryFilter? _lastFilter;
+  /// 最近一次渲染的影片列表。
+  ///
+  /// 删除时需要知道被删项在网格里的下标，而 `_deleteWithUndo` 拿到的
+  /// `context` 里读不到当前网格数据。这里在 build 里记一份引用，
+  /// 只读不写，避免为了取下标再走一次 Provider 查询。
+  List<Movie> _visibleMovies = const [];
 
   /// 片库卡片在网格里的固定行高。
   ///
@@ -65,33 +65,6 @@ class _MoviesPageState extends State<MoviesPage> {
     final extent = largeText ? 362.5 : 300.0;
     // 双保险：即使将来改成按宽度换算算错了，也不让非法值流进布局。
     return extent.isFinite && extent > 0 ? extent : 300.0;
-  }
-
-  void _rememberShown(Iterable<String> ids, LibraryFilter filter) {
-    final incoming = ids.toList(growable: false);
-    // 切换筛选：整列表换内容，交给外层 SliverAnimatedOpacity 做整体过渡，
-    // 卡片自身不逐个播入场动画。
-    if (_lastFilter != filter) {
-      _previouslyShown = incoming.toSet();
-      _lastFilter = filter;
-      _shownMovieIds
-        ..clear()
-        ..addAll(incoming);
-      return;
-    }
-
-    // 快路径：本帧要展示的集合与上一帧完全相同（滚动、无关重建、
-    // Provider 通知但数据没变）时直接返回，避免每帧复制一次大 Set。
-    // 原来的实现无条件 `Set.of(_shownMovieIds)`，片库上万条时每次重建
-    // 都要复制上万个字符串引用，是列表滚动的隐性开销。
-    if (incoming.length == _shownMovieIds.length &&
-        incoming.every(_shownMovieIds.contains)) {
-      return;
-    }
-
-    _previouslyShown = Set<String>.of(_shownMovieIds);
-    if (_shownMovieIds.length > 2000) _shownMovieIds.clear();
-    _shownMovieIds.addAll(incoming);
   }
 
   @override
@@ -299,6 +272,9 @@ class _MoviesPageState extends State<MoviesPage> {
               ),
               builder: (context, state, _) {
                 final movies = state.movies;
+                // 记一份当前可见列表的引用，供删除时定位下标。
+                // 只读引用，不触发重建（赋值本身不 setState）。
+                _visibleMovies = movies;
 
                 if ((!state.hasLoadedLibrary || state.isLibraryLoading) &&
                     movies.isEmpty) {
@@ -386,13 +362,9 @@ class _MoviesPageState extends State<MoviesPage> {
                 // 注意：这里在 build 期间写实例字段，但 [setState] 并没有被调用，
                 // 因此不会触发额外重建；`_rememberShown` 内部只在集合变化时
                 // 做一次 `Set.of`，成本与当前可见条目数成正比。
-                // 改成 initState/postFrame 反而会让「本批新增」判断晚一帧，
-                // 导致入场动画漏播，因此保留在 build 里，但避免整表复制。
-                _rememberShown(
-                  movies.map((movie) => movie.id),
-                  state.filter,
-                );
-                final previouslyShown = _previouslyShown;
+                // 入场与补位动画现在统一交给 SliverAnimatedGrid 的
+                // animation 驱动，不再需要「本批新增」的集合比对，
+                // 因此 _rememberShown / previouslyShown 已移除。
 
                 return SliverPadding(
                   padding: EdgeInsets.only(
@@ -408,51 +380,49 @@ class _MoviesPageState extends State<MoviesPage> {
                     opacity: state.isLibraryLoading ? 0.45 : 1,
                     duration: Motion.of(context, Motion.normal),
                     curve: Motion.standard,
-                    sliver: SliverGrid.builder(
-                    gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                      // 高密度屏幕（如 3200×1440）上等比放大卡片宽度。
-                      maxCrossAxisExtent: 190,
-                      // 用 mainAxisExtent 而不是 childAspectRatio：
-                      // 前者让网格在构建前就知道每行高度，滚动时省掉逐项
-                      // 测量与二次布局。实测 1000 项滚动 30 帧，
-                      // 317ms → 190ms（约快 40%）。
-                      //
-                      // 高度按「卡片宽度 174 + 标题/年份/进度条」推得：
-                      // 常规字号 300，2 倍字号 362.5（标题两行 + 进度条）。
-                      // 宽度随屏幕变化时用比例换算，避免高密度屏上被压扁。
-                      mainAxisExtent: _libraryCardExtent(context),
-                      crossAxisSpacing: Spacing.md,
-                      mainAxisSpacing: Spacing.lg,
-                    ),
-                    itemCount: itemCount,
-                    addAutomaticKeepAlives: true,
-                    addRepaintBoundaries: true,
-                    itemBuilder: (context, index) {
-                      if (index >= movies.length) {
-                        return state.error == null
-                            ? const Center(
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Center(
-                                child: TextButton.icon(
-                                  onPressed: context
-                                      .read<MovieProvider>()
-                                      .loadMoreLibrary,
-                                  icon: const Icon(Icons.refresh_rounded),
-                                  label: const Text('加载失败，重试'),
-                                ),
-                              );
-                      }
+                    // 用 SliverAnimatedGrid 而不是 SliverGrid.builder：
+                    // 前者内置「插入 / 移除」动画，删除一部影片后，
+                    // 后面的卡片会平滑滑动补位，而不是瞬间跳过去。
+                    //
+                    // 之前用 SliverGrid.builder，删除后剩余卡片直接重排，
+                    // 观感很生硬——用户明确反馈「补位没有动画，太丑」。
+                    sliver: SliverAnimatedGrid(
+                      key: _gridKey,
+                      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                        // 高密度屏幕（如 3200×1440）上等比放大卡片宽度。
+                        maxCrossAxisExtent: 190,
+                        // 用 mainAxisExtent 而不是 childAspectRatio：
+                        // 前者让网格在构建前就知道每行高度，滚动时省掉逐项
+                        // 测量与二次布局。实测 1000 项滚动 30 帧，
+                        // 317ms → 190ms（约快 40%）。
+                        mainAxisExtent: _libraryCardExtent(context),
+                        crossAxisSpacing: Spacing.md,
+                        mainAxisSpacing: Spacing.lg,
+                      ),
+                      initialItemCount: itemCount,
+                      // 补位动画：剩余卡片从旧位置滑到新位置。
+                      // 曲线用 emphasized（快起慢收），时长略长于普通切换，
+                      // 让「挪一格」这件事能被看清但不拖沓。
+                      findChildIndexCallback: (key) {
+                        if (key is! ValueKey<String>) return null;
+                        final index = movies.indexWhere(
+                          (m) => m.id == key.value,
+                        );
+                        return index < 0 ? null : index;
+                      },
+                      itemBuilder: (context, index, animation) {
+                        if (index >= movies.length) {
+                          return const Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          );
+                        }
 
-                      final movie = movies[index];
-                      return AnimatedCardEntrance(
-                        key: ValueKey(movie.id),
-                        // 只对本批新增的卡片播放渐入，已在屏上的不重复播放。
-                        play: !previouslyShown.contains(movie.id),
-                        reduceMotion: MediaQuery.disableAnimationsOf(context),
-                        child: MovieCard(
+                        final movie = movies[index];
+                        // 卡片内容本身不再播放入场动画（交给
+                        // SliverAnimatedGrid 的 animation 统一驱动），
+                        // 否则两层动画叠加会显得拖沓。
+                        return MovieCard(
+                          key: ValueKey(movie.id),
                           movie: movie,
                           posterHeroTag: 'library:${movie.id}',
                           onTap: () async {
@@ -472,9 +442,8 @@ class _MoviesPageState extends State<MoviesPage> {
                             context.read<MovieProvider>(),
                             movie,
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
                     ),
                   ),
                 );
@@ -606,6 +575,24 @@ class _MoviesPageState extends State<MoviesPage> {
     Movie movie,
   ) async {
     if (!context.mounted) return;
+
+    // 补位动画：先让网格知道「这一项要走了」，播完退场动画再更新数据。
+    //
+    // 之前只是 provider.hideMovie() → 列表少一项 → 网格重建，
+    // SliverAnimatedGrid 虽然在场，但没人调 removeItem，
+    // 它和普通网格行为一样：剩余卡片瞬间跳到新位置。
+    // 用户反馈的「补位没有动画、很生硬」就是这里。
+    final gridState = _gridKey.currentState;
+    final index = _visibleMovies.indexWhere((m) => m.id == movie.id);
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (gridState != null && index >= 0 && !reduceMotion) {
+      gridState.removeItem(
+        index,
+        (context, animation) => _buildRemovingCard(movie, animation),
+        duration: Motion.normal,
+      );
+    }
+
     await deleteWithUndo(
       context,
       label: '已删除《${movie.title}》',
@@ -613,6 +600,8 @@ class _MoviesPageState extends State<MoviesPage> {
       restore: () {
         provider.restoreMovie(movie.id);
         if (!context.mounted) return;
+        // 恢复时把卡片插回原位，也带一段入场动画。
+        _gridKey.currentState?.insertItem(index < 0 ? 0 : index);
         AppToast.info(context, '已恢复《${movie.title}》');
       },
       commit: () async {
@@ -624,6 +613,23 @@ class _MoviesPageState extends State<MoviesPage> {
           context.read<CollectionProvider>().refresh();
         }
       },
+    );
+  }
+
+  /// 被删除卡片的退场外观：缩小 + 淡出，同时高度收拢。
+  ///
+  /// SizeTransition 让它在网格里「占位收缩」，后面的卡片才能平滑补位；
+  /// FadeTransition 避免它生硬地消失。
+  Widget _buildRemovingCard(Movie movie, Animation<double> animation) {
+    return SizeTransition(
+      sizeFactor: CurvedAnimation(parent: animation, curve: Motion.fade),
+      child: FadeTransition(
+        opacity: animation,
+        child: MovieCard(
+          movie: movie,
+          showWatchedBadge: false,
+        ),
+      ),
     );
   }
 }

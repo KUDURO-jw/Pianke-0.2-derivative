@@ -105,6 +105,27 @@ Future<void> deleteWithUndo(
   await commit();
 }
 
+/// 当前正在显示的撤销提示条。
+///
+/// 全局只允许存在一条。连续删除多部影片时：
+/// - 旧提示条立刻关闭（按「被顶掉」处理 → 确认删除前一部）
+/// - 新提示条接管位置
+///
+/// 不做单例的后果（用户实际遇到）：同时删三部会叠三层提示条，
+/// 每层都在跑自己的倒计时与弹簧动画，画面持续重绘 → 卡顿 + 闪烁。
+/// 而且三条叠在一起，用户根本分不清「撤销」点的是哪一部。
+_UndoBannerHandle? _activeBanner;
+
+/// 一条正在显示的撤销提示的可控句柄。
+///
+/// [dismiss] 由新提示调用，用来把旧提示按「被顶掉」结束掉。
+class _UndoBannerHandle {
+  _UndoBannerHandle({required this.dismiss, required this.isAlive});
+
+  final void Function() dismiss;
+  final bool Function() isAlive;
+}
+
 /// 在 Overlay 上挂一条自绘提示条，返回它消失的原因。
 Future<UndoDismissReason> _showUndoBanner({
   required OverlayState overlay,
@@ -114,20 +135,48 @@ Future<UndoDismissReason> _showUndoBanner({
   required bool reduceMotion,
   required VoidCallback onUndo,
 }) {
+  // 顶掉上一条：新提示接管，旧提示按「被顶掉」结束（→ 确认删除上一条）。
+  // 这样连续删除多部时界面上永远只有一条，且每一部都会被正确提交。
+  final previous = _activeBanner;
+  _activeBanner = null;
+  previous?.dismiss();
+
   final completer = Completer<UndoDismissReason>();
   late OverlayEntry entry;
+  final hostKey = GlobalKey<_UndoBannerHostState>();
 
-  // entry 的移除时机必须由提示条自己决定（弹簧退场结束后回调），
-  // 不能在这里用一个固定延迟猜。原来写 `Future.delayed(Motion.panel)`
-  // 与弹簧退场的实际时长不同步，entry 被提前移除，
-  // 表现就是「下滑时闪一下」——提示条还没走完就被硬切掉。
+  // 先声明 handle，finish 里要用它做「我还是不是当前那条」的判断。
+  // 用 late 是为了让 dismiss 闭包能引用到 handleself。
+  late final _UndoBannerHandle handle;
+  handle = _UndoBannerHandle(
+    dismiss: () {
+      final state = hostKey.currentState;
+      if (state != null && state.mounted) {
+        // 让宿主播退场，结束后统一走 finish。
+        state.dismissAs(UndoDismissReason.replaced);
+      } else if (!completer.isCompleted) {
+        // 宿主还没挂载就被顶掉：直接按「确认删除」完成，不能丢。
+        completer.complete(UndoDismissReason.replaced);
+      }
+    },
+    isAlive: () => !completer.isCompleted,
+  );
+
   void finish(UndoDismissReason reason, {required bool removeNow}) {
+    // 只有当「当前记录的还是我」时才清空全局引用，
+    // 避免旧提示的收尾回调把新提示的引用抹掉。
+    if (identical(_activeBanner, handle)) {
+      _activeBanner = null;
+    }
     if (!completer.isCompleted) completer.complete(reason);
     if (removeNow && entry.mounted) entry.remove();
   }
 
+  _activeBanner = handle;
+
   entry = OverlayEntry(
     builder: (context) => _UndoBannerHost(
+      key: hostKey,
       scheme: scheme,
       label: label,
       undoWindow: undoWindow,
@@ -144,6 +193,7 @@ Future<UndoDismissReason> _showUndoBanner({
 /// 提示条本体：负责入场动画、倒计时、下滑关闭。
 class _UndoBannerHost extends StatefulWidget {
   const _UndoBannerHost({
+    super.key,
     required this.scheme,
     required this.label,
     required this.undoWindow,
@@ -313,6 +363,15 @@ class _UndoBannerHostState extends State<_UndoBannerHost>
     // 注意不要先置 _settled 再调 _settle：_settle 自己会置，
     // 先置会导致 _settle 直接 return，entry 永远不被移除。
     _settle(UndoDismissReason.undo);
+  }
+
+  /// 被新提示顶掉时调用：立刻退场并把原因报为 [reason]。
+  ///
+  /// 与 [dispose] 的区别是它走正常退场流程（有弹簧动画），
+  /// 且会通知调用方移除 entry。连续删除多部时靠它让旧提示让位。
+  void dismissAs(UndoDismissReason reason) {
+    if (_settled) return;
+    _settle(reason);
   }
 
   void _onDragStart(DragStartDetails _) {

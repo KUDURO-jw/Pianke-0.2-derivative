@@ -1,14 +1,15 @@
 {
-  "versionName": "0.2.33",
-  "versionCode": 39,
-  "title": "片刻·焕新版 0.2.33",
+  "versionName": "0.2.34",
+  "versionCode": 40,
+  "title": "片刻·焕新版 0.2.34",
   "changelog": [
-    "修复备份包含已删除影片：片库显示 94 部但备份说 116 部",
-    "已删除的观影记录、合集、标签也不再进入备份",
-    "修复导入备份时已删除的条目会复活的问题",
-    "装上本版后请在设置里重新上传一次备份，以清理云端旧数据"
+    "修复连续删除多部影片时撤销提示条会叠加、造成卡顿和闪屏",
+    "现在只保留一条提示，出现新提示时旧的立即关闭",
+    "修复删除后剩余卡片补位没有动画、直接跳位的问题",
+    "删除时卡片缩小淡出，后面的卡片平滑滑动补位",
+    "撤销恢复时卡片带入场动画滑回原位"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.33-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "585a31e6f392c2bd9022c4809d901e8838191561b1628acfe442264a46846cf9",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.34-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "4304d74fcbc72dce823beb93d2dad787b01bed99048d04ec1ff0f45c62b54359",
   "forceUpdate": false
 }
