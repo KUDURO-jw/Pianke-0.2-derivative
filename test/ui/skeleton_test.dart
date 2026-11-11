@@ -81,8 +81,10 @@ void main() {
       final grid = tester.widget<GridView>(find.byType(GridView));
       final delegate =
           grid.gridDelegate as SliverGridDelegateWithMaxCrossAxisExtent;
-      // 大字体用 0.48（更高的卡片），与真实网格一致。
-      expect(delegate.childAspectRatio, 0.48);
+      // 网格改用 mainAxisExtent 固定行高（滚动时省掉逐项测量），
+      // 大字体下用更高的行高，与真实网格 _libraryCardExtent 保持一致。
+      // 两条路径的取值必须同步，否则骨架 → 真数据会跳动。
+      expect(delegate.mainAxisExtent, 362.5);
     });
   });
 

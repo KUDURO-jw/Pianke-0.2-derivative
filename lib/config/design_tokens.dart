@@ -327,6 +327,16 @@ class Motion {
   /// 输入防抖：停止输入多久后才真正查询。
   static const Duration debounce = Duration(milliseconds: 250);
 
+  /// 片单批量抓取时，批次之间的间隔。
+  ///
+  /// 不是动画时长，但它同样是「不该散落在业务代码里的时间常量」，
+  /// 统一放在这里，方便调整时只改一处，也让 check-motion-tokens
+  /// 的「时长只在此文件定义」这条规则保持无例外。
+  ///
+  /// 取值理由：豆瓣对高频访问会返回挑战页或限流（403/429）。
+  /// 400ms 是「明显降低风控概率」与「用户还愿意等」之间的折中。
+  static const Duration scraperBatchGap = Duration(milliseconds: 400);
+
   static const Curve standard = Curves.easeOutCubic;
   static const Curve emphasized = Cubic(0.2, 0.0, 0.0, 1.0);
 

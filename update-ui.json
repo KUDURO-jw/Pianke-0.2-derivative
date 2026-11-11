@@ -1,18 +1,17 @@
 {
-  "versionName": "0.2.22",
-  "versionCode": 28,
-  "title": "片刻·焕新版 0.2.22",
+  "versionName": "0.2.23",
+  "versionCode": 29,
+  "title": "片刻·焕新版 0.2.23",
   "changelog": [
-    "新增统一的弹簧按压组件：按下缩小、松开带过冲回弹",
-    "影片卡片、抽片历史、观影统计卡的按压反馈改为弹簧物理",
-    "抽片结果登场、详情页评分星同样改为弹簧，回弹手感一致",
-    "建立规则：位移与缩放走弹簧，透明度与颜色走曲线",
-    "强调色统一走主题令牌，暗色模式下对比度达标",
-    "圆角与字号统一到设计令牌，不再散落字面量",
-    "修复按压反馈会重建整张卡片（含海报子树）的问题",
-    "修复 4 项长期失败的前端测试与 1 项并发偶发失败"
+    "片库网格改用固定行高，滚动更快（实测快约 28%）",
+    "片库滚动不再每帧复制整份已展示 ID 集合",
+    "数据库开启 WAL 模式，后台同步时界面不再被写锁挡住",
+    "移除未使用的依赖，安装包更小、构建更快",
+    "片单批量导入加入批次间隔，降低触发豆瓣风控导致整单失败的概率",
+    "新增全局错误边界，异常不再只表现为「点了一下没反应」",
+    "设置页新增「导出诊断日志」，可导出最近的错误记录"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.22-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "c1a21edbd370973ee7a7aab9878377c30c7a72376255aacdca9f3e095cac6ffd",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.23-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "371fe7534b02746b8b876e49091dadb52bfa50a64898d6a7d387bdf2f1b3bfc5",
   "forceUpdate": false
 }

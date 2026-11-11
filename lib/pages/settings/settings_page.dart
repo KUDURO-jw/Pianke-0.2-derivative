@@ -17,6 +17,8 @@ import 'package:random_movie/widgets/settings/webdav_sync_section.dart';
 import 'package:random_movie/widgets/settings/update_download_dialog.dart';
 import 'package:random_movie/services/local_data_guard.dart';
 import 'package:random_movie/services/haptics.dart';
+import 'package:random_movie/services/app_error_log.dart';
+import 'package:share_plus/share_plus.dart';
 
 class SettingsPage extends StatefulWidget {
   final UpdateService? updateService;
@@ -165,6 +167,18 @@ class _SettingsPageState extends State<SettingsPage> {
                   loading: false,
                   onTap: _showLicenseNotice,
                 ),
+                Divider(
+                  height: 1,
+                  indent: 56,
+                  color: colorScheme.outline.withValues(alpha: 0.12),
+                ),
+                _SettingsTile(
+                  icon: Icons.bug_report_outlined,
+                  iconColor: const Color(0xFFE07A5F),
+                  title: '导出诊断日志',
+                  loading: false,
+                  onTap: _exportDiagnostics,
+                ),
               ],
             ),
           ),
@@ -193,6 +207,27 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ],
       ),
+    );
+  }
+
+  /// 导出诊断日志：把全局错误边界收集到的条目写成文本并交给系统分享。
+  ///
+  /// 刻意做成用户主动触发、内容只在本机生成，不上传任何服务器。
+  Future<void> _exportDiagnostics() async {
+    if (AppErrorLog.isEmpty) {
+      AppToast.info(context, '暂无可导出的错误记录');
+      return;
+    }
+    final file = await AppErrorLog.exportToTemp();
+    if (!mounted) return;
+    if (file == null) {
+      AppToast.error(context, '生成诊断日志失败');
+      return;
+    }
+    await Share.shareXFiles(
+      [XFile(file.path)],
+      subject: '片刻诊断日志',
+      text: '${AppErrorLog.entries.length} 条错误记录',
     );
   }
 

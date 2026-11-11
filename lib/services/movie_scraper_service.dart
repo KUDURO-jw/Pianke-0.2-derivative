@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart' show compute;
 import 'package:html/dom.dart' show Element;
 import 'package:html/parser.dart' show parse;
 import 'package:random_movie/config/api_config.dart';
+import 'package:random_movie/config/design_tokens.dart';
 import 'package:random_movie/models/movie.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -316,6 +317,20 @@ class MovieScraperService {
       // 先抓第一条，用于“预热” Cookie，减少后续批量触发挑战页概率
       await scrapeAt(0, candidates.first);
 
+      // 批次之间留出间隔，降低触发豆瓣风控（403 / 429）的概率。
+      //
+      // 原先批次是「打完一批立刻打下一批」，100 部的片单会连发 25 批、
+      // 每批 4 个并发请求，中间没有任何停顿。豆瓣对高频访问会返回
+      // 挑战页或直接限流，用户看到的是「解析失败」——错误提示里虽然
+      // 写了「勿连续请求」，但代码本身并没有做任何节流。
+      //
+      // 代价：100 部片单大约从 30 秒变成 60~80 秒。比起整单失败重来，
+      // 这个代价值得。间隔取 400ms，是「能明显降低风控概率」与
+      // 「用户还愿意等」之间的折中。
+      // 间隔取自设计令牌，避免时长常量散落在业务代码里。
+      // 详见 Motion.scraperBatchGap 的说明。
+      const batchGap = Motion.scraperBatchGap;
+
       final remaining = candidates.asMap().entries.skip(1).toList();
       for (var start = 0; start < remaining.length; start += batchSize) {
         final end = math.min(start + batchSize, remaining.length);
@@ -323,6 +338,10 @@ class MovieScraperService {
         await Future.wait(
           batch.map((entry) => scrapeAt(entry.key, entry.value)),
         );
+        // 最后一批之后不需要再等。
+        if (end < remaining.length) {
+          await Future<void>.delayed(batchGap);
+        }
       }
 
       return snapshotMovies();

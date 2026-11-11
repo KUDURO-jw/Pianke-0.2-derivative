@@ -214,8 +214,9 @@ class LibrarySkeletonGrid extends StatelessWidget {
         padding: padding,
         gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
           maxCrossAxisExtent: 190,
-          // 必须与 movies_page 完全一致，否则骨架→真数据会跳动。
-          childAspectRatio: textScaler.scale(14) > 19 ? 0.48 : 0.58,
+          // 必须与 movies_page._libraryCardExtent 完全一致，
+          // 否则骨架 → 真数据时网格会跳动一下。
+          mainAxisExtent: textScaler.scale(14) > 19 ? 362.5 : 300.0,
           crossAxisSpacing: Spacing.md,
           mainAxisSpacing: Spacing.lg,
         ),

@@ -200,6 +200,13 @@ class StorageService {
           // 打开后删影片会自动带走会话 / 合集成员 / 标签关联，
           // 不再依赖各处手写清理，漏一处也不会留下孤儿数据。
           await db.execute('PRAGMA foreign_keys = ON');
+          // WAL：读写不再互斥。后台 WebDAV 同步写入时，界面上的
+          // 查询（片库滚动、日历翻月）不会被写锁挡住，反之亦然。
+          // 单机应用不需要网络文件系统，WAL 是安全的选择。
+          await db.execute('PRAGMA journal_mode = WAL');
+          // 平衡耐久性与写入速度：WAL 下 NORMAL 只在检查点落盘，
+          // 断电最多丢最后一个事务，不会损坏数据库文件。
+          await db.execute('PRAGMA synchronous = NORMAL');
         },
         onCreate: (db, _) async {
           await _createTables(db);
