@@ -1,14 +1,15 @@
 {
-  "versionName": "0.2.25",
-  "versionCode": 31,
-  "title": "片刻·焕新版 0.2.25",
+  "versionName": "0.2.26",
+  "versionCode": 32,
+  "title": "片刻·焕新版 0.2.26",
   "changelog": [
-    "修复片库页崩溃：0.2.23 改用固定行高后，骨架屏在无界高度父级下会抛 Infinity or NaN toInt",
-    "骨架网格加 shrinkWrap，按内容高度布局",
-    "行高增加有限性校验，非法值回退到默认值",
-    "新增 5 项回归测试覆盖骨架屏在各种父级约束下的行为"
+    "修复删除过的影片无法重新添加：软删除后主键仍被占用，查重看不见墓碑行，插入时报 UNIQUE constraint failed",
+    "现在会复活墓碑行而不是插入新行，删了还能再加回来",
+    "修复导出诊断日志显示为空：原错误边界只抓未捕获异常，被界面接住的业务错误收不到",
+    "添加、更新、删除影片与批量添加失败现在都会记入诊断日志，附带 id 与标题",
+    "批量添加原先完全吞掉异常，现在会记录失败原因"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.25-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "066df5c06cbfafeb18bdb9557d26d412ea7d06d4570f63c580eca4c3d89069a6",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.26-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "260ba0636218e3b88b206d8c95e855e6030d2e518113971151a0e5fbda76adfa",
   "forceUpdate": false
 }

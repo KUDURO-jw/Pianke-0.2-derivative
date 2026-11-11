@@ -1290,6 +1290,28 @@ class StorageService {
     return null;
   }
 
+  /// 查这个主键是否被**已软删除**的行占用。
+  ///
+  /// 为什么需要它：`getMovieById` / `_getMovieByDoubanSubjectId` 都带
+  /// `deleted_at IS NULL`，会把墓碑行当作不存在。但 `movies.id` 是主键，
+  /// 墓碑行仍然占着这个 id。于是出现：
+  ///   删过某片 → 重新添加 → 查重通过 → INSERT 主键冲突
+  /// → 用户看到「保存失败: UNIQUE constraint failed: movies.id」。
+  ///
+  /// 返回墓碑行时，调用方应当「复活」它（清掉 deleted_at 并覆盖内容），
+  /// 而不是插入新行。
+  Future<Movie?> _findTombstoneById(String id) async {
+    if (id.isEmpty) return null;
+    final rows = await _db.query(
+      _moviesTable,
+      where: 'id = ? AND deleted_at IS NOT NULL',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return _movieFromDbMap(rows.first);
+  }
+
   Future<List<Movie>> getMoviesByIds(Iterable<String> ids) async {
     _ensureInitialized();
 
@@ -1338,6 +1360,25 @@ class StorageService {
         : movie.copyWith(
             id: 'movie_${DateTime.now().millisecondsSinceEpoch}_${_generateRandomString(4)}',
           );
+
+    // 主键可能被一条「已软删除」的墓碑行占着。
+    // 上面的查重都带 `deleted_at IS NULL`，看不见它，但数据库主键看得见，
+    // 直接 INSERT 会抛 UNIQUE constraint failed: movies.id。
+    //
+    // 正确处理是「复活」那一行：把墓碑行覆盖成新内容并清掉 deleted_at。
+    // 这样既满足「删了还能重新添加」的用户预期，也不留重复主键。
+    final tombstone = await _findTombstoneById(newMovie.id);
+    if (tombstone != null) {
+      await _notifyOnWrite({_moviesTable}, () async {
+        await _db.update(
+          _moviesTable,
+          {..._stamp(_movieToDbMap(newMovie)), 'deleted_at': null},
+          where: 'id = ?',
+          whereArgs: [newMovie.id],
+        );
+      });
+      return newMovie;
+    }
 
     await _notifyOnWrite({_moviesTable}, () async {
       await _db.insert(

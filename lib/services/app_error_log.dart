@@ -65,6 +65,35 @@ abstract final class AppErrorLog {
     unawaited(_flush(buffer.toString()));
   }
 
+  /// 记录一次「被业务代码接住的失败」。
+  ///
+  /// [install] 里的两个处理器只抓**没人接的**异常。但本项目大量错误是
+  /// 这样处理的：
+  ///
+  /// ```dart
+  /// } catch (error) {
+  ///   _error = '保存失败: $error';   // 显示在界面上，不算未捕获异常
+  /// }
+  /// ```
+  ///
+  /// 这类失败在 Dart 看来已经「处理完毕」，全局处理器收不到，
+  /// 用户导出诊断日志时是空的——可它恰恰是用户真正遇到的问题
+  /// （比如主键冲突导致添加影片失败）。
+  ///
+  /// 因此业务层在 catch 里显式调用本方法，把失败连同上下文记下来。
+  static void recordHandled(
+    String scope,
+    Object error, {
+    StackTrace? stack,
+    String? detail,
+  }) {
+    final buffer = StringBuffer('[handled:$scope] $error');
+    if (detail != null && detail.isNotEmpty) {
+      buffer.write('\n  上下文: $detail');
+    }
+    record(buffer.toString(), stack: stack?.toString());
+  }
+
   static Future<void> _flush(String text) async {
     try {
       final file = _file ?? await _resolveFile();

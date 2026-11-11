@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/scheduler.dart';
 import 'package:random_movie/models/models.dart';
 import 'package:random_movie/services/services.dart';
+import 'package:random_movie/services/app_error_log.dart';
 import 'package:random_movie/config/design_tokens.dart';
 
 /// Library filter mode: all / watched / unwatched.
@@ -678,7 +679,16 @@ class MovieProvider extends AppNotifier {
     } on DuplicateMovieException {
       _error = '《${movie.title}》已在片库中';
       return null;
-    } catch (error) {
+    } catch (error, stack) {
+      // 这类失败会被界面接住并显示，不算未捕获异常，全局处理器收不到。
+      // 显式记进诊断日志，用户导出时才能看到真正原因
+      // （例如主键冲突导致的添加失败）。
+      AppErrorLog.recordHandled(
+        'addMovie',
+        error,
+        stack: stack,
+        detail: 'title=${movie.title} id=${movie.id}',
+      );
       _error = '保存失败: $error';
       return null;
     } finally {
@@ -708,7 +718,15 @@ class MovieProvider extends AppNotifier {
           added++;
         } on DuplicateMovieException {
           skipped++;
-        } catch (_) {
+        } catch (error, stack) {
+          // 这里原本是 catch (_) 完全吞掉，用户只看到「有 N 部失败」，
+          // 不知道是网络、主键冲突还是别的原因。记进诊断日志。
+          AppErrorLog.recordHandled(
+            'addScrapedMovies',
+            error,
+            stack: stack,
+            detail: 'title=${movie.title} id=${movie.id}',
+          );
           failed.add(movie);
         }
       }
@@ -735,7 +753,13 @@ class MovieProvider extends AppNotifier {
       _cacheMovies([movie]);
       await _reloadVisibleCollections();
       await _refreshVisibleHistoryCalendarIfNeeded();
-    } catch (error) {
+    } catch (error, stack) {
+      AppErrorLog.recordHandled(
+        'updateMovie',
+        error,
+        stack: stack,
+        detail: 'id=${movie.id}',
+      );
       _error = '更新失败: $error';
       notifyListeners();
     }
@@ -750,7 +774,13 @@ class MovieProvider extends AppNotifier {
       _hiddenMovieIds.remove(movieId);
       await _reloadVisibleCollections();
       await _refreshVisibleHistoryCalendarIfNeeded();
-    } catch (error) {
+    } catch (error, stack) {
+      AppErrorLog.recordHandled(
+        'deleteMovie',
+        error,
+        stack: stack,
+        detail: 'id=$movieId',
+      );
       // 删库失败：把它放回界面，别让用户以为已经删掉了。
       _hiddenMovieIds.remove(movieId);
       _error = '删除失败: $error';
