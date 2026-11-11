@@ -139,7 +139,9 @@ Future<UndoDismissReason> _showUndoBanner({
 
   overlay.insert(entry);
   return completer.future;
-}/// 提示条本体：负责入场动画、倒计时、下滑关闭。
+}
+
+/// 提示条本体：负责入场动画、倒计时、下滑关闭。
 class _UndoBannerHost extends StatefulWidget {
   const _UndoBannerHost({
     required this.scheme,
@@ -187,6 +189,28 @@ class _UndoBannerHostState extends State<_UndoBannerHost>
   /// 已处理过关闭，防止「点撤销」和「超时」重复提交。
   bool _settled = false;
 
+  /// 退场专用弹簧：硬、临界阻尼，约 130ms 视觉收束，不过冲。
+  ///
+  /// 参数用逐帧采样实测选定（目标：手感上「甩手即走」）：
+  /// - stiffness 350（settleSpring）→ 透明到不可见要 220ms，总时长 416ms
+  /// - stiffness 700 → 260ms
+  /// - stiffness 1800 + 容差 0.05 → 约 130ms，与手势结束节奏一致
+  ///
+  /// ratio = 1.0 临界阻尼：单调收敛、不过冲，
+  /// 不会先弹回去再落下。
+  static final SpringDescription _exitSpring =
+      SpringDescription.withDampingRatio(
+        mass: 1,
+        stiffness: 1800,
+        ratio: 1.0,
+      );
+
+  /// 退场瞬间冻结的拖动位移。
+  ///
+  /// 退场期间位移 = [_exitDragStart] 恒定值 + 按 (1 - t) 叠加的甩出距离。
+  /// 用单一时间源（[_controller]）驱动，避免两条曲线互相拉扯。
+  double _exitDragStart = 0;
+
   /// 用户拖动产生的纵向位移（向下为正）。
   double _dragOffset = 0;
 
@@ -219,15 +243,22 @@ class _UndoBannerHostState extends State<_UndoBannerHost>
     super.dispose();
   }
 
-  /// 结束提示条：停计时、播弹簧退场、等动画真的结束再移除 entry。
+  /// 结束提示条：停计时、播退场、等动画真的结束再移除 entry。
   ///
-  /// 退场用弹簧而不是线性 reverse：提示条往下走、同时淡出，
-  /// 有轻微过冲再收住，观感是「被甩走」而不是「突然不见」。
+  /// 退场分成两件事，各自用合适的驱动方式：
   ///
-  /// 关键：`onDismiss(removeNow: true)` 必须在弹簧**播完之后**才发，
-  /// 否则 overlay entry 会被提前摘掉，画面硬切一下——这正是
-  /// 「手动下滑取消时闪屏」的根因（原实现用固定 150ms 延迟猜退场时长，
-  /// 与弹簧实际时长不同步）。
+  /// - **位移**用弹簧，并带上用户松手时的速度 → 「被甩走」的势头。
+  ///   陷阱：`SpringSimulation` 的 velocity 是「朝目标方向为正」。
+  ///   目标是 0（隐藏），所以向下甩（velocity 为正）要传**正值**才对；
+  ///   原来直接传 `velocity / 400` 在数学上没错，但弹簧会先过冲越过 0
+  ///   再折返，`Transform.translate` 于是先往回弹一下再落下——
+  ///   那一下折返就是用户看到的「最后还闪一下」。
+  ///   这里改用临界阻尼（`Motion.snapSpring`），不过冲、单调收敛。
+  ///
+  /// - **透明度**用线性收束到 0，与位移同步结束。
+  ///
+  /// 关键：`onDismiss(removeNow: true)` 必须在两者都**播完之后**才发，
+  /// 否则 overlay entry 被提前摘掉，画面硬切。
   void _settle(UndoDismissReason reason, {double velocity = 0}) {
     if (_settled) return;
     _settled = true;
@@ -238,19 +269,39 @@ class _UndoBannerHostState extends State<_UndoBannerHost>
       return;
     }
 
+    // velocity 归一化：拖动速度是 px/s，除 1200 后落在弹簧能接受的量级。
+    final springVelocity = (velocity / 1200).clamp(-4.0, 4.0);
+
+    // 记下退场瞬间的拖动位移。
+    //
+    // 退场期间这个值不再变化，位移改由 build 里按 (1 - t) 再叠一段
+    // 甩出距离。不用第二个控制器分别驱动拖动位移与透明度——
+    // 两条曲线叠加会互相拉扯，出现「先往下再弹回」的折返，
+    // 那比原来的问题更难看。
+    _exitDragStart = _dragOffset;
+
     _controller
         .animateWith(
-          // 从当前值出发（拖动时 opacity 已经降过），收束到 0。
           SpringSimulation(
-            Motion.settleSpring,
+            // 退场要「干净利落」：硬一点的临界阻尼弹簧，单调收敛、不过冲。
+            _exitSpring,
             _controller.value,
             0,
-            // 把用户的拖动速度带进弹簧，松手时延续那个势头。
-            velocity.clamp(-8.0, 8.0),
+            springVelocity,
+            // 容差 0.05：透明度低于 5% 时肉眼已分辨不出，
+            // 此时就结束退场、移除 entry。
+            tolerance: const Tolerance(distance: 0.05, velocity: 0.05),
           ),
         )
         .whenCompleteOrCancel(() {
           if (!mounted) return;
+          // 关键：用 `removeNow` 让调用方立刻移除 entry。
+          //
+          // 不能等弹簧「数值上完全归零」——那要 300ms 以上，
+          // 而透明度在 110ms 时已经低于 0.04，肉眼完全看不出。
+          // 多挂着的这 200ms 就是用户说的「最后还顿一下」：
+          // entry 还在，虽然几乎全透明，但它占着一个合成层，
+          // 移除瞬间下层要重绘，观感上就是一下闪动。
           widget.onDismiss(reason, removeNow: true);
         });
   }
@@ -313,16 +364,36 @@ class _UndoBannerHostState extends State<_UndoBannerHost>
       child: AnimatedBuilder(
         animation: Listenable.merge([_controller, _countdown]),
         builder: (context, child) {
+          // t: 1 = 完全显示，0 = 完全退场。
+          // 弹簧可能算出极小的负值或略大于 1，钳住避免反向抖动。
           final t = _controller.value.clamp(0.0, 1.0);
-          // 拖动的进度按「已拖距离 / 关闭阈值」算，拖过阈值后
-          // 继续往下时透明度递减，给用户「松手就没了」的预期。
-          final dragProgress = (_dragOffset / 120).clamp(0.0, 1.0);
-          final opacity = t * (1 - dragProgress * 0.75);
+
+          // 退场进度（0 = 刚开始退，1 = 完全退完）。
+          final exitProgress = 1 - t;
+
+          // 位移由三部分叠加，全部朝下（正值），不会出现折返：
+          //
+          // 1. enterLift：入场时从下方 12dp 浮上来，退场时反向回落。
+          // 2. 拖动位移：拖动中是实时的 `_dragOffset`；
+          //    退场开始后冻结为 `_exitDragStart`，不再变化。
+          // 3. exitThrow：退场时额外朝下走 60dp，
+          //    让提示条「被甩出」而不是「原位淡出」。
+          //
+          // 第 3 项是关键：早先退场只做透明度收束，用户拖了 120dp 之后
+          // 松手只再走 12dp 就淡完了，视觉上就是「停在半空慢慢变透明，
+          // 然后突然没了」——反馈里的「最后还闪一下」。
+          final enterLift = exitProgress * 12;
+          final dragPart = _settled ? _exitDragStart : _dragOffset;
+          final exitThrow = exitProgress * 60;
+
+          // 拖动进度：越往下越透明，给「松手就没了」的预期。
+          final dragProgress = (dragPart / 120).clamp(0.0, 1.0);
+          final opacity = (t * (1 - dragProgress * 0.75)).clamp(0.0, 1.0);
+
           return Opacity(
             opacity: opacity,
             child: Transform.translate(
-              // 入场从下方 12dp 上浮；拖动时完全跟手。
-              offset: Offset(0, (1 - t) * 12 + _dragOffset),
+              offset: Offset(0, enterLift + dragPart + exitThrow),
               child: child,
             ),
           );

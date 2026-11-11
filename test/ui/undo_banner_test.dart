@@ -238,6 +238,69 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('退场位移单调朝下，不回弹', (tester) async {
+    // 这是「下滑关闭最后还闪一下」的守卫测试。
+    //
+    // 曾经出现过两个问题：
+    // 1. 退场只做透明度收束、位移不动 → 提示条「停在半空变透明」，
+    //    然后 entry 被移除，观感是闪一下。
+    // 2. 用第二个控制器单独收束拖动位移与弹簧叠加 → 两条曲线互相拉扯，
+    //    出现「先往下再弹回」的折返，比问题 1 更难看。
+    //
+    // 现在位移由单一时间源驱动，必须严格单调递增。
+    await tester.pumpWidget(host());
+    final context = tester.element(find.text('删除'));
+
+    deleteWithUndo(
+      context,
+      label: '已删除',
+      undoWindow: const Duration(seconds: 5),
+      hide: () {},
+      restore: () {},
+      commit: () async {},
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    double ty() {
+      double maxAbs = 0;
+      for (final e in find.byType(Transform).evaluate()) {
+        final w = e.widget as Transform;
+        final v = w.transform.storage[13];
+        if (v.abs() > maxAbs.abs()) maxAbs = v;
+      }
+      return maxAbs;
+    }
+
+    final g = await tester.startGesture(
+      tester.getCenter(find.text('已删除')),
+    );
+    await g.moveBy(const Offset(0, 120));
+    await tester.pump();
+    await g.up();
+
+    final samples = <double>[];
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      if (find.text('已删除').evaluate().isEmpty) break;
+      samples.add(ty());
+    }
+
+    expect(samples.length, greaterThan(3), reason: '应采到若干退场帧');
+    for (var i = 1; i < samples.length; i++) {
+      expect(
+        samples[i],
+        greaterThanOrEqualTo(samples[i - 1] - 0.01),
+        reason: '退场位移必须单调朝下（不回弹）：'
+            '第 $i 帧 ${samples[i]} 小于上一帧 ${samples[i - 1]}，'
+            '完整序列 $samples',
+      );
+    }
+
+    await tester.pumpAndSettle();
+    expect(find.text('已删除'), findsNothing, reason: '最终应完全移除');
+  });
+
   testWidgets('视觉参数符合项目规范', (tester) async {
     await tester.pumpWidget(host());
     final context = tester.element(find.text('删除'));
