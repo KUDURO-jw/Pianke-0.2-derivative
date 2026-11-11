@@ -2,6 +2,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:random_movie/config/design_tokens.dart';
 import 'package:random_movie/services/haptics.dart';
 import 'package:random_movie/widgets/common/continuous_rrect.dart';
@@ -116,13 +117,13 @@ Future<UndoDismissReason> _showUndoBanner({
   final completer = Completer<UndoDismissReason>();
   late OverlayEntry entry;
 
-  void finish(UndoDismissReason reason) {
-    if (completer.isCompleted) return;
-    completer.complete(reason);
-    // 等退场动画播完再移除 entry，避免硬切造成闪烁。
-    Future<void>.delayed(reduceMotion ? Duration.zero : Motion.panel, () {
-      if (entry.mounted) entry.remove();
-    });
+  // entry 的移除时机必须由提示条自己决定（弹簧退场结束后回调），
+  // 不能在这里用一个固定延迟猜。原来写 `Future.delayed(Motion.panel)`
+  // 与弹簧退场的实际时长不同步，entry 被提前移除，
+  // 表现就是「下滑时闪一下」——提示条还没走完就被硬切掉。
+  void finish(UndoDismissReason reason, {required bool removeNow}) {
+    if (!completer.isCompleted) completer.complete(reason);
+    if (removeNow && entry.mounted) entry.remove();
   }
 
   entry = OverlayEntry(
@@ -138,9 +139,7 @@ Future<UndoDismissReason> _showUndoBanner({
 
   overlay.insert(entry);
   return completer.future;
-}
-
-/// 提示条本体：负责入场动画、倒计时、下滑关闭。
+}/// 提示条本体：负责入场动画、倒计时、下滑关闭。
 class _UndoBannerHost extends StatefulWidget {
   const _UndoBannerHost({
     required this.scheme,
@@ -155,7 +154,11 @@ class _UndoBannerHost extends StatefulWidget {
   final String label;
   final Duration undoWindow;
   final bool reduceMotion;
-  final void Function(UndoDismissReason) onDismiss;
+
+  /// 上报关闭原因。[removeNow] 为真表示退场动画已结束，可以移除 entry。
+  final void Function(UndoDismissReason reason, {required bool removeNow})
+      onDismiss;
+
   final VoidCallback onUndo;
 
   @override
@@ -163,53 +166,136 @@ class _UndoBannerHost extends StatefulWidget {
 }
 
 class _UndoBannerHostState extends State<_UndoBannerHost>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
+  /// 入场/退场动画（0=完全隐藏，1=完全显示）。
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: widget.reduceMotion ? Duration.zero : Motion.panel,
   );
 
-  Timer? _timer;
+  /// 倒计时进度（1→0）。与 [_controller] 分开：拖动提示条时倒计时暂停，
+  /// 松手回弹后继续，两者互不干扰。
+  ///
+  /// 用 controller 而不是 Timer：同一个时间源既驱动底部进度条，
+  /// 又在归零时触发关闭，不会出现「进度条走完了但还没关」的错位。
+  late final AnimationController _countdown = AnimationController(
+    vsync: this,
+    duration: widget.undoWindow,
+    value: 1,
+  );
 
   /// 已处理过关闭，防止「点撤销」和「超时」重复提交。
   bool _settled = false;
+
+  /// 用户拖动产生的纵向位移（向下为正）。
+  double _dragOffset = 0;
+
+  /// 当前拖动是否已越过关闭阈值。
+  bool _dragPastThreshold = false;
 
   @override
   void initState() {
     super.initState();
     _controller.forward();
-    // 倒计时自己持有，不依赖任何框架的 SnackBar 状态机。
-    _timer = Timer(widget.undoWindow, () => _settle(UndoDismissReason.timeout));
+    _countdown.addStatusListener((status) {
+      if (status == AnimationStatus.dismissed && !_settled) {
+        _settle(UndoDismissReason.timeout);
+      }
+    });
+    // 从 1 走到 0：duration 就是 undoWindow。
+    _countdown.reverse(from: 1);
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
     // 宿主在提示条还在时被销毁：按「确认删除」处理，避免幽灵条目。
+    // 注意此时不能再去 remove entry（正在 dispose 中），removeNow 传 false。
     if (!_settled) {
       _settled = true;
-      widget.onDismiss(UndoDismissReason.disposed);
+      widget.onDismiss(UndoDismissReason.disposed, removeNow: false);
     }
     _controller.dispose();
+    _countdown.dispose();
     super.dispose();
   }
 
-  /// 结束提示条：停计时、播退场、上报原因。
-  void _settle(UndoDismissReason reason) {
+  /// 结束提示条：停计时、播弹簧退场、等动画真的结束再移除 entry。
+  ///
+  /// 退场用弹簧而不是线性 reverse：提示条往下走、同时淡出，
+  /// 有轻微过冲再收住，观感是「被甩走」而不是「突然不见」。
+  ///
+  /// 关键：`onDismiss(removeNow: true)` 必须在弹簧**播完之后**才发，
+  /// 否则 overlay entry 会被提前摘掉，画面硬切一下——这正是
+  /// 「手动下滑取消时闪屏」的根因（原实现用固定 150ms 延迟猜退场时长，
+  /// 与弹簧实际时长不同步）。
+  void _settle(UndoDismissReason reason, {double velocity = 0}) {
     if (_settled) return;
     _settled = true;
-    _timer?.cancel();
-    _controller.reverse();
-    widget.onDismiss(reason);
+    _countdown.stop();
+
+    if (widget.reduceMotion) {
+      widget.onDismiss(reason, removeNow: true);
+      return;
+    }
+
+    _controller
+        .animateWith(
+          // 从当前值出发（拖动时 opacity 已经降过），收束到 0。
+          SpringSimulation(
+            Motion.settleSpring,
+            _controller.value,
+            0,
+            // 把用户的拖动速度带进弹簧，松手时延续那个势头。
+            velocity.clamp(-8.0, 8.0),
+          ),
+        )
+        .whenCompleteOrCancel(() {
+          if (!mounted) return;
+          widget.onDismiss(reason, removeNow: true);
+        });
   }
 
   void _handleUndo() {
     if (_settled) return;
-    _settled = true;
-    _timer?.cancel();
+    _countdown.stop();
     widget.onUndo();
-    _controller.reverse();
-    widget.onDismiss(UndoDismissReason.undo);
+    // 注意不要先置 _settled 再调 _settle：_settle 自己会置，
+    // 先置会导致 _settle 直接 return，entry 永远不被移除。
+    _settle(UndoDismissReason.undo);
+  }
+
+  void _onDragStart(DragStartDetails _) {
+    if (_settled) return;
+    _countdown.stop();
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    if (_settled) return;
+    setState(() {
+      // 只允许向下拖；向上给一点阻尼，不跟手。
+      final delta = details.delta.dy;
+      _dragOffset = (_dragOffset + (delta > 0 ? delta : delta * 0.3))
+          .clamp(0.0, 160.0);
+      _dragPastThreshold = _dragOffset > 56;
+    });
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    if (_settled) return;
+    final velocity = details.primaryVelocity ?? 0;
+
+    if (_dragPastThreshold || velocity > 700) {
+      // 越过阈值或甩得够快：按下滑关闭处理。
+      _settle(UndoDismissReason.swipe, velocity: velocity / 400);
+      return;
+    }
+
+    // 没到阈值：弹簧回弹到原位，倒计时继续。
+    setState(() {
+      _dragOffset = 0;
+      _dragPastThreshold = false;
+    });
+    _countdown.reverse(from: _countdown.value);
   }
 
   @override
@@ -225,15 +311,18 @@ class _UndoBannerHostState extends State<_UndoBannerHost>
       right: 0,
       bottom: bottomInset,
       child: AnimatedBuilder(
-        animation: _controller,
+        animation: Listenable.merge([_controller, _countdown]),
         builder: (context, child) {
-          final t = Motion.fade.transform(_controller.value.clamp(0.0, 1.0));
+          final t = _controller.value.clamp(0.0, 1.0);
+          // 拖动的进度按「已拖距离 / 关闭阈值」算，拖过阈值后
+          // 继续往下时透明度递减，给用户「松手就没了」的预期。
+          final dragProgress = (_dragOffset / 120).clamp(0.0, 1.0);
+          final opacity = t * (1 - dragProgress * 0.75);
           return Opacity(
-            opacity: t,
-            // 入场从下方轻微上浮，退场回落；不做整层淡入淡出，
-            // 避免滑走时露出背景造成闪烁。
+            opacity: opacity,
             child: Transform.translate(
-              offset: Offset(0, (1 - t) * 12),
+              // 入场从下方 12dp 上浮；拖动时完全跟手。
+              offset: Offset(0, (1 - t) * 12 + _dragOffset),
               child: child,
             ),
           );
@@ -241,11 +330,18 @@ class _UndoBannerHostState extends State<_UndoBannerHost>
         child: Center(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: Spacing.lg),
-            child: _UndoBannerSurface(
-              scheme: scheme,
-              label: widget.label,
-              onUndo: _handleUndo,
-              onSwipeDismiss: () => _settle(UndoDismissReason.swipe),
+            child: GestureDetector(
+              // 拖动而不是 fling：要跟手，不能等手势结束才动。
+              onVerticalDragStart: _onDragStart,
+              onVerticalDragUpdate: _onDragUpdate,
+              onVerticalDragEnd: _onDragEnd,
+              child: _UndoBannerSurface(
+                scheme: scheme,
+                label: widget.label,
+                countdown: _countdown,
+                pastThreshold: _dragPastThreshold,
+                onUndo: _handleUndo,
+              ),
             ),
           ),
         ),
@@ -254,95 +350,133 @@ class _UndoBannerHostState extends State<_UndoBannerHost>
   }
 }
 
-/// 提示条的可视部分：连续圆角深色胶囊 + 文字 + 撤销按钮。
+/// 提示条的可视部分：连续圆角深色胶囊 + 文字 + 撤销按钮 + 倒计时进度。
 ///
 /// 视觉参数对齐项目既有规范：
 /// - 深色胶囊用 `#2A2A2E`（与全局 snackBarTheme 一致）
 /// - 连续圆角 `Radii.md`
 /// - 文字 `TypeScale.body` / w500
 /// - 撤销按钮用主题强调色
+///
+/// 倒计时参考 Telegram 的撤销提示：胶囊底部一条细进度条随剩余时间收缩，
+/// 让「还剩多久」可见，比单纯等 5 秒然后突然消失更容易预期。
 class _UndoBannerSurface extends StatelessWidget {
   const _UndoBannerSurface({
     required this.scheme,
     required this.label,
+    required this.countdown,
+    required this.pastThreshold,
     required this.onUndo,
-    required this.onSwipeDismiss,
   });
 
   final ColorScheme scheme;
   final String label;
+
+  /// 剩余时间进度：1 = 刚开始，0 = 到时。
+  final Animation<double> countdown;
+
+  /// 拖动是否已越过关闭阈值（越过时文字变淡，提示松手就关）。
+  final bool pastThreshold;
+
   final VoidCallback onUndo;
-  final VoidCallback onSwipeDismiss;
 
   @override
   Widget build(BuildContext context) {
     const surface = Color(0xFF2A2A2E);
     final shape = ContinuousRRect(radius: Radii.md, smoothing: 0.6);
 
-    return GestureDetector(
-      // 下滑关闭：与系统提示条一致的手势习惯。
-      onVerticalDragEnd: (details) {
-        if ((details.primaryVelocity ?? 0) > 0) onSwipeDismiss();
-      },
-      child: DecoratedBox(
-        decoration: ShapeDecoration(
-          shape: shape,
-          shadows: Shadows.floating(scheme),
-        ),
-        child: Material(
-          color: surface,
-          shape: shape,
-          clipBehavior: Clip.antiAlias,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              Spacing.lg,
-              Spacing.sm + 2,
-              Spacing.sm,
-              Spacing.sm + 2,
+    return DecoratedBox(
+      decoration: ShapeDecoration(
+        shape: shape,
+        shadows: Shadows.floating(scheme),
+      ),
+      child: Material(
+        color: surface,
+        shape: shape,
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                Spacing.lg,
+                Spacing.sm + 2,
+                Spacing.sm,
+                Spacing.sm + 4,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: AnimatedOpacity(
+                      duration: Motion.fast,
+                      opacity: pastThreshold ? 0.45 : 1,
+                      child: Text(
+                        label,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: TypeScale.body,
+                          fontWeight: FontWeight.w500,
+                          height: TypeScale.lineHeight,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: Spacing.sm),
+                  TextButton(
+                    onPressed: onUndo,
+                    style: TextButton.styleFrom(
+                      foregroundColor: scheme.accent,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: Spacing.md,
+                        vertical: Spacing.xs,
+                      ),
+                      minimumSize: const Size(0, 36),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      shape: ContinuousRRect(
+                        radius: Radii.pill,
+                        smoothing: 0.6,
+                      ),
+                    ),
+                    child: const Text(
+                      '撤销',
+                      style: TextStyle(
+                        fontSize: TypeScale.label,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: TypeScale.body,
-                      fontWeight: FontWeight.w500,
-                      height: TypeScale.lineHeight,
+            // 倒计时进度条：贴底、极细、随剩余时间收缩。
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: AnimatedBuilder(
+                animation: countdown,
+                builder: (context, _) {
+                  final remaining = countdown.value.clamp(0.0, 1.0);
+                  return FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: remaining,
+                    child: Container(
+                      height: 2.5,
+                      decoration: BoxDecoration(
+                        color: scheme.accent.withValues(alpha: 0.85),
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(2),
+                          bottomRight: Radius.circular(2),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: Spacing.sm),
-                TextButton(
-                  onPressed: onUndo,
-                  style: TextButton.styleFrom(
-                    foregroundColor: scheme.accent,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: Spacing.md,
-                      vertical: Spacing.xs,
-                    ),
-                    minimumSize: const Size(0, 36),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    shape: ContinuousRRect(
-                      radius: Radii.pill,
-                      smoothing: 0.6,
-                    ),
-                  ),
-                  child: const Text(
-                    '撤销',
-                    style: TextStyle(
-                      fontSize: TypeScale.label,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
+                  );
+                },
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

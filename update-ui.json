@@ -1,15 +1,15 @@
 {
-  "versionName": "0.2.29",
-  "versionCode": 35,
-  "title": "片刻·焕新版 0.2.29",
+  "versionName": "0.2.30",
+  "versionCode": 36,
+  "title": "片刻·焕新版 0.2.30",
   "changelog": [
-    "修复删除后的撤销提示条不会自动消失，必须手动下滑",
-    "修复因提示条不关闭导致删除没有真正写进数据库、重启后影片又回来的问题",
-    "修复下滑取消撤销时屏幕闪一下",
-    "撤销提示条改为自绘，视觉与项目风格一致：深色胶囊、连续圆角、主题强调色",
-    "下滑关闭保留，向下快速拖动即可取消"
+    "撤销提示条加入倒计时进度条，剩余时间可见",
+    "下滑关闭改为真正跟手拖动，松手有弹簧回弹",
+    "拖过阈值文字变淡，提示松手即关闭",
+    "退场改用弹簧并把拖动速度带入，不再突然消失",
+    "修复下滑关闭时闪屏：改为弹簧真正结束后才移除提示条"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.29-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "9d4edf395e1512d927412ee78e8cc7a44e44801befab9c5a1aed1d4f7c8935fc",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.30-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "07539b930a05066d50a08f0f97bdf0289e457adaa139c58596346a4a8474ee91",
   "forceUpdate": false
 }
