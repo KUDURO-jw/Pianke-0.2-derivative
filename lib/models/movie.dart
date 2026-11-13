@@ -22,11 +22,22 @@ class MovieEpisode {
   final String doubanUrl;
   final bool watched;
 
+  /// 这一集是哪天看的。
+  ///
+  /// 用于让「观影日历」能显示追剧过程：电影点一次「记录观影」就有日期，
+  /// 但电视剧是逐集勾选的，原来只有 `watched` 布尔值、没有时间，
+  /// 于是花几天看完的剧在日历上全是空白。
+  ///
+  /// 老数据没有这个字段，解析为 `null` —— 不补假日期，
+  /// 也不参与日历聚合。只有从这个版本起新勾的分集才有日期。
+  final DateTime? watchedAt;
+
   const MovieEpisode({
     required this.number,
     required this.label,
     required this.doubanUrl,
     this.watched = false,
+    this.watchedAt,
   });
 
   Map<String, dynamic> toJson() => {
@@ -34,6 +45,8 @@ class MovieEpisode {
     'label': label,
     'doubanUrl': doubanUrl,
     'watched': watched,
+    // 只在有值时写出，保持旧数据的 JSON 形状不变（体积与可读性都更好）。
+    if (watchedAt != null) 'watchedAt': watchedAt!.toIso8601String(),
   };
 
   factory MovieEpisode.fromJson(Map<String, dynamic> json) {
@@ -44,6 +57,14 @@ class MovieEpisode {
               watchedRaw == '1' ||
               watchedRaw?.toString().toLowerCase() == 'true';
 
+    // 解析日期。格式不对或缺失都退回 null，绝不让一条坏数据
+    // 把整部剧的分集列表读空。
+    final watchedAtRaw = json['watchedAt'];
+    DateTime? watchedAt;
+    if (watchedAtRaw is String && watchedAtRaw.isNotEmpty) {
+      watchedAt = DateTime.tryParse(watchedAtRaw);
+    }
+
     return MovieEpisode(
       number: json['number'] is int
           ? json['number'] as int
@@ -51,6 +72,7 @@ class MovieEpisode {
       label: json['label'] ?? '',
       doubanUrl: json['doubanUrl'] ?? '',
       watched: watchedValue,
+      watchedAt: watchedAt,
     );
   }
 
@@ -59,12 +81,20 @@ class MovieEpisode {
     String? label,
     String? doubanUrl,
     bool? watched,
+    DateTime? watchedAt,
+
+    /// 显式清空日期。
+    ///
+    /// 不能只靠「传 null」表达清空——那样与「不修改」无法区分。
+    /// 取消勾选分集时必须真的把日期抹掉，否则日历上那一天会残留。
+    bool clearWatchedAt = false,
   }) {
     return MovieEpisode(
       number: number ?? this.number,
       label: label ?? this.label,
       doubanUrl: doubanUrl ?? this.doubanUrl,
       watched: watched ?? this.watched,
+      watchedAt: clearWatchedAt ? null : (watchedAt ?? this.watchedAt),
     );
   }
 }

@@ -432,7 +432,17 @@ class MovieProvider extends AppNotifier {
     _calendarError = null;
     notifyListeners();
     try {
+      // 两个来源合并：
+      // 1. 电影 / 手动记录的观影会话（原有逻辑）
+      // 2. 电视剧逐集勾选时写入的分集日期（本次新增）
+      //
+      // 不用 Future.wait：两个 Future 返回不同类型，会被推断成
+      // List<Object>，后续强转虽然能过分析器，但类型一旦对不上就是
+      // 运行时崩溃。这里分开 await，类型由编译器保证。
       final movies = await _storageService.queryWatchedMoviesByMonth(
+        target.firstDay,
+      );
+      final seriesEpisodes = await _storageService.querySeriesEpisodesByMonth(
         target.firstDay,
       );
       if (isDisposed ||
@@ -440,7 +450,10 @@ class MovieProvider extends AppNotifier {
           revision != _calendarRevision) {
         return;
       }
-      _cacheHistoryMonth(target, _buildHistoryMonthData(target, movies));
+      _cacheHistoryMonth(
+        target,
+        _buildHistoryMonthData(target, movies, seriesEpisodes),
+      );
       if (revision == _calendarRevision) _hasLoadedHistoryCalendar = true;
     } catch (error) {
       if (revision == _calendarRevision) _calendarError = '加载观影日历失败: $error';
@@ -881,19 +894,60 @@ class MovieProvider extends AppNotifier {
 
   HistoryMonthData _buildHistoryMonthData(
     HistoryMonthKey month,
-    List<Movie> movies,
-  ) {
+    List<Movie> movies, [
+    List<({Movie movie, List<int> episodeNumbers})> seriesEpisodes = const [],
+  ]) {
+    // day → 该天的影片（保持插入顺序，先电影后剧集）
     final grouped = <int, List<Movie>>{};
+    // day → 该天的剧集集号明细
+    final episodesByDay = <int, Map<String, List<int>>>{};
+
+    void addMovie(int day, Movie movie) {
+      final list = grouped.putIfAbsent(day, () => <Movie>[]);
+      // 同一部剧可能同时有观影会话和分集日期，
+      // 只保留一条，避免日历里同一部片出现两次。
+      if (!list.any((m) => m.id == movie.id)) list.add(movie);
+    }
+
     for (final movie in movies) {
       final watchDate = movie.watchedAt ?? movie.createdAt;
-      grouped.putIfAbsent(watchDate.day, () => <Movie>[]).add(movie);
+      addMovie(watchDate.day, movie);
+    }
+
+    // 剧集按「每一集的日期」归到对应那天。
+    // 同一天勾了第 5、6、7 集，就在那一天记下 [5,6,7]。
+    //
+    // 必须校验年月：movie.episodes 里含该剧所有分集的全部日期，
+    // 可能横跨多个月。若只按 `day` 分组，去年同一天看的那集会
+    // 被错误地算进本月。
+    for (final entry in seriesEpisodes) {
+      final movie = entry.movie;
+      final byDay = <int, List<int>>{};
+      for (final episode in movie.episodes) {
+        final at = episode.watchedAt;
+        if (!episode.watched || at == null) continue;
+        if (at.year != month.year || at.month != month.month) continue;
+        byDay.putIfAbsent(at.day, () => <int>[]).add(episode.number);
+      }
+      for (final dayEntry in byDay.entries) {
+        addMovie(dayEntry.key, movie);
+        final numbers = episodesByDay.putIfAbsent(dayEntry.key, () => {});
+        numbers.putIfAbsent(movie.id, () => <int>[]).addAll(dayEntry.value);
+      }
     }
 
     final summaries = <int, HistoryDaySummary>{};
     for (final entry in grouped.entries) {
+      final dayEpisodes = episodesByDay[entry.key] ?? const <String, List<int>>{};
+      // 集号去重并排序，防止同一集被重复计入。
+      final normalized = <String, List<int>>{
+        for (final e in dayEpisodes.entries)
+          e.key: (e.value.toSet().toList()..sort()),
+      };
       summaries[entry.key] = HistoryDaySummary(
         date: DateTime(month.year, month.month, entry.key),
         movies: List<Movie>.unmodifiable(entry.value),
+        episodeNumbersByMovieId: Map<String, List<int>>.unmodifiable(normalized),
       );
     }
 

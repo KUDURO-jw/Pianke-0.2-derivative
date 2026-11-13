@@ -1202,6 +1202,63 @@ class StorageService {
     return rows.map(_movieFromDbMap).toList();
   }
 
+  /// 按月份查询「分集在该月有观看日期」的剧集，附带集号明细。
+  ///
+  /// 电影靠观影会话进日历，而电视剧是逐集勾选的，原来只有 `watched`
+  /// 布尔值、没有日期，导致花几天看完的剧在日历上全是空白。
+  /// 现在分集带 `watchedAt`，这里把它们按月捞出来。
+  ///
+  /// 刻意**不在 SQL 里解析 JSON**：`episodes_json` 是 JSON 文本，
+  /// 而 Android 7 的系统 SQLite 未必编译了 JSON1 扩展
+  /// （`_seriesCompletedPredicate` 也是因此改用 LIKE 而非 json_each）。
+  /// 所以只在 SQL 层做一次粗筛，日期解析放到 Dart 层，
+  /// 既跨版本安全，解析逻辑也能单测。
+  ///
+  /// 粗筛条件：JSON 里出现本月前十位字符（`"2026-11-`）说明
+  /// 至少有一集落在该月。这一条能把绝大多数月份无关的剧排除掉，
+  /// 避免每次翻月都把整个片库的 JSON 全解析一遍。
+  Future<List<({Movie movie, List<int> episodeNumbers})>>
+  querySeriesEpisodesByMonth(DateTime month) async {
+    _ensureInitialized();
+
+    final firstDay = DateTime(month.year, month.month);
+    final nextMonth = DateTime(month.year, month.month + 1);
+
+    // 形如 2026-11，与 toIso8601String() 的前缀一致。
+    final monthPrefix =
+        '${month.year.toString().padLeft(4, '0')}-'
+        '${month.month.toString().padLeft(2, '0')}-';
+
+    final rows = await _db.rawQuery(
+      _movieSelect(
+        where:
+            "m.deleted_at IS NULL "
+            "AND m.subject_type = 'tvSeries' "
+            "AND m.episodes_json <> '[]' "
+            // 粗筛：JSON 里出现本月前缀（形如 2026-11-）说明至少有一集
+            // 落在该月。值来自代码生成（年月），不含用户输入，
+            // 且格式固定为数字与连字符，无注入面。
+            "AND m.episodes_json LIKE '%$monthPrefix%'",
+      ),
+    );
+
+    final result = <({Movie movie, List<int> episodeNumbers})>[];
+    for (final row in rows) {
+      final movie = _movieFromDbMap(row);
+      final numbers = <int>[];
+      for (final episode in movie.episodes) {
+        final at = episode.watchedAt;
+        if (!episode.watched || at == null) continue;
+        if (at.isBefore(firstDay) || !at.isBefore(nextMonth)) continue;
+        numbers.add(episode.number);
+      }
+      if (numbers.isEmpty) continue;
+      numbers.sort();
+      result.add((movie: movie, episodeNumbers: numbers));
+    }
+    return result;
+  }
+
   /// 按月份查询有观影会话的影片（用于日历），一部多次仅返回一次，
   /// watched_at 取该月内最近一次会话时间。
   Future<List<Movie>> queryWatchedMoviesByMonth(DateTime month) async {

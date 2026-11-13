@@ -1384,16 +1384,23 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
     await _updateWatchState(provider, movie, () {
       final next = List<MovieEpisode>.from(_episodes);
       final willWatch = !next[index].watched;
+      final now = DateTime.now();
 
       if (willWatch) {
-        // Mark this episode and all before it as watched
+        // 勾选这一集，并把之前的都补上。
+        //
+        // 每一集各记各的日期：新勾上的都记为「今天」。
+        // 已经看过的（watchedAt 有值）保持原日期不动——
+        // 否则补勾后面几集会把之前几天的记录全改成今天。
         for (var i = 0; i <= index; i++) {
-          next[i] = next[i].copyWith(watched: true);
+          if (next[i].watched) continue; // 已看过的保留原日期
+          next[i] = next[i].copyWith(watched: true, watchedAt: now);
         }
       } else {
-        // Unmark this episode and all after it as unwatched
+        // 取消这一集，并把之后的都取消。
+        // 日期一并清空，否则日历上那一天会残留这一集。
         for (var i = index; i < next.length; i++) {
-          next[i] = next[i].copyWith(watched: false);
+          next[i] = next[i].copyWith(watched: false, clearWatchedAt: true);
         }
       }
       _episodes = next;
@@ -1401,7 +1408,7 @@ class _MovieDetailPageState extends State<MovieDetailPage> {
       final allWatched =
           _episodes.isNotEmpty && _episodes.every((episode) => episode.watched);
       _watched = allWatched;
-      _watchedAt = allWatched ? (_watchedAt ?? DateTime.now()) : null;
+      _watchedAt = allWatched ? (_watchedAt ?? now) : null;
     });
   }
 

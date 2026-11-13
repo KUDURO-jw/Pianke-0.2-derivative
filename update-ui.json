@@ -1,15 +1,15 @@
 {
-  "versionName": "0.2.35",
-  "versionCode": 41,
-  "title": "片刻·焕新版 0.2.35",
+  "versionName": "0.2.36",
+  "versionCode": 42,
+  "title": "片刻·焕新版 0.2.36",
   "changelog": [
-    "紧急修复：0.2.34 导致片库整页空白，看不到任何影片",
-    "根因是网格换成了 SliverAnimatedGrid，它的 initialItemCount 只在首帧生效，而片库数据是异步加载的",
-    "已改回普通网格，片库恢复正常显示",
-    "补位动画改用另一种实现：删除前后各测一次卡片位置，把位移注入卡片",
-    "撤销提示条单例（0.2.34 已修）保持不变"
+    "电视剧分集现在会记录观看日期，追剧过程能显示在观影日历里",
+    "之前逐集勾选没有日期，导致花几天看完的剧在日历上全是空白",
+    "勾选时记下当天日期，取消勾选会一并清空",
+    "点击日历某天，弹层里会显示当天看了哪几集，如「第 5-7 集」",
+    "老数据不补假日期，只从这个版本起新勾的分集才有日期"
   ],
-  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.35-ui.1/Pianke-UI-arm64-release.apk",
-  "sha256": "97c6c2a1cb468b5f39927eec96d87edeac13d0f11d2f802286248ddaa686f189",
+  "downloadUrl": "https://github.com/KUDURO-jw/Pianke-0.2-derivative/releases/download/v0.2.36-ui.1/Pianke-UI-arm64-release.apk",
+  "sha256": "ec8b5b0ee2a9eb468aefa3ab762ff8998ec3ada3ae385bf47b378c28e3b104e3",
   "forceUpdate": false
 }

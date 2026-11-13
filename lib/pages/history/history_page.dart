@@ -966,7 +966,10 @@ class _HistoryDaySheet extends StatelessWidget {
                       const SizedBox(height: AppTheme.spacingSmall),
                   itemBuilder: (context, index) {
                     final movie = summary.movies[index];
-                    return _HistoryDayMovieTile(movie: movie);
+                    return _HistoryDayMovieTile(
+                      movie: movie,
+                      episodeNumbers: summary.episodeNumbersOf(movie.id),
+                    );
                   },
                 ),
               ),
@@ -981,7 +984,13 @@ class _HistoryDaySheet extends StatelessWidget {
 class _HistoryDayMovieTile extends StatelessWidget {
   final Movie movie;
 
-  const _HistoryDayMovieTile({required this.movie});
+  /// 这一天看了这部剧的哪几集（升序）。空表示不是通过勾分集进来的。
+  final List<int> episodeNumbers;
+
+  const _HistoryDayMovieTile({
+    required this.movie,
+    this.episodeNumbers = const [],
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1040,10 +1049,21 @@ class _HistoryDayMovieTile extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    DateFormat('HH:mm').format(watchDate),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
+                  // 电视剧：显示当天看了哪几集（第 5-7 集）。
+                  // 电影没有分集，这里只显示时间。
+                  if (episodeNumbers.isNotEmpty)
+                    Text(
+                      HistoryDaySummary.formatEpisodeNumbers(episodeNumbers),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    )
+                  else
+                    Text(
+                      DateFormat('HH:mm').format(watchDate),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   if (movie.year.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(

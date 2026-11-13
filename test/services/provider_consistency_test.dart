@@ -39,6 +39,14 @@ class _Store implements StorageService {
   @override
   Future<List<Movie>> queryWatchedMoviesByMonth(DateTime month) =>
       calendar?.call(month) ?? Future.value([]);
+
+  /// 日历现在还会查「分集日期」。
+  ///
+  /// 这个测试替身只需要给出空结果：本文件验证的是竞态（旧请求不得覆盖
+  /// 新结果），与分集无关。真实聚合逻辑另见 calendar_series_test.dart。
+  @override
+  Future<List<({Movie movie, List<int> episodeNumbers})>>
+  querySeriesEpisodesByMonth(DateTime month) => Future.value(const []);
   @override
   Future<List<DrawRecord>> queryDrawRecords({
     required int limit,
